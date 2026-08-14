@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: hesed-api
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/hesed_db
+    username: henriquearaujo
+    password:
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
+
+server:
+  port: 8080
+
+# JWT Configuration
+app:
+  jwt:
+    secret: L8qB/Y2Yn6A3JtMJjsJJVPMUmS2eFk+8I2pPW+EgBgQ=HesedSemijoias2026SecretKey!
+    expiration-ms: 86400000  # 24 hours
+
+  upload:
+    dir: ./uploads
+    base-url: http://localhost:8080/uploads
