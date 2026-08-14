@@ -60,107 +60,74 @@ export default function CatalogoPage() {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] dark:bg-[#141210] transition-colors duration-300">
-      {/* ═══════════ HEADER ═══════════ */}
-      <header className="bg-white/90 dark:bg-[#1C1A16]/90 backdrop-blur-md border-b border-[#F0E4CC]/40 dark:border-[#3D3A33]/40 sticky top-0 z-40 transition-colors">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <Logo className="h-48" />
-          <div className="flex items-center gap-3">
-            {/* Theme toggle */}
-            <button
-              onClick={toggleTheme}
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-[#F5F0EA] dark:bg-[#292620] border border-[#E2CFA3]/40 dark:border-[#4A3B25]/60 hover:border-[#C8A96E] transition-all"
-              title={isDark ? 'Modo claro' : 'Modo escuro'}
-            >
-              {isDark ? (
-                <svg className="w-4 h-4 text-[#D4B87A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4 text-[#96784A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
-                </svg>
-              )}
-            </button>
 
-            {/* Cart badge */}
-            {selected.length > 0 && (
-              <div className="relative">
-                <div className="flex items-center gap-2 bg-gradient-to-r from-[#C8A96E] to-[#B5935A] px-4 py-2 rounded-full shadow-lg">
-                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      {/* ═══════════ HERO (scrolls with page) ═══════════ */}
+      <section className="relative bg-white dark:bg-[#1C1A16] border-b border-[#F0E4CC]/50 dark:border-[#292620]">
+        {/* Subtle gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#FAF7F2]/50 dark:to-[#141210]/50 pointer-events-none" />
+
+        <div className="relative max-w-5xl mx-auto px-6">
+          {/* Top utility bar */}
+          <div className="flex items-center justify-between py-4">
+            <a href={`https://wa.me/${WHATSAPP_NUMBER}`} target="_blank" rel="noopener noreferrer"
+              className="text-[11px] text-[#A8A5A0] dark:text-[#5C584F] hover:text-[#25D366] transition-colors tracking-wide">
+              Atendimento via WhatsApp
+            </a>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleTheme}
+                className="flex items-center justify-center w-8 h-8 rounded-full text-[#A8A5A0] dark:text-[#5C584F] hover:text-[#C8A96E] transition-colors"
+                title={isDark ? 'Modo claro' : 'Modo escuro'}
+              >
+                {isDark ? (
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                  </svg>
+                ) : (
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+                  </svg>
+                )}
+              </button>
+              {selected.length > 0 && (
+                <div className="flex items-center gap-1.5 bg-[#C8A96E] px-3 py-1.5 rounded-full">
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                   </svg>
-                  <span className="text-sm font-semibold text-white">{selected.length}</span>
+                  <span className="text-xs font-semibold text-white">{selected.length}</span>
                 </div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#25D366] rounded-full animate-pulse border-2 border-white dark:border-[#1C1A16]" />
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      {/* ═══════════ HERO ═══════════ */}
-      <section className="relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-[#FDFBF7] via-[#F9F3E8] to-[#F0E4CC]/30 dark:from-[#141210] dark:via-[#1C1A16] dark:to-[#292620]/50" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-[#C8A96E]/5 dark:bg-[#C8A96E]/3 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3" />
-        <div className="absolute bottom-0 left-0 w-72 h-72 bg-[#C8A96E]/5 dark:bg-[#C8A96E]/3 rounded-full blur-3xl translate-y-1/2 -translate-x-1/3" />
-        
-        <div className="relative max-w-6xl mx-auto px-4 py-16 text-center">
-          <div className="inline-flex items-center gap-2 bg-white/60 dark:bg-[#292620]/60 backdrop-blur-sm border border-[#C8A96E]/20 dark:border-[#C8A96E]/15 rounded-full px-4 py-1.5 mb-6">
-            <div className="w-1.5 h-1.5 rounded-full bg-[#C8A96E] animate-pulse" />
-            <span className="text-xs font-medium text-[#96784A] dark:text-[#D4B87A] tracking-wider uppercase">Nova Coleção Disponível</span>
-          </div>
-          
-          <h2 className="font-serif text-4xl md:text-5xl text-[#292620] dark:text-[#F5F0EA] font-semibold mb-4 leading-tight">
-            Peças que contam<br />
-            <span className="text-[#C8A96E]">a sua história</span>
-          </h2>
-          
-          <p className="text-[#7A766F] dark:text-[#A8A5A0] text-base max-w-lg mx-auto leading-relaxed mb-8">
-            Cada semijoia HESED é escolhida com cuidado para valorizar sua beleza única. 
-            Selecione suas peças favoritas e envie seu pedido pelo WhatsApp.
-          </p>
-
-          {/* Trust badges */}
-          <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-[#96784A] dark:text-[#D4B87A]">
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-[#C8A96E]" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-              </svg>
-              <span>Folheado Ouro 18k</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-[#C8A96E]" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-              </svg>
-              <span>Garantia de 6 meses</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <svg className="w-4 h-4 text-[#C8A96E]" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-              </svg>
-              <span>Envio para todo Brasil</span>
+              )}
             </div>
           </div>
-        </div>
-      </section>
 
-      {/* ═══════════ CATEGORY FILTERS ═══════════ */}
-      <div className="sticky top-[4.5rem] z-30 bg-[#FDFBF7]/90 dark:bg-[#141210]/90 backdrop-blur-md border-b border-[#F0E4CC]/30 dark:border-[#3D3A33]/30 transition-colors">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          {/* Logo + Headline — generous breathing room */}
+          <div className="text-center pt-6 pb-10">
+            <Logo className="h-32 mx-auto mb-8" />
+            
+            <h2 className="font-serif text-2xl md:text-3xl text-[#353229] dark:text-[#E8E7E5] font-medium tracking-wide leading-relaxed">
+              Peças que contam <span className="text-[#C8A96E] italic">a sua história</span>
+            </h2>
+            
+            <p className="mt-3 text-[13px] text-[#A8A5A0] dark:text-[#5C584F] tracking-wide">
+              Selecione suas favoritas e envie pelo WhatsApp
+            </p>
+          </div>
+
+          {/* Category filters — centered, generous spacing */}
+          <div className="flex items-center justify-center gap-3 pb-6 overflow-x-auto scrollbar-hide">
             {categories.map((cat) => (
               <button key={cat} onClick={() => setActiveCategory(cat)}
-                className={`shrink-0 px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-300 ${
+                className={`shrink-0 px-5 py-2 rounded-full text-[13px] font-medium transition-all duration-300 ${
                   activeCategory === cat
-                    ? 'bg-gradient-to-r from-[#C8A96E] to-[#B5935A] text-white shadow-lg shadow-[#C8A96E]/25'
-                    : 'bg-white dark:bg-[#1C1A16] text-[#7A766F] dark:text-[#A8A5A0] border border-[#E2CFA3]/50 dark:border-[#3D3A33] hover:border-[#C8A96E] hover:text-[#C8A96E] hover:shadow-sm'
+                    ? 'bg-[#C8A96E] text-white'
+                    : 'text-[#7A766F] dark:text-[#A8A5A0] hover:text-[#C8A96E] dark:hover:text-[#C8A96E]'
                 }`}>
                 {cat}
               </button>
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
       {/* ═══════════ PRODUCTS GRID ═══════════ */}
       <main className="max-w-6xl mx-auto px-4 py-8 pb-56">
@@ -193,7 +160,6 @@ export default function CatalogoPage() {
                         : 'ring-1 ring-[#F0E4CC]/60 dark:ring-[#3D3A33]/60 hover:ring-[#C8A96E]/50 hover:shadow-xl hover:shadow-[#C8A96E]/10 hover:-translate-y-1'
                     }`}
                 >
-                  {/* Selection indicator */}
                   {isSelected && (
                     <div className="absolute top-3 right-3 z-10">
                       <div className="flex items-center justify-center w-7 h-7 bg-gradient-to-br from-[#C8A96E] to-[#96784A] rounded-full shadow-lg">
@@ -204,7 +170,6 @@ export default function CatalogoPage() {
                     </div>
                   )}
 
-                  {/* Status badges */}
                   {isEsgotado && (
                     <div className="absolute top-3 left-3 z-10 bg-[#5C584F] text-white text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide">
                       Esgotado
@@ -216,7 +181,6 @@ export default function CatalogoPage() {
                     </div>
                   )}
 
-                  {/* Image */}
                   <div className="relative aspect-square bg-gradient-to-br from-[#FAF7F2] to-[#F5F0EA] dark:from-[#292620] dark:to-[#1C1A16] overflow-hidden">
                     <img 
                       src={imgUrl} 
@@ -228,7 +192,6 @@ export default function CatalogoPage() {
                     )}
                   </div>
 
-                  {/* Content */}
                   <div className="p-4">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <div className="w-1 h-1 rounded-full bg-[#C8A96E]" />
@@ -267,27 +230,13 @@ export default function CatalogoPage() {
           </div>
         )}
 
-        {/* Help text */}
-        <div className="mt-16 text-center">
-          <div className="inline-flex items-center gap-3 bg-white dark:bg-[#1C1A16] border border-[#F0E4CC]/60 dark:border-[#3D3A33]/60 rounded-2xl px-6 py-4 shadow-sm">
-            <div className="flex items-center justify-center w-10 h-10 rounded-full bg-[#25D366]/10 dark:bg-[#25D366]/5">
-              <svg className="w-5 h-5 text-[#25D366]" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-              </svg>
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-medium text-[#353229] dark:text-[#E8E7E5]">Selecione e envie pelo WhatsApp</p>
-              <p className="text-xs text-[#A8A5A0] dark:text-[#5C584F]">Respondemos em instantes com carinho</p>
-            </div>
-          </div>
-        </div>
+        {/* Spacing for cart drawer */}
       </main>
 
       {/* ═══════════ CART DRAWER ═══════════ */}
       {selected.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-50 md:bottom-6 md:right-6 md:left-auto md:w-[420px]">
           <div className="bg-white dark:bg-[#1C1A16] border border-[#C8A96E]/20 dark:border-[#4A3B25]/40 shadow-2xl shadow-black/10 dark:shadow-black/40 rounded-t-3xl md:rounded-3xl overflow-hidden">
-            {/* Cart header */}
             <div className="bg-gradient-to-r from-[#C8A96E] to-[#B5935A] px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="flex items-center justify-center w-8 h-8 bg-white/20 rounded-full">
@@ -304,7 +253,6 @@ export default function CatalogoPage() {
               </button>
             </div>
 
-            {/* Cart items */}
             <div className="max-h-48 overflow-y-auto divide-y divide-[#F0E4CC]/40 dark:divide-[#3D3A33]/40">
               {selected.map((p) => (
                 <div key={p.id} className="flex items-center justify-between px-6 py-3 hover:bg-[#FDFBF7] dark:hover:bg-[#292620] transition-colors">
@@ -330,7 +278,6 @@ export default function CatalogoPage() {
               ))}
             </div>
 
-            {/* Cart footer */}
             <div className="px-6 py-5 bg-gradient-to-b from-[#FDFBF7] dark:from-[#1C1A16] to-white dark:to-[#141210] border-t border-[#F0E4CC]/40 dark:border-[#3D3A33]/40">
               <div className="flex items-center justify-between mb-4">
                 <span className="text-sm text-[#7A766F] dark:text-[#A8A5A0]">Total estimado</span>
@@ -354,8 +301,33 @@ export default function CatalogoPage() {
       {/* ═══════════ FOOTER ═══════════ */}
       <footer className="bg-white dark:bg-[#1C1A16] border-t border-[#F0E4CC]/40 dark:border-[#3D3A33]/40 py-12 transition-colors">
         <div className="max-w-6xl mx-auto px-4 text-center">
-          <Logo className="h-20 mx-auto mb-4" />
-          <p className="text-sm text-[#A8A5A0] dark:text-[#5C584F] italic max-w-xs mx-auto mb-6">
+          <Logo className="h-16 mx-auto mb-6" />
+          
+          {/* Trust badges — here they reinforce confidence at decision point */}
+          <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-[#96784A] dark:text-[#A8A5A0] mb-8">
+            <div className="flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 text-[#C8A96E]" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+              </svg>
+              <span>Folheado Ouro 18k</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 text-[#C8A96E]" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+              </svg>
+              <span>Garantia de 6 meses</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 text-[#C8A96E]" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
+              </svg>
+              <span>Envio para todo Brasil</span>
+            </div>
+          </div>
+
+          <div className="w-16 h-px bg-[#E2CFA3]/40 dark:bg-[#3D3A33] mx-auto mb-6" />
+          
+          <p className="text-[13px] text-[#A8A5A0] dark:text-[#5C584F] italic max-w-xs mx-auto mb-6">
             "Amor leal. Bondade. Misericórdia. Fidelidade."
           </p>
           <div className="flex items-center justify-center gap-6">
