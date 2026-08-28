@@ -34,3 +34,6 @@ app:
   upload:
     dir: ./uploads
     base-url: http://localhost:8080/uploads
+
+  cors:
+    allowed-origins: http://localhost:5173,http://localhost:3000
