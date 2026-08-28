@@ -13,7 +13,7 @@ public interface ConsigneeRepository extends JpaRepository<Consignee, UUID> {
     boolean existsByEmail(String email);
 
     @Query("SELECT c FROM Consignee c WHERE " +
-           "(:search IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "(:search IS NULL OR LOWER(c.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%'))) " +
            "ORDER BY c.name ASC")
     List<Consignee> findFiltered(@Param("search") String search);
 }

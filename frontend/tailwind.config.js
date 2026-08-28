@@ -55,6 +55,20 @@ export default {
         'card': '0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03)',
         'elevated': '0 8px 24px -4px rgba(200, 169, 110, 0.15), 0 2px 8px -2px rgba(0, 0, 0, 0.08)',
       },
+      keyframes: {
+        shimmer: {
+          '0%': { transform: 'translateX(-100%) rotate(15deg)' },
+          '100%': { transform: 'translateX(100%) rotate(15deg)' },
+        },
+        fadeIn: {
+          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+      },
+      animation: {
+        shimmer: 'shimmer 3s infinite',
+        fadeIn: 'fadeIn 0.5s ease',
+      },
     },
   },
   plugins: [],

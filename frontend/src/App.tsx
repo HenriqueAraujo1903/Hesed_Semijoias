@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import ProductsPage from './pages/ProductsPage';
 import AdminProductsPage from './pages/AdminProductsPage';
+import AdminPromotionsPage from './pages/AdminPromotionsPage';
 import ConsigneesPage from './pages/ConsigneesPage';
 import CatalogoPage from './pages/CatalogoPage';
 
@@ -25,6 +26,9 @@ export default function App() {
         <Route path="/revendedoras" element={<ConsigneesPage />} />
         <Route path="/admin/produtos" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><AdminProductsPage /></ProtectedRoute>
+        } />
+        <Route path="/admin/promocoes" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><AdminPromotionsPage /></ProtectedRoute>
         } />
       </Route>
 

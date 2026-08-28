@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useTheme } from '../contexts/ThemeContext';
 import Logo from '../components/Logo';
@@ -128,6 +128,12 @@ export default function CatalogoPage() {
           </div>
         </div>
       </section>
+
+      {/* ═══════════ PROMOTIONS CAROUSEL ═══════════ */}
+      <PromotionCarousel onSelectProduct={(productId) => {
+        const product = products.find(p => p.id === productId);
+        if (product && product.stockStatus !== 'ESGOTADO') toggle(product);
+      }} />
 
       {/* ═══════════ PRODUCTS GRID ═══════════ */}
       <main className="max-w-6xl mx-auto px-4 py-8 pb-56">
@@ -350,5 +356,169 @@ export default function CatalogoPage() {
         </div>
       </footer>
     </div>
+  );
+}
+
+
+// ─── Promotion Banner Slider ─────────────────────────────────────────────────
+
+interface PromotionSlide {
+  id: string;
+  productId: string;
+  productName: string;
+  productSku: string;
+  productImageUrl: string | null;
+  originalPrice: number;
+  title: string;
+  subtitle: string | null;
+  discountPercent: number | null;
+  promoPrice: number | null;
+  bannerUrl: string | null;
+}
+
+function PromotionCarousel({ onSelectProduct }: { onSelectProduct: (productId: string) => void }) {
+  const [slides, setSlides] = useState<PromotionSlide[]>([]);
+  const [current, setCurrent] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    axios.get('/api/promotions').then((res) => setSlides(res.data));
+  }, []);
+
+  // Auto-play: advances every 4 seconds
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    intervalRef.current = setInterval(() => {
+      advance();
+    }, 4000);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [slides.length]);
+
+  function advance() {
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setCurrent((prev) => (prev + 1) % slides.length);
+      setIsTransitioning(false);
+    }, 300);
+  }
+
+  function goTo(i: number) {
+    if (i === current) return;
+    // Reset auto-play timer
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    setIsTransitioning(true);
+    setTimeout(() => {
+      setCurrent(i);
+      setIsTransitioning(false);
+    }, 300);
+    intervalRef.current = setInterval(() => advance(), 4000);
+  }
+
+  if (slides.length === 0) return null;
+
+  const slide = slides[current];
+  const imgUrl = slide.bannerUrl || slide.productImageUrl
+    || `https://placehold.co/500x500/FAF7F2/C8A96E?font=playfair-display&text=${encodeURIComponent(slide.productSku)}`;
+
+  return (
+    <section className="max-w-6xl mx-auto px-4 pt-8 pb-6">
+      <div className="relative rounded-2xl overflow-hidden bg-gradient-to-r from-[#F9F3E8] to-[#FDF9F3] dark:from-[#1C1A16] dark:to-[#292620] border border-[#E2CFA3]/30 dark:border-[#3D3A33]/40">
+        {/* Main content */}
+        <div className={`flex flex-col sm:flex-row items-center gap-6 p-6 md:p-8 transition-opacity duration-300 ${isTransitioning ? 'opacity-0' : 'opacity-100'}`}>
+          {/* Image */}
+          <div className="w-full sm:w-48 md:w-64 aspect-square sm:aspect-auto sm:h-64 rounded-xl overflow-hidden bg-white dark:bg-[#292620] shadow-lg shrink-0">
+            <img
+              src={imgUrl}
+              alt={slide.productName}
+              className="w-full h-full object-cover"
+            />
+          </div>
+
+          {/* Text content */}
+          <div className="flex-1 text-center sm:text-left">
+            {slide.discountPercent && (
+              <span className="inline-block bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full mb-3">
+                {slide.discountPercent}% OFF
+              </span>
+            )}
+
+            <h3 className="font-serif text-xl md:text-2xl font-semibold text-[#292620] dark:text-[#F5F0EA] mb-2 leading-tight">
+              {slide.title}
+            </h3>
+
+            {slide.subtitle && (
+              <p className="text-sm text-[#7A766F] dark:text-[#A8A5A0] mb-2">{slide.subtitle}</p>
+            )}
+
+            <p className="text-xs text-[#A8A5A0] dark:text-[#5C584F] mb-4">
+              {slide.productName}
+            </p>
+
+            <div className="flex items-baseline gap-3 justify-center sm:justify-start mb-5">
+              {slide.promoPrice != null && (
+                <span className="font-serif text-2xl md:text-3xl font-bold text-[#C8A96E]">
+                  {BRL.format(slide.promoPrice)}
+                </span>
+              )}
+              {slide.originalPrice != null && slide.promoPrice != null && (
+                <span className="text-sm text-[#A8A5A0] line-through">
+                  {BRL.format(slide.originalPrice)}
+                </span>
+              )}
+            </div>
+
+            <button
+              onClick={() => onSelectProduct(slide.productId)}
+              className="inline-flex items-center gap-2 bg-[#C8A96E] hover:bg-[#B5935A] text-white text-sm font-semibold px-6 py-3 rounded-full transition-all shadow-md hover:shadow-lg active:scale-95"
+            >
+              Quero esta peça
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Navigation arrows */}
+        {slides.length > 1 && (
+          <>
+            <button
+              onClick={() => goTo((current - 1 + slides.length) % slides.length)}
+              className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-white/80 dark:bg-[#292620]/80 text-[#7A766F] hover:text-[#C8A96E] shadow-md transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+            </button>
+            <button
+              onClick={() => goTo((current + 1) % slides.length)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-9 h-9 rounded-full bg-white/80 dark:bg-[#292620]/80 text-[#7A766F] hover:text-[#C8A96E] shadow-md transition-all"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
+          </>
+        )}
+
+        {/* Dots */}
+        {slides.length > 1 && (
+          <div className="flex items-center justify-center gap-2 pb-4">
+            {slides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => goTo(i)}
+                className={`rounded-full transition-all duration-300 ${
+                  i === current
+                    ? 'w-7 h-2 bg-[#C8A96E]'
+                    : 'w-2 h-2 bg-[#C8A96E]/30 hover:bg-[#C8A96E]/60'
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
