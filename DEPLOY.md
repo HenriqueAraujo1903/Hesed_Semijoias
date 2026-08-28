@@ -4,7 +4,112 @@ Guia para levar a aplicação para produção.
 
 ---
 
-## Opção 1: Railway (Recomendado — mais rápido)
+## Opção 1: Hostinger VPS com Docker Manager (Recomendado)
+
+Hostinger oferece VPS com Docker Manager integrado no painel — deploy via docker-compose visual, sem precisar de SSH.  
+Custo estimado: **~R$25-40/mês** (plano KVM 1).
+
+### Pré-requisitos
+
+- Conta na [Hostinger](https://www.hostinger.com.br)
+- VPS com template Docker instalado
+
+### Passo a Passo
+
+#### 1. Comprar e configurar o VPS
+
+1. Acesse [hostinger.com/docker-hosting](https://www.hostinger.com/docker-hosting)
+2. Escolha o plano **KVM 1** (4GB RAM, 1 vCPU, 50GB NVMe) — suficiente para esse projeto
+3. Na configuração inicial, selecione o template **Docker** (ou Ubuntu + Docker)
+4. Defina senha root ou SSH key
+
+#### 2. Acessar o Docker Manager
+
+1. No painel Hostinger → **VPS** → **Docker Manager**
+2. Clique em **"Compose from URL"**
+3. Cole a URL do repositório:
+   ```
+   https://github.com/HenriqueAraujo1903/Hesed_Semijoias
+   ```
+4. O Docker Manager vai detectar o `docker-compose.yml` na raiz
+
+#### 3. Configurar Variáveis de Ambiente
+
+No painel do Docker Manager, configure as variáveis (ou crie um `.env` via terminal SSH):
+
+```env
+DB_NAME=hesed_db
+DB_USERNAME=hesed
+DB_PASSWORD=<GERAR: openssl rand -base64 32>
+JWT_SECRET=<GERAR: openssl rand -base64 64>
+JWT_EXPIRATION_MS=86400000
+CORS_ALLOWED_ORIGINS=https://seudominio.com.br
+UPLOAD_BASE_URL=https://seudominio.com.br/uploads
+```
+
+**Para gerar senhas seguras** (rode no terminal do Mac ou no terminal do VPS):
+```bash
+# Senha do banco
+openssl rand -base64 32
+
+# JWT Secret
+openssl rand -base64 64
+```
+
+#### 4. Deploy
+
+1. Clique **Deploy** no Docker Manager
+2. Aguarde ~3-5 minutos (o build do backend é o mais demorado)
+3. Verifique o status dos containers no dashboard
+
+#### 5. Configurar Domínio
+
+1. No painel Hostinger, vincule seu domínio ao IP do VPS (DNS → Registro A)
+2. Aguarde propagação DNS (até 24h, geralmente 5-30 min)
+
+#### 6. Configurar SSL (HTTPS)
+
+**Via SSH** (terminal do Docker Manager):
+```bash
+# Instalar certbot
+apt install -y certbot
+
+# Parar nginx temporariamente
+docker compose stop nginx
+
+# Gerar certificado
+certbot certonly --standalone -d seudominio.com.br
+
+# Copiar certs
+mkdir -p /root/Hesed_Semijoias/nginx/ssl
+cp /etc/letsencrypt/live/seudominio.com.br/fullchain.pem /root/Hesed_Semijoias/nginx/ssl/
+cp /etc/letsencrypt/live/seudominio.com.br/privkey.pem /root/Hesed_Semijoias/nginx/ssl/
+```
+
+Edite `nginx/nginx.conf`: descomente o bloco HTTPS e o redirect HTTP→HTTPS.  
+Descomente também o volume SSL no `docker-compose.yml`.
+
+```bash
+docker compose up -d
+```
+
+#### 7. Verificar
+
+- Frontend: `https://seudominio.com.br`
+- API: `https://seudominio.com.br/api/products/catalog`
+- Login: `admin@hesed.com` / `admin123`
+
+#### 8. Renovação automática do SSL
+
+```bash
+crontab -e
+# Adicionar:
+0 3 1 * * certbot renew --pre-hook "cd /root/Hesed_Semijoias && docker compose stop nginx" --post-hook "cd /root/Hesed_Semijoias && cp /etc/letsencrypt/live/seudominio.com.br/*.pem nginx/ssl/ && docker compose start nginx"
+```
+
+---
+
+## Opção 2: Railway (Alternativa — deploy sem servidor)
 
 Railway oferece deploy direto do GitHub, SSL automático e PostgreSQL incluso.  
 Custo estimado: **~$5-15/mês** (plano Hobby).
@@ -87,7 +192,7 @@ Custo estimado: **~$5-15/mês** (plano Hobby).
 
 ---
 
-## Opção 2: DigitalOcean Droplet (Mais controle)
+## Opção 3: DigitalOcean Droplet (Mais controle)
 
 Usa o `docker-compose.yml` que já criamos. Custo: **~$6-12/mês**.
 
@@ -192,7 +297,7 @@ crontab -e
 
 ---
 
-## Opção 3: VPS Barato (Hostinger/Contabo)
+## Opção 4: VPS Genérico (Contabo, Vultr, etc.)
 
 Mesmos passos da Opção 2, mas em provedores mais baratos (~$4-8/mês).  
 A diferença é só onde comprar o servidor.
