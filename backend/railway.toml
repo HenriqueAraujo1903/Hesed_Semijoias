@@ -1,0 +1,10 @@
+[build]
+builder = "nixpacks"
+buildCommand = "mvn clean package -DskipTests"
+
+[deploy]
+startCommand = "java -jar -Dserver.port=$PORT -Dspring.profiles.active=prod target/hesed-api-0.1.0.jar"
+healthcheckPath = "/api/products/catalog"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3

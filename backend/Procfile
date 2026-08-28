@@ -1,0 +1,1 @@
+web: java -jar -Dserver.port=$PORT -Dspring.profiles.active=prod target/hesed-api-0.1.0.jar
