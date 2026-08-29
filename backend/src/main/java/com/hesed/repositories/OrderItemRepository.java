@@ -12,6 +12,8 @@ import java.util.UUID;
 /**
  * Consultas analíticas sobre os itens de pedido (snapshot).
  *
+ * Receita = SUM(effectivePrice * quantity). Itens = SUM(quantity).
+ *
  * Convenções para evitar parâmetros null (PostgreSQL não infere o tipo de
  * parâmetros null em comparações):
  *  - from/to: sempre valores concretos (o service normaliza).
@@ -24,7 +26,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, UUID> {
     // ---- Série temporal ----
     // Retorna: [periodo, receita, qtde itens, nº pedidos distintos]
     @Query("SELECT FUNCTION('to_char', o.orderedAt, 'YYYY-MM-DD') AS periodo, " +
-           "SUM(oi.effectivePrice) AS receita, COUNT(oi.id) AS itens, COUNT(DISTINCT o.id) AS pedidos " +
+           "SUM(oi.effectivePrice * oi.quantity) AS receita, SUM(oi.quantity) AS itens, COUNT(DISTINCT o.id) AS pedidos " +
            "FROM OrderItem oi JOIN oi.order o " +
            "WHERE o.status = :status AND o.orderedAt >= :from AND o.orderedAt <= :to " +
            "AND (:allCategories = true OR oi.productCategory = :category) " +
@@ -38,7 +40,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, UUID> {
                                    @Param("promoOnly") boolean promoOnly);
 
     @Query("SELECT FUNCTION('to_char', o.orderedAt, 'YYYY-MM') AS periodo, " +
-           "SUM(oi.effectivePrice) AS receita, COUNT(oi.id) AS itens, COUNT(DISTINCT o.id) AS pedidos " +
+           "SUM(oi.effectivePrice * oi.quantity) AS receita, SUM(oi.quantity) AS itens, COUNT(DISTINCT o.id) AS pedidos " +
            "FROM OrderItem oi JOIN oi.order o " +
            "WHERE o.status = :status AND o.orderedAt >= :from AND o.orderedAt <= :to " +
            "AND (:allCategories = true OR oi.productCategory = :category) " +
@@ -52,7 +54,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, UUID> {
                                      @Param("promoOnly") boolean promoOnly);
 
     @Query("SELECT FUNCTION('to_char', o.orderedAt, 'YYYY') AS periodo, " +
-           "SUM(oi.effectivePrice) AS receita, COUNT(oi.id) AS itens, COUNT(DISTINCT o.id) AS pedidos " +
+           "SUM(oi.effectivePrice * oi.quantity) AS receita, SUM(oi.quantity) AS itens, COUNT(DISTINCT o.id) AS pedidos " +
            "FROM OrderItem oi JOIN oi.order o " +
            "WHERE o.status = :status AND o.orderedAt >= :from AND o.orderedAt <= :to " +
            "AND (:allCategories = true OR oi.productCategory = :category) " +
@@ -67,7 +69,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, UUID> {
 
     // ---- Breakdown por categoria ----
     // Retorna: [categoria, receita, qtde itens]
-    @Query("SELECT oi.productCategory AS categoria, SUM(oi.effectivePrice) AS receita, COUNT(oi.id) AS itens " +
+    @Query("SELECT oi.productCategory AS categoria, SUM(oi.effectivePrice * oi.quantity) AS receita, SUM(oi.quantity) AS itens " +
            "FROM OrderItem oi JOIN oi.order o " +
            "WHERE o.status = :status AND o.orderedAt >= :from AND o.orderedAt <= :to " +
            "AND (:allCategories = true OR oi.productCategory = :category) " +
@@ -83,7 +85,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, UUID> {
     // ---- Top produtos ----
     // Retorna: [sku, nome, categoria, receita, qtde itens]
     @Query("SELECT oi.productSku AS sku, oi.productName AS nome, oi.productCategory AS categoria, " +
-           "SUM(oi.effectivePrice) AS receita, COUNT(oi.id) AS itens " +
+           "SUM(oi.effectivePrice * oi.quantity) AS receita, SUM(oi.quantity) AS itens " +
            "FROM OrderItem oi JOIN oi.order o " +
            "WHERE o.status = :status AND o.orderedAt >= :from AND o.orderedAt <= :to " +
            "AND (:allCategories = true OR oi.productCategory = :category) " +
@@ -98,7 +100,7 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, UUID> {
 
     // ---- Split promoção vs não-promoção ----
     // Retorna: [wasPromotion, receita, qtde itens]
-    @Query("SELECT oi.wasPromotion AS promo, SUM(oi.effectivePrice) AS receita, COUNT(oi.id) AS itens " +
+    @Query("SELECT oi.wasPromotion AS promo, SUM(oi.effectivePrice * oi.quantity) AS receita, SUM(oi.quantity) AS itens " +
            "FROM OrderItem oi JOIN oi.order o " +
            "WHERE o.status = :status AND o.orderedAt >= :from AND o.orderedAt <= :to " +
            "AND (:allCategories = true OR oi.productCategory = :category) " +
@@ -111,8 +113,8 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, UUID> {
 
     // ---- KPIs agregados ----
     // Retorna: [receita, custo, qtde itens, nº pedidos distintos]
-    @Query("SELECT COALESCE(SUM(oi.effectivePrice),0), COALESCE(SUM(oi.costPrice),0), " +
-           "COUNT(oi.id), COUNT(DISTINCT o.id) " +
+    @Query("SELECT COALESCE(SUM(oi.effectivePrice * oi.quantity),0), COALESCE(SUM(oi.costPrice * oi.quantity),0), " +
+           "COALESCE(SUM(oi.quantity),0), COUNT(DISTINCT o.id) " +
            "FROM OrderItem oi JOIN oi.order o " +
            "WHERE o.status = :status AND o.orderedAt >= :from AND o.orderedAt <= :to " +
            "AND (:allCategories = true OR oi.productCategory = :category) " +

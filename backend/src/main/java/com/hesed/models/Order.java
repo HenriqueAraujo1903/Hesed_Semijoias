@@ -60,6 +60,14 @@ public class Order {
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
 
+    /** Nome do cliente que comprou (obrigatório ao confirmar a venda). */
+    @Column(name = "customer_name", length = 120)
+    private String customerName;
+
+    /** Telefone do cliente (opcional). */
+    @Column(name = "customer_phone", length = 30)
+    private String customerPhone;
+
     @Column(columnDefinition = "TEXT")
     private String notes;
 

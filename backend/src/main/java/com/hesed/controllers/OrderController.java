@@ -2,6 +2,7 @@ package com.hesed.controllers;
 
 import com.hesed.dto.OrderRequest;
 import com.hesed.dto.OrderResponse;
+import com.hesed.dto.OrderUpdateRequest;
 import com.hesed.services.OrderService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -47,6 +48,16 @@ public class OrderController {
                 "confirmado", orderService.countByStatus("CONFIRMADO"),
                 "cancelado", orderService.countByStatus("CANCELADO")
         ));
+    }
+
+    // ---- Admin: editar pedido pendente (itens, cliente, notas) ----
+    @PutMapping("/api/admin/orders/{id}")
+    public ResponseEntity<?> update(@PathVariable UUID id, @Valid @RequestBody OrderUpdateRequest request) {
+        try {
+            return ResponseEntity.ok(orderService.update(id, request));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
     }
 
     // ---- Admin: alterar status (confirmar/cancelar/reabrir) ----

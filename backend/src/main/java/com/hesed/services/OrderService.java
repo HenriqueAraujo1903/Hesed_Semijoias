@@ -2,6 +2,7 @@ package com.hesed.services;
 
 import com.hesed.dto.OrderRequest;
 import com.hesed.dto.OrderResponse;
+import com.hesed.dto.OrderUpdateRequest;
 import com.hesed.models.Order;
 import com.hesed.models.OrderItem;
 import com.hesed.models.Product;
@@ -53,53 +54,49 @@ public class OrderService {
                 .notes(request.getNotes())
                 .build();
 
-        BigDecimal total = BigDecimal.ZERO;
-
         for (UUID productId : request.getProductIds()) {
             Product product = productRepository.findById(productId)
                     .orElseThrow(() -> new RuntimeException("Produto não encontrado: " + productId));
-
-            // Detecta promoção ativa para o snapshot
-            List<Promotion> activePromos = promotionRepository.findActiveByProduct(product.getId(), now);
-            Promotion promo = activePromos.isEmpty() ? null : activePromos.get(0);
-
-            BigDecimal unitPrice = product.getSalePrice();
-            BigDecimal effectivePrice = unitPrice;
-            boolean wasPromotion = false;
-            BigDecimal discountPercent = null;
-
-            if (promo != null) {
-                wasPromotion = true;
-                discountPercent = promo.getDiscountPercent();
-                if (promo.getPromoPrice() != null) {
-                    effectivePrice = promo.getPromoPrice();
-                } else if (promo.getDiscountPercent() != null) {
-                    // Calcula preço promocional a partir do percentual, se não houver promoPrice
-                    BigDecimal factor = BigDecimal.ONE.subtract(
-                            promo.getDiscountPercent().divide(BigDecimal.valueOf(100)));
-                    effectivePrice = unitPrice.multiply(factor);
-                }
-            }
-
-            OrderItem item = OrderItem.builder()
-                    .order(order)
-                    .product(product)
-                    .productSku(product.getSku())
-                    .productName(product.getName())
-                    .productCategory(product.getCategory())
-                    .unitPrice(unitPrice)
-                    .effectivePrice(effectivePrice)
-                    .costPrice(product.getCostPrice())
-                    .quantity(1)
-                    .wasPromotion(wasPromotion)
-                    .discountPercent(discountPercent)
-                    .build();
-
-            order.getItems().add(item);
-            total = total.add(effectivePrice);
+            order.getItems().add(buildSnapshotItem(order, product, 1, null, now));
         }
 
-        order.setTotalAmount(total);
+        recalcTotal(order);
+        return OrderResponse.from(orderRepository.save(order));
+    }
+
+    /**
+     * Edita um pedido PENDENTE: itens (qtd, preço), dados do cliente e notas.
+     * Pedidos já resolvidos (CONFIRMADO/CANCELADO) são imutáveis.
+     */
+    @Transactional
+    public OrderResponse update(UUID id, OrderUpdateRequest request) {
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Pedido não encontrado."));
+
+        if (!"PENDENTE".equals(order.getStatus())) {
+            throw new RuntimeException("Apenas pedidos pendentes podem ser editados.");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // Reconstrói a lista de itens a partir do request (orphanRemoval limpa os antigos)
+        order.getItems().clear();
+        for (OrderUpdateRequest.Item reqItem : request.getItems()) {
+            if (reqItem.getProductId() == null) {
+                throw new RuntimeException("Item sem produto informado.");
+            }
+            Product product = productRepository.findById(reqItem.getProductId())
+                    .orElseThrow(() -> new RuntimeException("Produto não encontrado: " + reqItem.getProductId()));
+
+            int qty = (reqItem.getQuantity() != null && reqItem.getQuantity() >= 1) ? reqItem.getQuantity() : 1;
+            order.getItems().add(buildSnapshotItem(order, product, qty, reqItem.getEffectivePrice(), now));
+        }
+
+        order.setCustomerName(trimToNull(request.getCustomerName()));
+        order.setCustomerPhone(trimToNull(request.getCustomerPhone()));
+        order.setNotes(trimToNull(request.getNotes()));
+
+        recalcTotal(order);
         return OrderResponse.from(orderRepository.save(order));
     }
 
@@ -120,6 +117,12 @@ public class OrderService {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Pedido não encontrado."));
 
+        // Nome do cliente é obrigatório para confirmar a venda
+        if (normalized.equals("CONFIRMADO")
+                && (order.getCustomerName() == null || order.getCustomerName().isBlank())) {
+            throw new RuntimeException("Informe o nome do cliente antes de confirmar a venda.");
+        }
+
         order.setStatus(normalized);
         order.setResolvedAt(normalized.equals("PENDENTE") ? null : LocalDateTime.now());
 
@@ -131,6 +134,66 @@ public class OrderService {
     }
 
     // ---- helpers ----
+
+    /** Constrói um OrderItem com snapshot de produto/promoção. Se overridePrice
+     *  for informado, usa-o como effectivePrice (negociação manual). */
+    private OrderItem buildSnapshotItem(Order order, Product product, int quantity,
+                                        BigDecimal overridePrice, LocalDateTime now) {
+        List<Promotion> activePromos = promotionRepository.findActiveByProduct(product.getId(), now);
+        Promotion promo = activePromos.isEmpty() ? null : activePromos.get(0);
+
+        BigDecimal unitPrice = product.getSalePrice();
+        BigDecimal effectivePrice = unitPrice;
+        boolean wasPromotion = false;
+        BigDecimal discountPercent = null;
+
+        if (promo != null) {
+            wasPromotion = true;
+            discountPercent = promo.getDiscountPercent();
+            if (promo.getPromoPrice() != null) {
+                effectivePrice = promo.getPromoPrice();
+            } else if (promo.getDiscountPercent() != null) {
+                BigDecimal factor = BigDecimal.ONE.subtract(
+                        promo.getDiscountPercent().divide(BigDecimal.valueOf(100)));
+                effectivePrice = unitPrice.multiply(factor);
+            }
+        }
+
+        // Preço negociado manualmente sobrepõe o cálculo automático
+        if (overridePrice != null && overridePrice.signum() >= 0) {
+            effectivePrice = overridePrice;
+        }
+
+        return OrderItem.builder()
+                .order(order)
+                .product(product)
+                .productSku(product.getSku())
+                .productName(product.getName())
+                .productCategory(product.getCategory())
+                .unitPrice(unitPrice)
+                .effectivePrice(effectivePrice)
+                .costPrice(product.getCostPrice())
+                .quantity(quantity)
+                .wasPromotion(wasPromotion)
+                .discountPercent(discountPercent)
+                .build();
+    }
+
+    /** Total = soma de (effectivePrice * quantity) de cada item. */
+    private void recalcTotal(Order order) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (OrderItem item : order.getItems()) {
+            int qty = item.getQuantity() != null ? item.getQuantity() : 1;
+            total = total.add(item.getEffectivePrice().multiply(BigDecimal.valueOf(qty)));
+        }
+        order.setTotalAmount(total);
+    }
+
+    private String trimToNull(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
 
     private String resolveOrderNumber(String requested) {
         if (requested != null && !requested.isBlank() && !orderRepository.existsByOrderNumber(requested)) {

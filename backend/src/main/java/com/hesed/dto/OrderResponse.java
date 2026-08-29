@@ -18,6 +18,8 @@ public class OrderResponse {
     private BigDecimal totalAmount;
     private LocalDateTime orderedAt;
     private LocalDateTime resolvedAt;
+    private String customerName;
+    private String customerPhone;
     private String notes;
     private List<Item> items;
 
@@ -30,6 +32,7 @@ public class OrderResponse {
         private String productCategory;
         private BigDecimal unitPrice;
         private BigDecimal effectivePrice;
+        private BigDecimal subtotal;   // effectivePrice * quantity
         private BigDecimal costPrice;
         private Integer quantity;
         private Boolean wasPromotion;
@@ -44,6 +47,9 @@ public class OrderResponse {
             i.setProductCategory(oi.getProductCategory());
             i.setUnitPrice(oi.getUnitPrice());
             i.setEffectivePrice(oi.getEffectivePrice());
+            int qty = oi.getQuantity() != null ? oi.getQuantity() : 1;
+            i.setSubtotal(oi.getEffectivePrice() != null
+                    ? oi.getEffectivePrice().multiply(java.math.BigDecimal.valueOf(qty)) : null);
             i.setCostPrice(oi.getCostPrice());
             i.setQuantity(oi.getQuantity());
             i.setWasPromotion(oi.getWasPromotion());
@@ -61,6 +67,8 @@ public class OrderResponse {
         r.setTotalAmount(o.getTotalAmount());
         r.setOrderedAt(o.getOrderedAt());
         r.setResolvedAt(o.getResolvedAt());
+        r.setCustomerName(o.getCustomerName());
+        r.setCustomerPhone(o.getCustomerPhone());
         r.setNotes(o.getNotes());
         r.setItems(o.getItems().stream().map(Item::from).toList());
         return r;
