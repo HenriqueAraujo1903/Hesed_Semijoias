@@ -52,9 +52,23 @@ export default function CatalogoPage() {
   }
 
   function sendWhatsApp() {
+    if (selected.length === 0) return;
+
     const total = selected.reduce((sum, p) => sum + p.salePrice, 0);
     const items = selected.map((p, i) => `${i + 1}. ${p.name}\n   Ref: ${p.sku} | ${BRL.format(p.salePrice)}`).join('\n\n');
     const msg = `✨ *HESED Semijoias — Novo Pedido* ✨\n\n*Nº do Pedido:* ${orderNumber}\n\n*Itens selecionados:*\n${items}\n\n━━━━━━━━━━━━━━━━━\n*Total estimado:* ${BRL.format(total)}\n━━━━━━━━━━━━━━━━━\n\nOlá! Gostaria de finalizar este pedido. 😊`;
+
+    // Registra o pedido no backend (não bloqueia o cliente).
+    // A abertura do WhatsApp acontece de qualquer forma — a venda é prioridade
+    // sobre o registro. Falhas de registro são apenas logadas.
+    axios.post('/api/orders', {
+      productIds: selected.map((p) => p.id),
+      orderNumber,
+    }).catch((err) => {
+      console.error('Falha ao registrar o pedido (o WhatsApp foi aberto normalmente):', err);
+    });
+
+    // Abre o WhatsApp imediatamente (síncrono, para não ser bloqueado como popup).
     window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
   }
 

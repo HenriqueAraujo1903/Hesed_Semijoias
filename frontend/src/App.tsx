@@ -4,6 +4,9 @@ import ProtectedRoute from './components/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
+import DashboardsPage from './pages/DashboardsPage';
+import SalesDashboardPage from './pages/dashboards/SalesDashboardPage';
+import OrdersPage from './pages/OrdersPage';
 import ProductsPage from './pages/ProductsPage';
 import AdminProductsPage from './pages/AdminProductsPage';
 import AdminPromotionsPage from './pages/AdminPromotionsPage';
@@ -22,7 +25,14 @@ export default function App() {
       {/* Protected */}
       <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/dashboards" element={<DashboardsPage />} />
+        <Route path="/dashboards/vendas" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><SalesDashboardPage /></ProtectedRoute>
+        } />
         <Route path="/produtos" element={<ProductsPage />} />
+        <Route path="/pedidos" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><OrdersPage /></ProtectedRoute>
+        } />
         <Route path="/revendedoras" element={<ConsigneesPage />} />
         <Route path="/admin/produtos" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><AdminProductsPage /></ProtectedRoute>
