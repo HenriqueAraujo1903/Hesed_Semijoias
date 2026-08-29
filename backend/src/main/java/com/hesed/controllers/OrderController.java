@@ -1,5 +1,6 @@
 package com.hesed.controllers;
 
+import com.hesed.dto.AdminOrderCreateRequest;
 import com.hesed.dto.OrderRequest;
 import com.hesed.dto.OrderResponse;
 import com.hesed.dto.OrderUpdateRequest;
@@ -27,6 +28,17 @@ public class OrderController {
     public ResponseEntity<?> create(@Valid @RequestBody OrderRequest request) {
         try {
             OrderResponse response = orderService.create(request);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ---- Admin: criar pedido de venda direta (fora do catálogo) ----
+    @PostMapping("/api/admin/orders")
+    public ResponseEntity<?> createDirect(@Valid @RequestBody AdminOrderCreateRequest request) {
+        try {
+            OrderResponse response = orderService.createDirect(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));

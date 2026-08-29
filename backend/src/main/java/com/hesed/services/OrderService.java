@@ -1,5 +1,6 @@
 package com.hesed.services;
 
+import com.hesed.dto.AdminOrderCreateRequest;
 import com.hesed.dto.OrderRequest;
 import com.hesed.dto.OrderResponse;
 import com.hesed.dto.OrderUpdateRequest;
@@ -65,6 +66,50 @@ public class OrderService {
             Product product = productRepository.findById(productId)
                     .orElseThrow(() -> new RuntimeException("Produto não encontrado: " + productId));
             order.getItems().add(buildSnapshotItem(order, product, 1, null, now));
+        }
+
+        recalcTotal(order);
+        return OrderResponse.from(orderRepository.save(order));
+    }
+
+    /**
+     * Cria um pedido pela operadora (venda direta, fora do catálogo).
+     * Canal = DIRETA. Se confirm=true, nasce CONFIRMADO (nome obrigatório).
+     */
+    @Transactional
+    public OrderResponse createDirect(AdminOrderCreateRequest request) {
+        boolean confirm = Boolean.TRUE.equals(request.getConfirm());
+
+        if (request.getItems().size() > MAX_ITEMS_PER_ORDER) {
+            throw new RuntimeException("Pedido excede o número máximo de itens (" + MAX_ITEMS_PER_ORDER + ").");
+        }
+
+        String customerName = trimToNull(request.getCustomerName());
+        if (confirm && customerName == null) {
+            throw new RuntimeException("Informe o nome do cliente para confirmar a venda.");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        Order order = Order.builder()
+                .orderNumber(generateUniqueOrderNumber())
+                .status(confirm ? "CONFIRMADO" : "PENDENTE")
+                .channel("DIRETA")
+                .orderedAt(now)
+                .resolvedAt(confirm ? now : null)
+                .customerName(customerName)
+                .customerPhone(trimToNull(request.getCustomerPhone()))
+                .notes(trimToNull(request.getNotes()))
+                .build();
+
+        for (AdminOrderCreateRequest.Item reqItem : request.getItems()) {
+            if (reqItem.getProductId() == null) {
+                throw new RuntimeException("Item sem produto informado.");
+            }
+            Product product = productRepository.findById(reqItem.getProductId())
+                    .orElseThrow(() -> new RuntimeException("Produto não encontrado: " + reqItem.getProductId()));
+            int qty = (reqItem.getQuantity() != null && reqItem.getQuantity() >= 1) ? reqItem.getQuantity() : 1;
+            order.getItems().add(buildSnapshotItem(order, product, qty, reqItem.getEffectivePrice(), now));
         }
 
         recalcTotal(order);

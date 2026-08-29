@@ -66,6 +66,7 @@ export default function OrdersPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<Order | null>(null);
+  const [creating, setCreating] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,11 +117,16 @@ export default function OrdersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-serif text-display text-charcoal-800 dark:text-cream-200">Pedidos</h1>
-        <p className="text-sm text-charcoal-400 dark:text-charcoal-500">
-          Pedidos recebidos pelo catálogo. Ajuste os itens e informe o cliente antes de confirmar a venda.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-serif text-display text-charcoal-800 dark:text-cream-200">Pedidos</h1>
+          <p className="text-sm text-charcoal-400 dark:text-charcoal-500">
+            Pedidos do catálogo e vendas diretas. Ajuste os itens e informe o cliente antes de confirmar a venda.
+          </p>
+        </div>
+        <button onClick={() => setCreating(true)} className="btn-primary shrink-0">
+          + Novo pedido
+        </button>
       </div>
 
       <div className="grid grid-cols-3 gap-4">
@@ -271,12 +277,12 @@ export default function OrdersPage() {
         </div>
       )}
 
-      {editTarget && (
+      {(editTarget || creating) && (
         <OrderEditModal
           order={editTarget}
           products={products}
-          onClose={() => setEditTarget(null)}
-          onSaved={() => { setEditTarget(null); load(); }}
+          onClose={() => { setEditTarget(null); setCreating(false); }}
+          onSaved={() => { setEditTarget(null); setCreating(false); load(); }}
         />
       )}
     </div>
@@ -293,10 +299,11 @@ interface EditItem {
 }
 
 function OrderEditModal({ order, products, onClose, onSaved }: {
-  order: Order; products: Product[]; onClose: () => void; onSaved: () => void;
+  order: Order | null; products: Product[]; onClose: () => void; onSaved: () => void;
 }) {
+  const isCreate = order === null;
   const [items, setItems] = useState<EditItem[]>(
-    order.items.map((i) => ({
+    (order?.items ?? []).map((i) => ({
       productId: i.productId ?? '',
       productName: i.productName,
       productSku: i.productSku,
@@ -304,9 +311,9 @@ function OrderEditModal({ order, products, onClose, onSaved }: {
       effectivePrice: i.effectivePrice,
     }))
   );
-  const [customerName, setCustomerName] = useState(order.customerName ?? '');
-  const [customerPhone, setCustomerPhone] = useState(order.customerPhone ?? '');
-  const [notes, setNotes] = useState(order.notes ?? '');
+  const [customerName, setCustomerName] = useState(order?.customerName ?? '');
+  const [customerPhone, setCustomerPhone] = useState(order?.customerPhone ?? '');
+  const [notes, setNotes] = useState(order?.notes ?? '');
   const [addProductId, setAddProductId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -342,20 +349,33 @@ function OrderEditModal({ order, products, onClose, onSaved }: {
     if (items.length === 0) { setError('O pedido precisa ter ao menos um item.'); return; }
     if (confirmAfter && !customerName.trim()) { setError('Informe o nome do cliente para confirmar a venda.'); return; }
 
+    const payloadItems = items.map((i) => ({
+      productId: i.productId,
+      quantity: i.quantity,
+      effectivePrice: i.effectivePrice,
+    }));
+
     setLoading(true);
     try {
-      await api.put(`/admin/orders/${order.id}`, {
-        items: items.map((i) => ({
-          productId: i.productId,
-          quantity: i.quantity,
-          effectivePrice: i.effectivePrice,
-        })),
-        customerName: customerName.trim() || null,
-        customerPhone: customerPhone.trim() || null,
-        notes: notes.trim() || null,
-      });
-      if (confirmAfter) {
-        await api.patch(`/admin/orders/${order.id}/status`, { status: 'CONFIRMADO' });
+      if (isCreate) {
+        // Venda direta: cria já com o status desejado (confirm=true nasce CONFIRMADO)
+        await api.post('/admin/orders', {
+          items: payloadItems,
+          customerName: customerName.trim() || null,
+          customerPhone: customerPhone.trim() || null,
+          notes: notes.trim() || null,
+          confirm: confirmAfter,
+        });
+      } else {
+        await api.put(`/admin/orders/${order!.id}`, {
+          items: payloadItems,
+          customerName: customerName.trim() || null,
+          customerPhone: customerPhone.trim() || null,
+          notes: notes.trim() || null,
+        });
+        if (confirmAfter) {
+          await api.patch(`/admin/orders/${order!.id}/status`, { status: 'CONFIRMADO' });
+        }
       }
       onSaved();
     } catch (e: any) {
@@ -370,8 +390,12 @@ function OrderEditModal({ order, products, onClose, onSaved }: {
       <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-charcoal-800 shadow-xl">
         <div className="flex items-center justify-between border-b border-charcoal-100 dark:border-charcoal-700 px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-charcoal-800 dark:text-cream-200">Editar Pedido</h2>
-            <p className="text-xs text-charcoal-400 font-mono">{order.orderNumber}</p>
+            <h2 className="text-base font-semibold text-charcoal-800 dark:text-cream-200">
+              {isCreate ? 'Nova Venda Direta' : 'Editar Pedido'}
+            </h2>
+            <p className="text-xs text-charcoal-400 font-mono">
+              {isCreate ? 'Venda fora do catálogo' : order!.orderNumber}
+            </p>
           </div>
           <button onClick={onClose} className="text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200">✕</button>
         </div>
@@ -460,11 +484,11 @@ function OrderEditModal({ order, products, onClose, onSaved }: {
           <button onClick={onClose} className="btn-ghost">Cancelar</button>
           <button onClick={() => handleSave(false)} disabled={loading}
             className="rounded-lg border border-charcoal-200 dark:border-charcoal-600 px-4 py-2 text-sm font-medium text-charcoal-600 dark:text-charcoal-300 hover:border-gold hover:text-gold transition-all disabled:opacity-50">
-            {loading ? 'Salvando...' : 'Salvar'}
+            {loading ? 'Salvando...' : isCreate ? 'Salvar como pendente' : 'Salvar'}
           </button>
           <button onClick={() => handleSave(true)} disabled={loading}
             className="rounded-lg bg-emerald-500 hover:bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50">
-            Salvar e confirmar venda
+            {isCreate ? 'Registrar venda' : 'Salvar e confirmar venda'}
           </button>
         </div>
       </div>
