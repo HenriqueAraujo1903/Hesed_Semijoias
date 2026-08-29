@@ -42,8 +42,15 @@ public class OrderService {
      * Cria um pedido a partir dos produtos selecionados no catálogo.
      * Faz snapshot de preço e promoção de cada item NO MOMENTO do pedido.
      */
+    /** Teto de itens por pedido do catálogo público (proteção contra abuso/lixo). */
+    private static final int MAX_ITEMS_PER_ORDER = 50;
+
     @Transactional
     public OrderResponse create(OrderRequest request) {
+        if (request.getProductIds().size() > MAX_ITEMS_PER_ORDER) {
+            throw new RuntimeException("Pedido excede o número máximo de itens (" + MAX_ITEMS_PER_ORDER + ").");
+        }
+
         LocalDateTime now = LocalDateTime.now();
 
         Order order = Order.builder()
@@ -79,6 +86,15 @@ public class OrderService {
 
         LocalDateTime now = LocalDateTime.now();
 
+        // Preserva o custo do snapshot original por produto (o custo é do instante
+        // do pedido, não da edição — evita divergência de margem se o custo mudar).
+        java.util.Map<UUID, BigDecimal> originalCostByProduct = new java.util.HashMap<>();
+        for (OrderItem existing : order.getItems()) {
+            if (existing.getProduct() != null && existing.getCostPrice() != null) {
+                originalCostByProduct.putIfAbsent(existing.getProduct().getId(), existing.getCostPrice());
+            }
+        }
+
         // Reconstrói a lista de itens a partir do request (orphanRemoval limpa os antigos)
         order.getItems().clear();
         for (OrderUpdateRequest.Item reqItem : request.getItems()) {
@@ -89,7 +105,13 @@ public class OrderService {
                     .orElseThrow(() -> new RuntimeException("Produto não encontrado: " + reqItem.getProductId()));
 
             int qty = (reqItem.getQuantity() != null && reqItem.getQuantity() >= 1) ? reqItem.getQuantity() : 1;
-            order.getItems().add(buildSnapshotItem(order, product, qty, reqItem.getEffectivePrice(), now));
+            OrderItem item = buildSnapshotItem(order, product, qty, reqItem.getEffectivePrice(), now);
+            // Se o produto já estava no pedido, mantém o custo do snapshot original
+            BigDecimal preservedCost = originalCostByProduct.get(product.getId());
+            if (preservedCost != null) {
+                item.setCostPrice(preservedCost);
+            }
+            order.getItems().add(item);
         }
 
         order.setCustomerName(trimToNull(request.getCustomerName()));
@@ -184,7 +206,8 @@ public class OrderService {
         BigDecimal total = BigDecimal.ZERO;
         for (OrderItem item : order.getItems()) {
             int qty = item.getQuantity() != null ? item.getQuantity() : 1;
-            total = total.add(item.getEffectivePrice().multiply(BigDecimal.valueOf(qty)));
+            BigDecimal price = item.getEffectivePrice() != null ? item.getEffectivePrice() : BigDecimal.ZERO;
+            total = total.add(price.multiply(BigDecimal.valueOf(qty)));
         }
         order.setTotalAmount(total);
     }

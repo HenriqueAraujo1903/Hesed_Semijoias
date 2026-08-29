@@ -22,7 +22,9 @@ import java.util.UUID;
  * Só pedidos CONFIRMADO entram nas métricas de receita do dashboard.
  */
 @Entity
-@Table(name = "orders")
+@Table(name = "orders", indexes = {
+        @Index(name = "idx_orders_status_ordered_at", columnList = "status, ordered_at")
+})
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
 @Builder
