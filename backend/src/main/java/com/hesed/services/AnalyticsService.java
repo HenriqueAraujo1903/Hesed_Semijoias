@@ -1,7 +1,9 @@
 package com.hesed.services;
 
+import com.hesed.dto.EngagementAnalyticsResponse;
 import com.hesed.dto.SalesAnalyticsResponse;
 import com.hesed.dto.SalesAnalyticsResponse.*;
+import com.hesed.repositories.CatalogEventRepository;
 import com.hesed.repositories.OrderItemRepository;
 import com.hesed.repositories.OrderRepository;
 import org.springframework.stereotype.Service;
@@ -16,11 +18,14 @@ public class AnalyticsService {
 
     private final OrderItemRepository orderItemRepository;
     private final OrderRepository orderRepository;
+    private final CatalogEventRepository catalogEventRepository;
 
     public AnalyticsService(OrderItemRepository orderItemRepository,
-                            OrderRepository orderRepository) {
+                            OrderRepository orderRepository,
+                            CatalogEventRepository catalogEventRepository) {
         this.orderItemRepository = orderItemRepository;
         this.orderRepository = orderRepository;
+        this.catalogEventRepository = catalogEventRepository;
     }
 
     public SalesAnalyticsResponse sales(String status,
@@ -167,6 +172,90 @@ public class AnalyticsService {
                 : BigDecimal.valueOf(confirmed).multiply(BigDecimal.valueOf(100))
                     .divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP));
         return c;
+    }
+
+    // ═══════════════ Engajamento do catálogo (topo/meio do funil) ═══════════════
+
+    public EngagementAnalyticsResponse engagement(LocalDateTime from, LocalDateTime to) {
+        LocalDateTime fromDt = from != null ? from : LocalDateTime.of(2000, 1, 1, 0, 0);
+        LocalDateTime toDt = to != null ? to : LocalDateTime.now().plusYears(1);
+
+        long visits = catalogEventRepository.countByTypeInRange("VIEW", fromDt, toDt);
+        long selections = catalogEventRepository.countByTypeInRange("SELECT", fromDt, toDt);
+        long uniqueSessions = catalogEventRepository.countDistinctSessionsInRange(fromDt, toDt);
+
+        // Pedidos e vendas do período (reusa a contagem por status)
+        long orders = 0, sales = 0;
+        for (Object[] r : orderRepository.countByStatusInRange(fromDt, toDt)) {
+            String status = (String) r[0];
+            long count = toLong(r[1]);
+            orders += count;
+            if ("CONFIRMADO".equals(status)) sales = count;
+        }
+
+        EngagementAnalyticsResponse resp = new EngagementAnalyticsResponse();
+
+        // KPIs
+        EngagementAnalyticsResponse.Kpis k = new EngagementAnalyticsResponse.Kpis();
+        k.setVisits(visits);
+        k.setUniqueSessions(uniqueSessions);
+        k.setSelections(selections);
+        k.setOrdersCreated(orders);
+        k.setSalesConfirmed(sales);
+        resp.setKpis(k);
+
+        // Série temporal (visitas e seleções por dia)
+        java.util.Map<String, long[]> byDay = new java.util.LinkedHashMap<>();
+        for (Object[] r : catalogEventRepository.dailyByType(fromDt, toDt)) {
+            String period = (String) r[0];
+            String type = (String) r[1];
+            long count = toLong(r[2]);
+            long[] pair = byDay.computeIfAbsent(period, x -> new long[2]);
+            if ("VIEW".equals(type)) pair[0] += count;
+            else if ("SELECT".equals(type)) pair[1] += count;
+        }
+        List<EngagementAnalyticsResponse.DayPoint> series = new java.util.ArrayList<>();
+        for (var entry : byDay.entrySet()) {
+            EngagementAnalyticsResponse.DayPoint dp = new EngagementAnalyticsResponse.DayPoint();
+            dp.setPeriod(entry.getKey());
+            dp.setVisits(entry.getValue()[0]);
+            dp.setSelections(entry.getValue()[1]);
+            series.add(dp);
+        }
+        resp.setTimeSeries(series);
+
+        // Top produtos selecionados
+        List<EngagementAnalyticsResponse.SelectedProduct> top = new java.util.ArrayList<>();
+        for (Object[] r : catalogEventRepository.topSelectedProducts(fromDt, toDt)) {
+            EngagementAnalyticsResponse.SelectedProduct sp = new EngagementAnalyticsResponse.SelectedProduct();
+            sp.setSku((String) r[0]);
+            sp.setName((String) r[1]);
+            sp.setCategory((String) r[2]);
+            sp.setSelections(toLong(r[3]));
+            sp.setUniqueSessions(toLong(r[4]));
+            top.add(sp);
+        }
+        resp.setTopSelected(top);
+
+        // Funil
+        EngagementAnalyticsResponse.Funnel f = new EngagementAnalyticsResponse.Funnel();
+        f.setVisits(visits);
+        f.setSelections(selections);
+        f.setOrders(orders);
+        f.setSales(sales);
+        f.setVisitToSelection(rate(selections, visits));
+        f.setSelectionToOrder(rate(orders, selections));
+        f.setOrderToSale(rate(sales, orders));
+        resp.setFunnel(f);
+
+        return resp;
+    }
+
+    /** Taxa percentual de num/den, protegida contra divisão por zero. */
+    private static BigDecimal rate(long num, long den) {
+        if (den == 0) return BigDecimal.ZERO;
+        return BigDecimal.valueOf(num).multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(den), 2, RoundingMode.HALF_UP);
     }
 
     // ---- helpers de conversão de tipo ----

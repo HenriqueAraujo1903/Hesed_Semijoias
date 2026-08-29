@@ -1,5 +1,6 @@
 package com.hesed.controllers;
 
+import com.hesed.dto.EngagementAnalyticsResponse;
 import com.hesed.dto.SalesAnalyticsResponse;
 import com.hesed.services.AnalyticsService;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -48,5 +49,19 @@ public class AnalyticsController {
 
         return ResponseEntity.ok(
                 analyticsService.sales(status, granularity, fromDt, toDt, cat, promoOnly));
+    }
+
+    /**
+     * Engajamento do catálogo: visitas, seleções, produtos mais desejados e funil.
+     */
+    @GetMapping("/engagement")
+    public ResponseEntity<EngagementAnalyticsResponse> engagement(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+
+        LocalDateTime fromDt = from != null ? from.atStartOfDay() : null;
+        LocalDateTime toDt = to != null ? to.atTime(LocalTime.MAX) : null;
+
+        return ResponseEntity.ok(analyticsService.engagement(fromDt, toDt));
     }
 }

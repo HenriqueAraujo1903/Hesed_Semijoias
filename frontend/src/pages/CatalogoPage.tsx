@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { useTheme } from '../contexts/ThemeContext';
+import { trackCatalogEvent } from '../services/telemetry';
 import Logo from '../components/Logo';
 
 interface Product {
@@ -31,6 +32,8 @@ export default function CatalogoPage() {
 
   useEffect(() => {
     axios.get('/api/products/catalog').then((res) => setProducts(res.data));
+    // Telemetria: registra a visita ao catálogo (uma vez por montagem da página)
+    trackCatalogEvent('VIEW');
   }, []);
 
   const categories = useMemo(() => {
@@ -44,11 +47,15 @@ export default function CatalogoPage() {
   }, [products, activeCategory]);
 
   function toggle(product: Product) {
-    setSelected((prev) =>
-      prev.find((p) => p.id === product.id)
-        ? prev.filter((p) => p.id !== product.id)
-        : [...prev, product]
-    );
+    setSelected((prev) => {
+      const alreadySelected = prev.find((p) => p.id === product.id);
+      if (alreadySelected) {
+        return prev.filter((p) => p.id !== product.id);
+      }
+      // Telemetria: registra o interesse (seleção) — não registramos deseleção
+      trackCatalogEvent('SELECT', product.id);
+      return [...prev, product];
+    });
   }
 
   function sendWhatsApp() {

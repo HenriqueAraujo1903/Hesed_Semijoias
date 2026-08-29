@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import DashboardsPage from './pages/DashboardsPage';
 import SalesDashboardPage from './pages/dashboards/SalesDashboardPage';
+import EngagementDashboardPage from './pages/dashboards/EngagementDashboardPage';
 import OrdersPage from './pages/OrdersPage';
 import ProductsPage from './pages/ProductsPage';
 import AdminProductsPage from './pages/AdminProductsPage';
@@ -28,6 +29,9 @@ export default function App() {
         <Route path="/dashboards" element={<DashboardsPage />} />
         <Route path="/dashboards/vendas" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><SalesDashboardPage /></ProtectedRoute>
+        } />
+        <Route path="/dashboards/engajamento" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><EngagementDashboardPage /></ProtectedRoute>
         } />
         <Route path="/produtos" element={<ProductsPage />} />
         <Route path="/pedidos" element={

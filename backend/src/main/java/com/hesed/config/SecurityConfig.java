@@ -52,6 +52,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/promotions").permitAll()
                 // Registro de pedido do catálogo público (sem login)
                 .requestMatchers(HttpMethod.POST, "/api/orders").permitAll()
+                // Telemetria de engajamento do catálogo público (sem login)
+                .requestMatchers(HttpMethod.POST, "/api/catalog-events").permitAll()
                 .requestMatchers("/uploads/**").permitAll()
                 // Admin-only endpoints
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
