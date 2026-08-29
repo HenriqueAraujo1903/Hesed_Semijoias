@@ -22,8 +22,9 @@
 2. ~~Configurar domínio + SSL~~ → **HTTPS ativo em https://hesedsemijoias.online** (Let's Encrypt, válido até 27/11/2026, renovação automática via certbot)
 3. ~~Restringir portas 5432 e 8080~~ → portas do banco e backend agora só na rede interna Docker (não expostas)
 
-### ⚠️ PENDÊNCIA RESTANTE:
-- **Rotacionar/remover JWT secret antigo** do `application.yml` de dev (vazou no GitHub). O de PRODUÇÃO já é diferente (só no .env do servidor), então o risco é baixo, mas vale limpar o de dev.
+### ✅ TODAS AS PENDÊNCIAS DE SEGURANÇA RESOLVIDAS:
+- ~~JWT secret hardcoded~~ → externalizado via env var (`JWT_SECRET`), fallback só para dev. Senha do banco, CORS e upload também externalizados. Produção usa valores próprios via `.env` no servidor.
+- Nota: o secret antigo permanece no histórico do Git, mas é inofensivo pois o de produção é totalmente distinto e nunca foi commitado.
 
 ### Domínio de produção:
 - **https://hesedsemijoias.online** (e www) → HTTP redireciona para HTTPS
