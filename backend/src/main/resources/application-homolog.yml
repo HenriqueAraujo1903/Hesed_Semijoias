@@ -1,0 +1,45 @@
+# ============================================================
+# Perfil de HOMOLOGAÇÃO (staging local)
+# Banco separado do de desenvolvimento (hesed_homolog).
+# Porta 8081 para poder rodar junto com o dev (8080), se necessário.
+# Uso: mvn spring-boot:run -Dspring-boot.run.profiles=homolog
+#  ou: java -jar app.jar --spring.profiles.active=homolog
+# ============================================================
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:hesed_homolog}
+    username: ${DB_USERNAME:henriquearaujo}
+    password: ${DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # 'update' facilita o setup do banco de homologação (cria/atualiza schema).
+      # Para uma homologação mais fiel à produção, troque para 'validate'
+      # depois que o schema já estiver criado.
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+server:
+  port: 8081
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:homologSecretKeyHesedSemijoias2026ParaTestesDeHomologacaoLocal}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
+
+  upload:
+    dir: ${UPLOAD_DIR:./uploads-homolog}
+    base-url: ${UPLOAD_BASE_URL:http://localhost:8081/uploads}
+
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:5174,http://localhost:3000}
+
+logging:
+  level:
+    root: INFO
+    com.hesed: INFO
