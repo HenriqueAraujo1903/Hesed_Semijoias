@@ -17,4 +17,10 @@ public interface PromotionRepository extends JpaRepository<Promotion, UUID> {
            "AND (p.endsAt IS NULL OR p.endsAt >= :now) " +
            "ORDER BY p.sortOrder ASC, p.createdAt DESC")
     List<Promotion> findActivePromotions(LocalDateTime now);
+
+    @Query("SELECT p FROM Promotion p WHERE p.product.id = :productId AND p.active = true " +
+           "AND (p.startsAt IS NULL OR p.startsAt <= :now) " +
+           "AND (p.endsAt IS NULL OR p.endsAt >= :now) " +
+           "ORDER BY p.sortOrder ASC, p.createdAt DESC")
+    List<Promotion> findActiveByProduct(UUID productId, LocalDateTime now);
 }
