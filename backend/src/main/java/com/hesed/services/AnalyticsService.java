@@ -190,7 +190,7 @@ public class AnalyticsService {
             String status = (String) r[0];
             long count = toLong(r[1]);
             orders += count;
-            if ("CONFIRMADO".equals(status)) sales = count;
+            if ("CONFIRMADO".equals(status)) sales += count;
         }
 
         EngagementAnalyticsResponse resp = new EngagementAnalyticsResponse();

@@ -28,3 +28,6 @@ uploads/
 # Docker
 # ========================
 nginx/ssl/
+
+# Outputs de revisão de código (ferramenta)
+semantic-review/

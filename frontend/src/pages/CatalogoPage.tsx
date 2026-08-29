@@ -29,11 +29,23 @@ export default function CatalogoPage() {
   const [selected, setSelected] = useState<Product[]>([]);
   const [activeCategory, setActiveCategory] = useState('Todos');
   const [orderNumber] = useState(generateOrderNumber());
+  // Sacola: expande ao adicionar item e minimiza sozinha após alguns segundos,
+  // para não atrapalhar a navegação pelo catálogo.
+  const [cartExpanded, setCartExpanded] = useState(false);
+  const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viewTracked = useRef(false);
+
+  // Limpa o timer ao desmontar
+  useEffect(() => () => { if (collapseTimer.current) clearTimeout(collapseTimer.current); }, []);
 
   useEffect(() => {
     axios.get('/api/products/catalog').then((res) => setProducts(res.data));
-    // Telemetria: registra a visita ao catálogo (uma vez por montagem da página)
-    trackCatalogEvent('VIEW');
+    // Telemetria: registra a visita ao catálogo uma única vez
+    // (guarda contra o double-invoke do React StrictMode em desenvolvimento).
+    if (!viewTracked.current) {
+      viewTracked.current = true;
+      trackCatalogEvent('VIEW');
+    }
   }, []);
 
   const categories = useMemo(() => {
@@ -46,6 +58,12 @@ export default function CatalogoPage() {
     return products.filter((p) => p.category === activeCategory);
   }, [products, activeCategory]);
 
+  function expandCartThenCollapse() {
+    setCartExpanded(true);
+    if (collapseTimer.current) clearTimeout(collapseTimer.current);
+    collapseTimer.current = setTimeout(() => setCartExpanded(false), 2500);
+  }
+
   function toggle(product: Product) {
     setSelected((prev) => {
       const alreadySelected = prev.find((p) => p.id === product.id);
@@ -54,6 +72,8 @@ export default function CatalogoPage() {
       }
       // Telemetria: registra o interesse (seleção) — não registramos deseleção
       trackCatalogEvent('SELECT', product.id);
+      // Mostra a sacola expandida brevemente ao adicionar, depois minimiza
+      expandCartThenCollapse();
       return [...prev, product];
     });
   }
@@ -264,22 +284,49 @@ export default function CatalogoPage() {
       {selected.length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 z-50 md:bottom-6 md:right-6 md:left-auto md:w-[420px]">
           <div className="bg-white dark:bg-[#1C1A16] border border-[#C8A96E]/20 dark:border-[#4A3B25]/40 shadow-2xl shadow-black/10 dark:shadow-black/40 rounded-t-3xl md:rounded-3xl overflow-hidden">
-            <div className="bg-gradient-to-r from-[#C8A96E] to-[#B5935A] px-6 py-4 flex items-center justify-between">
+            {/* Header — clicável para expandir/minimizar */}
+            <button
+              onClick={() => setCartExpanded((v) => !v)}
+              aria-expanded={cartExpanded}
+              aria-controls="cart-body"
+              className="w-full bg-gradient-to-r from-[#C8A96E] to-[#B5935A] px-6 py-4 flex items-center justify-between text-left"
+            >
               <div className="flex items-center gap-3">
                 <div className="flex items-center justify-center w-8 h-8 bg-white/20 rounded-full">
                   <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                   </svg>
                 </div>
-                <span className="text-white font-semibold text-sm">
-                  {selected.length} {selected.length === 1 ? 'peça selecionada' : 'peças selecionadas'}
-                </span>
+                <div className="flex flex-col">
+                  <span className="text-white font-semibold text-sm leading-tight">
+                    {selected.length} {selected.length === 1 ? 'peça selecionada' : 'peças selecionadas'}
+                  </span>
+                  {!cartExpanded && (
+                    <span className="text-white/85 text-xs font-serif">
+                      {BRL.format(selected.reduce((s, p) => s + p.salePrice, 0))}
+                    </span>
+                  )}
+                </div>
               </div>
-              <button onClick={() => setSelected([])} className="text-white/60 hover:text-white text-xs underline underline-offset-2 transition-colors">
-                Limpar
+              <div className="flex items-center gap-3">
+                {!cartExpanded && <span className="text-white/90 text-xs font-medium">Ver pedido</span>}
+                <svg
+                  className={`w-4 h-4 text-white transition-transform duration-300 ${cartExpanded ? 'rotate-180' : ''}`}
+                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+                </svg>
+              </div>
+            </button>
+
+            {/* Corpo — só quando expandido */}
+            {cartExpanded && (
+            <div id="cart-body">
+            <div className="flex justify-end px-6 pt-2">
+              <button onClick={() => setSelected([])} className="text-[#A8A5A0] hover:text-red-400 text-xs underline underline-offset-2 transition-colors">
+                Limpar tudo
               </button>
             </div>
-
             <div className="max-h-48 overflow-y-auto divide-y divide-[#F0E4CC]/40 dark:divide-[#3D3A33]/40">
               {selected.map((p) => (
                 <div key={p.id} className="flex items-center justify-between px-6 py-3 hover:bg-[#FDFBF7] dark:hover:bg-[#292620] transition-colors">
@@ -321,6 +368,8 @@ export default function CatalogoPage() {
               </button>
               <p className="text-center text-[10px] text-[#A8A5A0] dark:text-[#5C584F] mt-2">Sem compromisso — finalize pelo chat</p>
             </div>
+            </div>
+            )}
           </div>
         </div>
       )}
