@@ -9,7 +9,6 @@ WORKDIR /app
 
 # Cache dependencies
 COPY pom.xml .
-COPY .mvn .mvn
 RUN apk add --no-cache maven && \
     mvn dependency:go-offline -B
 
