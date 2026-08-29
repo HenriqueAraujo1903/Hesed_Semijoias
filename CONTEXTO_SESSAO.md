@@ -17,11 +17,17 @@
 - Removido `COPY .mvn` do Dockerfile backend (pasta não existia)
 - `ddl-auto: validate` → `update` em prod (banco novo precisava criar schema)
 
-### ⚠️ PENDÊNCIAS DE SEGURANÇA (fazer com urgência):
-1. **Trocar senha do admin** (`admin123` é padrão) — logar e alterar
-2. **Rotacionar/remover JWT secret antigo** do `application.yml` (vazou no GitHub)
-3. **Configurar domínio + SSL (HTTPS)** — hoje só HTTP no IP
-4. **Restringir portas** 5432 e 8080 (hoje expostas publicamente — deixar só 80/443)
+### ✅ RESOLVIDO (29/08):
+1. ~~Trocar senha do admin~~ → admins reais criados (Henrique + Su), admin@hesed.com removido, DataInitializer não recria mais seed
+2. ~~Configurar domínio + SSL~~ → **HTTPS ativo em https://hesedsemijoias.online** (Let's Encrypt, válido até 27/11/2026, renovação automática via certbot)
+3. ~~Restringir portas 5432 e 8080~~ → portas do banco e backend agora só na rede interna Docker (não expostas)
+
+### ⚠️ PENDÊNCIA RESTANTE:
+- **Rotacionar/remover JWT secret antigo** do `application.yml` de dev (vazou no GitHub). O de PRODUÇÃO já é diferente (só no .env do servidor), então o risco é baixo, mas vale limpar o de dev.
+
+### Domínio de produção:
+- **https://hesedsemijoias.online** (e www) → HTTP redireciona para HTTPS
+- DNS já aponta para 103.199.184.97
 
 ### Segredos de produção (guardados no `.env` do VPS, permissão 600):
 - Estão APENAS no servidor, NÃO commitados. Ver `/root/Hesed_Semijoias/.env`
