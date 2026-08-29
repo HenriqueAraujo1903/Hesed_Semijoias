@@ -1,7 +1,34 @@
 # Contexto da Sessão — HESED Semijoias
 
-**Data:** 28/08/2026  
-**Status:** Pronto para deploy em produção
+**Data:** 29/08/2026  
+**Status:** 🟢 NO AR EM PRODUÇÃO — http://103.199.184.97
+
+---
+
+## 🚀 DEPLOY REALIZADO (29/08/2026)
+
+- **VPS Hostinger:** KVM 1, Ubuntu 24.04 + Docker, IP `103.199.184.97`
+- **Acesso SSH:** `ssh root@103.199.184.97` (chave ed25519 `hesed-vps-deploy`)
+- **Projeto:** clonado em `/root/Hesed_Semijoias`
+- **Containers rodando:** postgres (healthy), backend (healthy), frontend, nginx
+- **Testes pós-deploy:** frontend 200, API catálogo 200 (16 produtos), login admin 200 ✅
+
+### Correções feitas durante o deploy:
+- Removido `COPY .mvn` do Dockerfile backend (pasta não existia)
+- `ddl-auto: validate` → `update` em prod (banco novo precisava criar schema)
+
+### ⚠️ PENDÊNCIAS DE SEGURANÇA (fazer com urgência):
+1. **Trocar senha do admin** (`admin123` é padrão) — logar e alterar
+2. **Rotacionar/remover JWT secret antigo** do `application.yml` (vazou no GitHub)
+3. **Configurar domínio + SSL (HTTPS)** — hoje só HTTP no IP
+4. **Restringir portas** 5432 e 8080 (hoje expostas publicamente — deixar só 80/443)
+
+### Segredos de produção (guardados no `.env` do VPS, permissão 600):
+- Estão APENAS no servidor, NÃO commitados. Ver `/root/Hesed_Semijoias/.env`
+
+---
+
+## Status anterior (28/08): Pronto para deploy em produção
 
 ---
 
