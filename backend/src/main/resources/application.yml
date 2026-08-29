@@ -3,9 +3,9 @@ spring:
     name: hesed-api
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/hesed_db
-    username: henriquearaujo
-    password:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:hesed_db}
+    username: ${DB_USERNAME:henriquearaujo}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -26,14 +26,17 @@ server:
   port: 8080
 
 # JWT Configuration
+# O secret vem da variável de ambiente JWT_SECRET.
+# O valor abaixo é APENAS um fallback para desenvolvimento local.
+# Em produção, JWT_SECRET é obrigatório e definido via .env (nunca commitado).
 app:
   jwt:
-    secret: L8qB/Y2Yn6A3JtMJjsJJVPMUmS2eFk+8I2pPW+EgBgQ=HesedSemijoias2026SecretKey!
-    expiration-ms: 86400000  # 24 hours
+    secret: ${JWT_SECRET:qZ/wqb6mWZQ87F9yvlxT84gfBH2rUT43pOCZsxNXO8dIDyzxu4334ml8IxgSDIiS}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}  # 24 hours
 
   upload:
-    dir: ./uploads
-    base-url: http://localhost:8080/uploads
+    dir: ${UPLOAD_DIR:./uploads}
+    base-url: ${UPLOAD_BASE_URL:http://localhost:8080/uploads}
 
   cors:
-    allowed-origins: http://localhost:5173,http://localhost:3000
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
