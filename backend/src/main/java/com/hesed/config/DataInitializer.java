@@ -1,13 +1,10 @@
 package com.hesed.config;
 
 import com.hesed.models.Product;
-import com.hesed.models.User;
 import com.hesed.repositories.ProductRepository;
-import com.hesed.repositories.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -16,30 +13,11 @@ import java.util.List;
 public class DataInitializer {
 
     @Bean
-    CommandLineRunner initData(UserRepository userRepository,
-                               ProductRepository productRepository,
-                               PasswordEncoder passwordEncoder) {
+    CommandLineRunner initData(ProductRepository productRepository) {
         return args -> {
-            // Seed users
-            if (!userRepository.existsByEmail("admin@hesed.com")) {
-                userRepository.save(User.builder()
-                        .email("admin@hesed.com")
-                        .name("Administrador HESED")
-                        .password(passwordEncoder.encode("admin123"))
-                        .role("ROLE_ADMIN")
-                        .build());
-                System.out.println("✅ Usuário admin criado: admin@hesed.com / admin123");
-            }
-
-            if (!userRepository.existsByEmail("operator@hesed.com")) {
-                userRepository.save(User.builder()
-                        .email("operator@hesed.com")
-                        .name("Operador HESED")
-                        .password(passwordEncoder.encode("operador123"))
-                        .role("ROLE_OPERATOR")
-                        .build());
-                System.out.println("✅ Usuário operador criado: operator@hesed.com / operador123");
-            }
+            // Os usuários admin são gerenciados diretamente no banco de dados.
+            // Não recriamos usuários seed padrão para evitar reintroduzir
+            // credenciais padrão inseguras em produção.
 
             // Seed products
             List<ProductSeed> seeds = List.of(
@@ -81,9 +59,7 @@ public class DataInitializer {
             }
 
             System.out.println("\n🌿 HESED API pronta!");
-            System.out.println("   Login: POST http://localhost:8080/api/auth/login");
-            System.out.println("   Admin: admin@hesed.com / admin123");
-            System.out.println("   Operador: operator@hesed.com / operador123");
+            System.out.println("   Login: POST /api/auth/login");
         };
     }
 
