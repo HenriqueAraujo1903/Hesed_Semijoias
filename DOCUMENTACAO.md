@@ -191,6 +191,32 @@ Guia completo de deploy (incluindo SSL e alternativas): `DEPLOY.md`.
 
 ---
 
+## 8.1 Operação e Continuidade
+
+**O sistema roda de forma autônoma:**
+- Containers com política `restart: unless-stopped` — sobem sozinhos após falha ou reinício do VPS.
+- Docker habilitado no boot do servidor.
+- SSL renovado automaticamente (container `certbot`).
+
+**Backup automático do banco:**
+- Script: `/root/backup-hesed.sh` no VPS (dump comprimido + retenção).
+- Agendamento (cron): a cada 3 dias, **05:00 UTC (02:00 horário de Brasília)**.
+- Retenção: mantém os últimos **10 dias**; backups mais antigos são removidos automaticamente.
+- Local dos backups: `/root/backups/hesed_db_auto_*.sql.gz`.
+- Log: `/root/backups/backup.log`.
+- Restaurar um backup:
+  ```bash
+  gunzip -c /root/backups/hesed_db_auto_AAAAMMDD_HHMMSS.sql.gz | \
+    docker compose -f /root/Hesed_Semijoias/docker-compose.yml exec -T postgres psql -U hesed -d hesed_db
+  ```
+
+**Pontos que exigem atenção periódica do responsável:**
+- Manter o pagamento do VPS (Hostinger) em dia.
+- Renovar o domínio `hesedsemijoias.online` na data de vencimento anual.
+- Backup automático protege contra perda de dados, mas não contra perda total do VPS — para isso, considerar snapshots do VPS na Hostinger ou cópia externa dos backups.
+
+---
+
 ## 9. Segurança
 
 - **Autenticação JWT** stateless; senhas com BCrypt força 12.
