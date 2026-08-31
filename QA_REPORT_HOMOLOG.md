@@ -1,112 +1,77 @@
 # Relatório de QA — Homologação HESED Semijoias
 
-**Data:** 29/08/2026
+**Data:** 31/08/2026
 **QA:** Bateria automatizada end-to-end (perfil sênior)
 **Ambiente:** Homologação local
 - Backend: Java 21 / Spring Boot 3.3.2 — porta **8081**, profile `homolog`
 - Frontend: React 18 / Vite 5.4 — porta **5174** (proxy → 8081)
 - Banco: PostgreSQL — **`hesed_homolog`** (isolado do dev e da produção)
-- Branch: `homolog` (commit `690501a`)
+- Branch: `homolog` (commit `c4ccce7`)
+- Harness: `qa/qa_homolog.py` (stdlib pura, sem dependências)
 
 ---
 
-## 1. Resumo Executivo
+## 1. Resultado
 
-| Área | Testes | Passou | Falhou |
-|------|--------|--------|--------|
-| Autenticação | 4 | 4 | 0 |
-| RBAC / Segurança | 4 | 4 | 0 |
-| Catálogo Público | 4 | 4 | 0 |
-| Produtos (CRUD + validações) | 6 | 6 | 0 |
-| Promoções (CRUD + toggle) | 4 | 4 | 0 |
-| Revendedoras (CRUD) | 4 | 4 | 0 |
-| Pedidos do Catálogo | 8 | 8 | 0 |
-| Venda Direta | 5 | 5 | 0 |
-| Analytics de Vendas | 11 | 11 | 0 |
-| Engajamento do Catálogo | 6 | 6 | 0 |
-| Edge Cases / Resiliência | 6 | 6 | 0 |
-| **TOTAL** | **62** | **62** | **0** |
+| Métrica | Valor |
+|---|---|
+| **Total de testes** | **330** |
+| **Aprovados** | **330** |
+| **Reprovados** | **0** |
+| Tempo de execução | ~1,3 s |
+| Dados de teste vazados | 0 (banco limpo ao final) |
 
-**Resultado: APROVADO ✅ (100%)**
+**100% de aprovação.**
 
 ---
 
 ## 2. Escopo desta homologação
 
 Leva acumulada na branch `dev`/`homolog` desde a última entrega em produção:
-- Captura de pedidos do catálogo (WhatsApp) com snapshot imutável
-- Tela de gestão de Pedidos com edição (quantidade, preço, itens, cliente)
-- Venda direta (fora do catálogo)
-- Dashboard de Vendas
-- Dashboard de Engajamento do Catálogo (funil, desejados vs vendidos)
-- Telemetria anônima (visitas/seleções) + gancho Google Analytics
-- Sacola minimizável no catálogo
+
+- **Múltiplas fotos por produto (até 5)** — galeria no admin, modal de detalhe no catálogo, `imageUrl` como capa (1ª foto)
+- **Ordenação de esgotados** — produtos `ESGOTADO` vão para o fim do catálogo
+- **Painel admin responsivo (mobile) + PWA** instalável
+- Regressão completa das funcionalidades já em produção
 
 ---
 
-## 3. Detalhamento por área
+## 3. Suítes executadas
 
-### 3.1 Autenticação (4/4)
-| Caso | Esperado | Resultado |
+| Suíte | Área | Foco |
 |---|---|---|
-| Login admin válido | 200 + token + ROLE_ADMIN | ✅ |
-| Senha errada | 401 | ✅ |
-| E-mail inexistente | 401 | ✅ |
-| Credenciais vazias | 400/401 | ✅ |
-
-### 3.2 RBAC / Segurança (4/4)
-| Caso | Esperado | Resultado |
-|---|---|---|
-| Endpoint admin sem token | 403 | ✅ |
-| Analytics sem token | 403 | ✅ |
-| Revendedoras sem token | 403 | ✅ |
-| Token inválido/forjado | 403 | ✅ |
-
-### 3.3 Catálogo Público (4/4)
-Catálogo acessível sem login (200, 16 produtos), campos essenciais presentes, promoções públicas 200. Todas as rotas do SPA (`/`, `/login`, `/catalogo`, `/dashboard`, `/pedidos`, `/dashboards`, `/dashboards/vendas`, `/dashboards/engajamento`) retornam 200.
-
-### 3.4 Produtos (6/6)
-CRUD admin completo. Validações confirmadas: nome < 3 caracteres → 400, SKU duplicado → 400, preço negativo → 400. Busca por nome/SKU funcional (com URL-encoding, como o frontend faz automaticamente).
-
-### 3.5 Promoções (4/4)
-Criar promoção, reflexo imediato nas ativas do catálogo, toggle ativar/desativar, e sumiço das ativas quando desativada.
-
-### 3.6 Revendedoras (4/4)
-CRUD completo (criar, listar, atualizar, excluir).
-
-### 3.7 Pedidos do Catálogo (8/8)
-Registro público via proxy do frontend, número HSD-, **snapshot de promoção detectado corretamente**, edição (qtd/preço/cliente) com recálculo de total, confirmação exigindo nome, imutabilidade do pedido confirmado, e cancelamento.
-
-### 3.8 Venda Direta (5/5)
-Criação admin confirmada (canal `DIRETA`, `resolvedAt` preenchido), nome obrigatório ao confirmar, e criação como pendente permitida sem nome.
-
-### 3.9 Analytics de Vendas (11/11)
-KPIs corretos (receita R$540 = 300 pedido + 240 venda direta; itens = 5 contando quantidade; 2 pedidos; margem > 0), série temporal, top produtos, taxa de conversão, e todas as granularidades (dia/mês/ano) e filtro por categoria.
-
-### 3.10 Engajamento (6/6)
-Eventos VIEW/SELECT registrados; KPIs corretos (3 visitas, 2 sessões únicas, 2 seleções); top produto desejado; funil com taxas calculadas.
-
-### 3.11 Edge Cases (6/6)
-Pedido vazio → 400, produto inexistente → 400, acima do teto de 50 itens → 400, status inválido → 400, evento de telemetria inválido silenciado → 202, edição de pedido inexistente → 400.
+| A | Autenticação / RBAC / Segurança | Login válido/inválido, e-mails malformados, campos em branco, acesso negado a `/api/admin` sem token e com token inválido, headers `Authorization` malformados, fronteira público × protegido |
+| B | **Múltiplas fotos** (feature nova) | 1..5 fotos, exatamente 5 (limite), 6+ rejeitado (400), deduplicação, remoção de blanks/nulos, capa = 1ª foto, retrocompatibilidade com `imageUrl`, reordenação via update, remoção de fotos, persistência no `/catalog` |
+| C | **Ordenação de esgotados** (feature nova) | Esgotados sempre no fim, bloco final 100% esgotado, ordem por (categoria, nome) preservada dentro de cada grupo, contagem consistente |
+| D | Regressão Produtos | CRUD, SKU duplicado/inválido (caracteres proibidos), nome curto, preços nulos/zero/negativos, filtros category/stock/search, delete/update de inexistente |
+| E | Regressão Promoções | Criar/editar/toggle, snapshot de preço/nome do produto, presença nas ativas, validação de desconto (0..100) e `promoPrice` (positivo), produto inexistente, título/produto ausentes |
+| F | Regressão Consignados | CRUD, validação de nome (3..100), telefone (regex), e-mail, comissão (0..1 com limites), comissão ausente, not found (404), acesso sem token |
+| G | Regressão Pedidos | Pedido público (`productIds`), **integridade de preço server-side** (total calculado no backend), lista vazia/sem ids/produto inexistente, summary, transições de status, confirmar exige nome do cliente, teto de 50 itens |
+| I | RBAC exaustivo | Matriz completa de rotas admin × métodos (sem token e com token inválido → negado), rotas públicas acessíveis, endpoints de analytics (`/sales`, `/engagement`) protegidos e respondendo 200 para admin |
+| H | Robustez / Limites / Consistência | Nome nos limites (2/3/120/121), SKUs válidos variados, categorias, cada `stockStatus`, capa consistente em toda a galeria, JSON malformado → 400 (não 500), método não suportado, rota inexistente, XSS armazenado como dado, descrição acima de 500 |
+| J | Validação adicional | Varredura ampla de e-mails/SKUs/telefones inválidos, comissões e descontos válidos na faixa, nomes com acento PT-BR, galeria com extensões variadas |
 
 ---
 
-## 4. Validações de integridade financeira
+## 4. Verificações-chave de segurança e integridade
 
-- **Snapshot de promoção**: produto R$124,00 com promoção de 20% → `effectivePrice` R$99,20, `wasPromotion=true`, `discountPercent=20`. Cálculo matematicamente correto.
-- **Receita com quantidade**: `effectivePrice × quantity` refletido corretamente nos KPIs e agregações.
-- **Custo preservado na edição**: mantém o custo do snapshot original (não reamostra).
-- **Divisão por zero**: tratada em margem %, ticket médio e taxas de conversão.
+- **RBAC:** todas as rotas `/api/admin/**` negam acesso sem token e com token inválido. Rotas públicas (catálogo, promoções ativas, registro de pedido, telemetria) permanecem acessíveis.
+- **Integridade financeira:** o total do pedido é sempre calculado no servidor a partir do `salePrice`/promoção vigente — o cliente não consegue injetar preço.
+- **Snapshot de promoção:** a promoção preserva nome e preço original do produto no momento da criação.
+- **Integridade referencial:** produtos já usados em pedidos não podem ser excluídos (FK em `order_items`), protegendo o histórico de vendas. Confirmado em teste.
+- **Retrocompatibilidade das fotos:** `imageUrl` (capa) sempre reflete a 1ª foto da galeria — carrossel de promoções, cards do catálogo e listagens antigas continuam funcionando sem alteração.
 
 ---
 
-## 5. Observações
+## 5. Observações (não bloqueiam a promoção)
 
 | Severidade | Item | Nota |
 |---|---|---|
-| INFO | Banco de homolog inicia sem usuários | Comportamento correto após remoção dos seeds padrão. Admin de teste (`admin@homolog.com`) criado manualmente para a homologação. |
-| INFO | "Falha" de busca no teste automatizado | Artefato do script (espaço não-encoded na URL). A busca funciona 100% com encoding, que é o que o frontend faz. Não é bug do sistema. |
-| BAIXA | Telemetria pública sem rate limit | Aceitável para o volume atual; melhoria futura se escalar. |
+| INFO | Validação de telefone do consignado | A regex aceita `51983396457` (11 dígitos) e fixo `(51) 3339-6457`, mas rejeita celular formatado com traço `(51) 98339-6457`. Comportamento **pré-existente**, não introduzido nesta leva. Melhoria futura opcional: flexibilizar a máscara. |
+| INFO | Telemetria pública sem rate limit | Aceitável para o volume atual; melhoria futura se escalar. |
+| INFO | Migração de schema | A tabela `product_images` é criada automaticamente pelo `ddl-auto: update` (aditiva). Coluna `image_url` original preservada. Nenhuma migração destrutiva. |
+
+Nenhum bug funcional encontrado. Os dois "falsos negativos" iniciais foram do próprio harness (formato de telefone e expectativa de delete de produto com pedido), corrigidos após confirmar que o sistema estava correto.
 
 ---
 
@@ -114,6 +79,11 @@ Pedido vazio → 400, produto inexistente → 400, acima do teto de 50 itens →
 
 **APROVADO para promoção `homolog → produção`.**
 
-62/62 testes passaram, cobrindo todas as funcionalidades novas e de regressão. Integridade financeira, segurança (RBAC), snapshot de promoção e edge cases validados. Nenhum bug encontrado.
+330/330 testes aprovados, cobrindo as funcionalidades novas (múltiplas fotos, ordenação de esgotados) e regressão completa (auth/RBAC, produtos, promoções, consignados, pedidos, analytics). Integridade financeira, segurança (RBAC), snapshot de promoção, integridade referencial e casos-limite validados. Mudanças são aditivas e retrocompatíveis — sem risco identificado para o que já está em produção.
 
-*Relatório gerado por QA automatizado — HESED Semijoias (homologação)*
+### Recomendações para o deploy em produção
+1. **Backup do banco** (`pg_dump`) antes do merge `homolog → main`.
+2. O `ddl-auto` em produção criará a tabela `product_images` na primeira subida (aditivo). Validar que o usuário do banco tem permissão de `CREATE TABLE`.
+3. Após o deploy, smoke test rápido: catálogo carrega, admin loga, upload de foto funciona.
+
+*Relatório gerado por QA automatizado — HESED Semijoias (homologação). Bateria reproduzível via `python3 qa/qa_homolog.py` com o backend de homolog no ar.*

@@ -23,6 +23,7 @@ frontend/.DS_Store
 .env
 .env.local
 uploads/
+uploads-homolog/
 
 # ========================
 # Docker
