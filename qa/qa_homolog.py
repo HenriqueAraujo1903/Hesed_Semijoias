@@ -16,10 +16,12 @@ import sys
 import time
 import urllib.request
 import urllib.error
+import os
 
-BASE = "http://localhost:8081"
-ADMIN_EMAIL = "admin@homolog.com"
-ADMIN_PASS = "homolog123"
+# Parametrizável por env para rodar contra dev (8080) ou homolog (8081).
+BASE = os.environ.get("QA_BASE", "http://localhost:8081")
+ADMIN_EMAIL = os.environ.get("QA_ADMIN_EMAIL", "admin@homolog.com")
+ADMIN_PASS = os.environ.get("QA_ADMIN_PASS", "homolog123")
 
 # ---------------------------------------------------------------------------
 # Harness

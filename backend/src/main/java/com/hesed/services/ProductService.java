@@ -162,12 +162,16 @@ public class ProductService {
     /**
      * Aplica estoque, fornecedor e garantia. Só sobrescreve campos que o request
      * traz preenchidos (import CSV e chamadas antigas não os enviam → preservados).
-     * Ao final, DERIVA o stockStatus da quantidade — fonte única da verdade.
+     *
+     * Regra de estoque:
+     * - Se o request traz stockQuantity, ela é a fonte da verdade e o stockStatus
+     *   é DERIVADO dela.
+     * - Se NÃO traz stockQuantity mas traz um stockStatus explícito (import CSV e
+     *   chamadas legadas), respeitamos esse status e semeamos uma quantidade
+     *   coerente — para não quebrar a retrocompatibilidade (senão tudo viraria
+     *   ESGOTADO por causa do default 0).
      */
     private void applyStockAndWarranty(Product product, ProductRequest request) {
-        if (request.getStockQuantity() != null) {
-            product.setStockQuantity(Math.max(0, request.getStockQuantity()));
-        }
         if (request.getLowStockThreshold() != null) {
             product.setLowStockThreshold(Math.max(0, request.getLowStockThreshold()));
         }
@@ -183,7 +187,36 @@ public class ProductService {
             product.setSupplier(supplier);
         }
 
-        product.setStockStatus(deriveStockStatus(product.getStockQuantity(), product.getLowStockThreshold()));
+        int threshold = product.getLowStockThreshold() != null ? product.getLowStockThreshold() : 3;
+
+        if (request.getStockQuantity() != null) {
+            // Quantidade explícita manda; status derivado dela.
+            int qty = Math.max(0, request.getStockQuantity());
+            product.setStockQuantity(qty);
+            product.setStockStatus(deriveStockStatus(qty, threshold));
+        } else if (request.getStockStatus() != null && !request.getStockStatus().isBlank()) {
+            // Retrocompat: sem quantidade, mas com status explícito (CSV/legado).
+            // Semeia uma quantidade coerente com o status informado, sem sobrescrever
+            // um estoque já existente que seja compatível.
+            String status = request.getStockStatus().trim().toUpperCase();
+            int current = product.getStockQuantity() != null ? product.getStockQuantity() : 0;
+            if (!deriveStockStatus(current, threshold).equals(status)) {
+                product.setStockQuantity(seedQuantityForStatus(status, threshold));
+            }
+            product.setStockStatus(deriveStockStatus(product.getStockQuantity(), threshold));
+        } else {
+            // Nada informado: apenas re-deriva do que já existe.
+            product.setStockStatus(deriveStockStatus(product.getStockQuantity(), threshold));
+        }
+    }
+
+    /** Quantidade inicial coerente com um status textual (retrocompat CSV/legado). */
+    private int seedQuantityForStatus(String status, int threshold) {
+        return switch (status) {
+            case "ESGOTADO" -> 0;
+            case "BAIXO" -> Math.max(1, threshold);
+            default -> threshold + 5; // DISPONIVEL ou qualquer outro
+        };
     }
 
     /**
