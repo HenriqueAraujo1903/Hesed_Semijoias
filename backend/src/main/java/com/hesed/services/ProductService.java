@@ -50,13 +50,37 @@ public class ProductService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .category(request.getCategory())
-                .imageUrl(request.getImageUrl())
                 .costPrice(request.getCostPrice())
                 .salePrice(request.getSalePrice())
                 .stockStatus(request.getStockStatus())
                 .build();
 
+        applyImages(product, request);
+
         return ProductResponse.from(productRepository.save(product));
+    }
+
+    /**
+     * Normaliza a galeria de imagens: prioriza imageUrls; se ausente, usa imageUrl
+     * (retrocompatibilidade). Remove nulos/duplicados, limita a 5 e mantém a capa
+     * (imageUrl) sincronizada com a primeira foto da galeria.
+     */
+    private void applyImages(Product product, ProductRequest request) {
+        java.util.List<String> gallery = new java.util.ArrayList<>();
+        if (request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
+            for (String url : request.getImageUrls()) {
+                if (url != null && !url.isBlank() && !gallery.contains(url)) gallery.add(url);
+            }
+        } else if (request.getImageUrl() != null && !request.getImageUrl().isBlank()) {
+            gallery.add(request.getImageUrl());
+        }
+
+        if (gallery.size() > 5) {
+            throw new RuntimeException("Um produto pode ter no máximo 5 fotos.");
+        }
+
+        product.setImageUrls(gallery);
+        product.setImageUrl(gallery.isEmpty() ? null : gallery.get(0));
     }
 
     @Transactional
@@ -73,10 +97,10 @@ public class ProductService {
         product.setName(request.getName());
         product.setDescription(request.getDescription());
         product.setCategory(request.getCategory());
-        product.setImageUrl(request.getImageUrl());
         product.setCostPrice(request.getCostPrice());
         product.setSalePrice(request.getSalePrice());
         product.setStockStatus(request.getStockStatus());
+        applyImages(product, request);
 
         return ProductResponse.from(productRepository.save(product));
     }
@@ -93,6 +117,9 @@ public class ProductService {
     public ProductResponse upsertBySku(ProductRequest request) {
         Product existing = productRepository.findBySku(request.getSku()).orElse(null);
 
+        boolean hasImages = (request.getImageUrls() != null && !request.getImageUrls().isEmpty())
+                || (request.getImageUrl() != null && !request.getImageUrl().isBlank());
+
         if (existing != null) {
             existing.setName(request.getName());
             existing.setCategory(request.getCategory());
@@ -100,7 +127,8 @@ public class ProductService {
             existing.setSalePrice(request.getSalePrice());
             existing.setStockStatus(request.getStockStatus());
             if (request.getDescription() != null) existing.setDescription(request.getDescription());
-            if (request.getImageUrl() != null) existing.setImageUrl(request.getImageUrl());
+            // Só mexe nas imagens se o request trouxer alguma (evita apagar galeria em reimport sem fotos)
+            if (hasImages) applyImages(existing, request);
             return ProductResponse.from(productRepository.save(existing));
         }
 
@@ -109,11 +137,12 @@ public class ProductService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .category(request.getCategory())
-                .imageUrl(request.getImageUrl())
                 .costPrice(request.getCostPrice())
                 .salePrice(request.getSalePrice())
                 .stockStatus(request.getStockStatus())
                 .build();
+
+        applyImages(product, request);
 
         return ProductResponse.from(productRepository.save(product));
     }

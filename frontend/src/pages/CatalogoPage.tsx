@@ -12,6 +12,8 @@ interface Product {
   salePrice: number;
   stockStatus: string;
   imageUrl: string | null;
+  imageUrls: string[] | null;
+  description?: string | null;
 }
 
 const WHATSAPP_NUMBER = '5551983396457';
@@ -27,6 +29,7 @@ export default function CatalogoPage() {
   const { isDark, toggleTheme } = useTheme();
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<Product[]>([]);
+  const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [activeCategory, setActiveCategory] = useState('Todos');
   const [orderNumber] = useState(generateOrderNumber());
   // Sacola: expande ao adicionar item e minimiza sozinha após alguns segundos,
@@ -193,7 +196,11 @@ export default function CatalogoPage() {
               const isSelected = !!selected.find((s) => s.id === p.id);
               const isEsgotado = p.stockStatus === 'ESGOTADO';
               const isBaixo = p.stockStatus === 'BAIXO';
-              const imgUrl = p.imageUrl || `https://placehold.co/400x400/FAF7F2/C8A96E?text=${encodeURIComponent(p.sku)}`;
+              const gallery = (p.imageUrls && p.imageUrls.length > 0)
+                ? p.imageUrls
+                : (p.imageUrl ? [p.imageUrl] : []);
+              const photoCount = gallery.length;
+              const imgUrl = gallery[0] || `https://placehold.co/400x400/FAF7F2/C8A96E?text=${encodeURIComponent(p.sku)}`;
 
               return (
                 <div key={p.id}
@@ -228,7 +235,10 @@ export default function CatalogoPage() {
                     </div>
                   )}
 
-                  <div className="relative aspect-square bg-gradient-to-br from-[#FAF7F2] to-[#F5F0EA] dark:from-[#292620] dark:to-[#1C1A16] overflow-hidden">
+                  <div
+                    className="relative aspect-square bg-gradient-to-br from-[#FAF7F2] to-[#F5F0EA] dark:from-[#292620] dark:to-[#1C1A16] overflow-hidden"
+                    onClick={(e) => { e.stopPropagation(); setDetailProduct(p); }}
+                  >
                     <img 
                       src={imgUrl} 
                       alt={p.name} 
@@ -236,6 +246,14 @@ export default function CatalogoPage() {
                     />
                     {!isEsgotado && (
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    )}
+                    {photoCount > 1 && (
+                      <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
+                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 3.75h16.5v16.5H3.75V3.75z" />
+                        </svg>
+                        {photoCount}
+                      </div>
                     )}
                   </div>
 
@@ -279,6 +297,16 @@ export default function CatalogoPage() {
 
         {/* Spacing for cart drawer */}
       </main>
+
+      {/* ═══════════ PRODUCT DETAIL MODAL ═══════════ */}
+      {detailProduct && (
+        <ProductDetailModal
+          product={detailProduct}
+          isSelected={!!selected.find((s) => s.id === detailProduct.id)}
+          onClose={() => setDetailProduct(null)}
+          onToggle={() => toggle(detailProduct)}
+        />
+      )}
 
       {/* ═══════════ CART DRAWER ═══════════ */}
       {selected.length > 0 && (
@@ -590,5 +618,160 @@ function PromotionCarousel({ onSelectProduct }: { onSelectProduct: (productId: s
         )}
       </div>
     </section>
+  );
+}
+
+
+// ─── Product Detail Modal (galeria de fotos) ─────────────────────────────────
+
+function ProductDetailModal({ product, isSelected, onClose, onToggle }: {
+  product: Product;
+  isSelected: boolean;
+  onClose: () => void;
+  onToggle: () => void;
+}) {
+  const gallery = (product.imageUrls && product.imageUrls.length > 0)
+    ? product.imageUrls
+    : (product.imageUrl ? [product.imageUrl] : []);
+  const hasPhotos = gallery.length > 0;
+  const [active, setActive] = useState(0);
+  const isEsgotado = product.stockStatus === 'ESGOTADO';
+
+  // Fecha com ESC e bloqueia o scroll do fundo enquanto aberto
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowRight' && gallery.length > 1) setActive((i) => (i + 1) % gallery.length);
+      if (e.key === 'ArrowLeft' && gallery.length > 1) setActive((i) => (i - 1 + gallery.length) % gallery.length);
+    }
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [gallery.length, onClose]);
+
+  const activeUrl = hasPhotos
+    ? gallery[active]
+    : `https://placehold.co/600x600/FAF7F2/C8A96E?text=${encodeURIComponent(product.sku)}`;
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white dark:bg-[#1C1A16] shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Fechar */}
+        <button
+          onClick={onClose}
+          aria-label="Fechar"
+          className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/85 dark:bg-[#292620]/85 text-[#7A766F] hover:text-[#C8A96E] shadow-md transition"
+        >
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        <div className="flex flex-col md:flex-row">
+          {/* Galeria */}
+          <div className="w-full md:w-1/2 p-4 md:p-6">
+            <div className="relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br from-[#FAF7F2] to-[#F5F0EA] dark:from-[#292620] dark:to-[#141210]">
+              <img src={activeUrl} alt={product.name} className="h-full w-full object-cover" />
+
+              {gallery.length > 1 && (
+                <>
+                  <button
+                    onClick={() => setActive((i) => (i - 1 + gallery.length) % gallery.length)}
+                    aria-label="Foto anterior"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 dark:bg-[#292620]/80 text-[#7A766F] hover:text-[#C8A96E] shadow-md transition"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setActive((i) => (i + 1) % gallery.length)}
+                    aria-label="Próxima foto"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 flex h-9 w-9 items-center justify-center rounded-full bg-white/80 dark:bg-[#292620]/80 text-[#7A766F] hover:text-[#C8A96E] shadow-md transition"
+                  >
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                    </svg>
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Miniaturas */}
+            {gallery.length > 1 && (
+              <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-hide">
+                {gallery.map((url, i) => (
+                  <button
+                    key={`${url}-${i}`}
+                    onClick={() => setActive(i)}
+                    className={`h-14 w-14 shrink-0 overflow-hidden rounded-lg border-2 transition ${
+                      i === active ? 'border-[#C8A96E]' : 'border-transparent opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={url} alt={`${product.name} ${i + 1}`} className="h-full w-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Info */}
+          <div className="flex w-full flex-col md:w-1/2 p-4 md:p-6 md:pl-0">
+            <div className="mb-1.5 flex items-center gap-1.5">
+              <div className="h-1 w-1 rounded-full bg-[#C8A96E]" />
+              <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-[#C8A96E]">
+                {product.category}
+              </span>
+            </div>
+
+            <h2 className="font-serif text-2xl font-semibold leading-snug text-[#292620] dark:text-[#F5F0EA]">
+              {product.name}
+            </h2>
+            <p className="mt-1 font-mono text-[11px] text-[#A8A5A0] dark:text-[#5C584F]">Ref: {product.sku}</p>
+
+            {product.description && (
+              <p className="mt-4 text-sm leading-relaxed text-[#7A766F] dark:text-[#A8A5A0]">
+                {product.description}
+              </p>
+            )}
+
+            <div className="mt-auto pt-6">
+              <div className="mb-4 flex items-baseline gap-2">
+                <span className="font-serif text-3xl font-bold text-[#292620] dark:text-[#F5F0EA]">
+                  {BRL.format(product.salePrice)}
+                </span>
+              </div>
+
+              {isEsgotado ? (
+                <div className="rounded-xl bg-[#F5F0EA] dark:bg-[#292620] px-4 py-3 text-center text-sm font-medium text-[#7A766F] dark:text-[#A8A5A0]">
+                  Produto esgotado no momento
+                </div>
+              ) : (
+                <button
+                  onClick={() => { onToggle(); }}
+                  className={`w-full rounded-xl py-3.5 text-sm font-semibold transition-all duration-200 active:scale-[0.98] ${
+                    isSelected
+                      ? 'bg-[#F9F3E8] dark:bg-[#292620] text-[#96784A] dark:text-[#D4B87A] ring-1 ring-[#C8A96E]/40'
+                      : 'bg-[#C8A96E] text-white shadow-lg shadow-[#C8A96E]/25 hover:bg-[#B5935A]'
+                  }`}
+                >
+                  {isSelected ? '✓ Adicionado — remover' : 'Selecionar peça'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

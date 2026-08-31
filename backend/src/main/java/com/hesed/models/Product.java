@@ -7,6 +7,8 @@ import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -33,8 +35,17 @@ public class Product {
     @Builder.Default
     private String category = "Brinco";
 
+    /** Foto principal (capa). Mantida por retrocompatibilidade; espelha a 1ª de imageUrls. */
     @Column(name = "image_url", length = 500)
     private String imageUrl;
+
+    /** Galeria de fotos do produto (até 5). A primeira é a capa (= imageUrl). */
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "product_images", joinColumns = @JoinColumn(name = "product_id"))
+    @OrderColumn(name = "position")
+    @Column(name = "image_url", length = 500)
+    @Builder.Default
+    private List<String> imageUrls = new ArrayList<>();
 
     @Column(name = "cost_price", nullable = false, precision = 10, scale = 2)
     private BigDecimal costPrice;

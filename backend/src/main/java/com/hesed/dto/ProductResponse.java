@@ -15,6 +15,7 @@ public class ProductResponse {
     private String description;
     private String category;
     private String imageUrl;
+    private java.util.List<String> imageUrls;
     private BigDecimal costPrice;
     private BigDecimal salePrice;
     private String status;
@@ -30,6 +31,7 @@ public class ProductResponse {
         r.setDescription(p.getDescription());
         r.setCategory(p.getCategory());
         r.setImageUrl(p.getImageUrl());
+        r.setImageUrls(p.getImageUrls());
         r.setCostPrice(p.getCostPrice());
         r.setSalePrice(p.getSalePrice());
         r.setStatus(p.getStatus());

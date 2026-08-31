@@ -8,6 +8,7 @@ interface Product {
   description: string | null;
   category: string;
   imageUrl: string | null;
+  imageUrls: string[] | null;
   costPrice: number;
   salePrice: number;
   status: string;
@@ -190,29 +191,44 @@ export default function AdminProductsPage() {
   );
 }
 
-// ---- Image Uploader ----
-function ImageUploader({ currentUrl, onUploaded }: {
-  currentUrl: string | null;
-  onUploaded: (url: string) => void;
+// ---- Gallery Uploader (até 5 fotos; a 1ª é a capa) ----
+const MAX_IMAGES = 5;
+
+function GalleryUploader({ images, onChange }: {
+  images: string[];
+  onChange: (urls: string[]) => void;
 }) {
-  const [preview, setPreview] = useState<string | null>(currentUrl);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  async function handleFile(file: File) {
-    setUploadError(null);
-    setUploading(true);
+  async function uploadOne(file: File): Promise<string> {
     const formData = new FormData();
     formData.append('file', file);
+    const res = await api.post('/admin/products/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return res.data.url as string;
+  }
 
+  async function handleFiles(files: FileList) {
+    setUploadError(null);
+    const remaining = MAX_IMAGES - images.length;
+    if (remaining <= 0) {
+      setUploadError(`Máximo de ${MAX_IMAGES} fotos por produto.`);
+      return;
+    }
+    const toUpload = Array.from(files).slice(0, remaining);
+    setUploading(true);
     try {
-      const res = await api.post('/admin/products/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      const url = res.data.url;
-      setPreview(url);
-      onUploaded(url);
+      const uploaded: string[] = [];
+      for (const file of toUpload) {
+        uploaded.push(await uploadOne(file));
+      }
+      onChange([...images, ...uploaded]);
+      if (files.length > remaining) {
+        setUploadError(`Só cabem mais ${remaining}. As demais foram ignoradas.`);
+      }
     } catch (e: any) {
       setUploadError(e.response?.data?.error || 'Erro no upload');
     } finally {
@@ -221,56 +237,97 @@ function ImageUploader({ currentUrl, onUploaded }: {
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
+    if (e.target.files?.length) handleFiles(e.target.files);
+    e.target.value = '';
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFile(file);
+    if (e.dataTransfer.files?.length) handleFiles(e.dataTransfer.files);
   }
+
+  function removeAt(idx: number) {
+    onChange(images.filter((_, i) => i !== idx));
+  }
+
+  function move(idx: number, dir: -1 | 1) {
+    const next = [...images];
+    const target = idx + dir;
+    if (target < 0 || target >= next.length) return;
+    [next[idx], next[target]] = [next[target], next[idx]];
+    onChange(next);
+  }
+
+  function makeCover(idx: number) {
+    if (idx === 0) return;
+    const next = [...images];
+    const [pick] = next.splice(idx, 1);
+    next.unshift(pick);
+    onChange(next);
+  }
+
+  const canAddMore = images.length < MAX_IMAGES;
 
   return (
     <div className="space-y-2">
-      <label className="block text-xs font-medium text-stone-600 uppercase tracking-wide">
-        Imagem do produto
-      </label>
-      <div
-        onDrop={handleDrop}
-        onDragOver={(e) => e.preventDefault()}
-        onClick={() => inputRef.current?.click()}
-        className="relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-200 bg-stone-50 p-4 transition hover:border-gold hover:bg-gold-light"
-      >
-        {preview ? (
-          <div className="relative h-36 w-36 overflow-hidden rounded-lg">
-            <img src={preview} alt="Preview" className="h-full w-full object-cover" />
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2 py-4 text-stone-400">
-            <svg className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <div className="flex items-center justify-between">
+        <label className="block text-xs font-medium text-stone-600 uppercase tracking-wide">
+          Fotos do produto
+        </label>
+        <span className="text-[11px] text-stone-400">{images.length}/{MAX_IMAGES} — a 1ª é a capa</span>
+      </div>
+
+      {images.length > 0 && (
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+          {images.map((url, idx) => (
+            <div key={`${url}-${idx}`}
+              className={`group relative aspect-square overflow-hidden rounded-lg border ${idx === 0 ? 'border-gold ring-1 ring-gold' : 'border-stone-200'}`}>
+              <img src={url} alt={`Foto ${idx + 1}`} className="h-full w-full object-cover" />
+              {idx === 0 && (
+                <span className="absolute left-1 top-1 rounded bg-gold px-1.5 py-0.5 text-[9px] font-semibold text-white">Capa</span>
+              )}
+              <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-black/50 px-1 py-0.5 opacity-0 transition group-hover:opacity-100">
+                <button type="button" title="Mover para trás" onClick={() => move(idx, -1)} disabled={idx === 0}
+                  className="text-white disabled:opacity-30 px-1 text-xs">‹</button>
+                {idx !== 0 && (
+                  <button type="button" title="Definir como capa" onClick={() => makeCover(idx)}
+                    className="text-white px-1 text-[9px] uppercase">Capa</button>
+                )}
+                <button type="button" title="Mover para frente" onClick={() => move(idx, 1)} disabled={idx === images.length - 1}
+                  className="text-white disabled:opacity-30 px-1 text-xs">›</button>
+              </div>
+              <button type="button" title="Remover" onClick={() => removeAt(idx)}
+                className="absolute right-1 top-1 rounded-full bg-white/80 px-1.5 text-xs text-red-500 opacity-0 transition group-hover:opacity-100 hover:bg-white">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {canAddMore && (
+        <div
+          onDrop={handleDrop}
+          onDragOver={(e) => e.preventDefault()}
+          onClick={() => inputRef.current?.click()}
+          className="relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-200 bg-stone-50 p-4 transition hover:border-gold hover:bg-gold-light"
+        >
+          <div className="flex flex-col items-center gap-2 py-3 text-stone-400">
+            <svg className="h-9 w-9" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                 d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M13.5 12h.008v.008H13.5V12zm-3 6.75h10.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 6.75v10.5a2.25 2.25 0 002.25 2.25z" />
             </svg>
-            <p className="text-xs">Clique ou arraste a foto aqui</p>
-            <p className="text-xs text-stone-300">JPG, PNG, WebP — máx 5 MB</p>
+            <p className="text-xs">Clique ou arraste fotos aqui</p>
+            <p className="text-xs text-stone-300">JPG, PNG, WebP — máx 5 MB cada</p>
           </div>
-        )}
-        {uploading && (
-          <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/70">
-            <div className="h-6 w-6 animate-spin rounded-full border-4 border-gold border-t-transparent" />
-          </div>
-        )}
-      </div>
-      {preview && (
-        <div className="flex items-center gap-2">
-          <p className="flex-1 truncate text-xs text-stone-400">{preview}</p>
-          <button type="button" onClick={() => { setPreview(null); onUploaded(''); }}
-            className="text-xs text-red-400 hover:text-red-600">Remover</button>
+          {uploading && (
+            <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/70">
+              <div className="h-6 w-6 animate-spin rounded-full border-4 border-gold border-t-transparent" />
+            </div>
+          )}
         </div>
       )}
+
       {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
-      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleChange} />
+      <input ref={inputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden" onChange={handleChange} />
     </div>
   );
 }
@@ -290,7 +347,11 @@ function ProductModal({ product, onClose, onSaved }: {
     costPrice: product?.costPrice?.toString() ?? '',
     salePrice: product?.salePrice?.toString() ?? '',
     stockStatus: product?.stockStatus ?? 'DISPONIVEL',
-    imageUrl: product?.imageUrl ?? '',
+  });
+  const [images, setImages] = useState<string[]>(() => {
+    if (product?.imageUrls && product.imageUrls.length > 0) return product.imageUrls;
+    if (product?.imageUrl) return [product.imageUrl];
+    return [];
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -305,7 +366,8 @@ function ProductModal({ product, onClose, onSaved }: {
       costPrice: parseFloat(form.costPrice),
       salePrice: parseFloat(form.salePrice),
       description: form.description || null,
-      imageUrl: form.imageUrl || null,
+      imageUrls: images,
+      imageUrl: images[0] || null,
     };
 
     try {
@@ -333,11 +395,8 @@ function ProductModal({ product, onClose, onSaved }: {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
-          {/* Image Upload */}
-          <ImageUploader
-            currentUrl={form.imageUrl || null}
-            onUploaded={(url) => setForm({ ...form, imageUrl: url })}
-          />
+          {/* Galeria de fotos */}
+          <GalleryUploader images={images} onChange={setImages} />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>

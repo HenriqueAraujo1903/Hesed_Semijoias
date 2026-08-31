@@ -4,6 +4,7 @@ import jakarta.validation.constraints.*;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 @Data
 public class ProductRequest {
@@ -22,7 +23,12 @@ public class ProductRequest {
 
     private String category = "Brinco";
 
+    /** Foto principal (capa). Opcional se imageUrls for informado. */
     private String imageUrl;
+
+    /** Galeria de fotos (até 5). A primeira é a capa. */
+    @Size(max = 5, message = "Um produto pode ter no máximo 5 fotos")
+    private List<String> imageUrls;
 
     @NotNull(message = "Preço de custo obrigatório")
     @Positive(message = "Preço de custo deve ser maior que zero")
