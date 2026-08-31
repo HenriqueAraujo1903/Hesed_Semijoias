@@ -77,7 +77,7 @@ const BRL_DATE = (iso: string) => {
 
 function StockAlertsTab({ tab }: { tab: 'reposicao' | 'garantia' }) {
   const [low, setLow] = useState<StockProduct[]>([]);
-  const [warranty, setWarranty] = useState<{ expiring: WarrantyRow[]; expired: WarrantyRow[] }>({ expiring: [], expired: [] });
+  const [warranty, setWarranty] = useState<{ expiring: WarrantyRow[]; expired: WarrantyRow[]; active: WarrantyRow[] }>({ expiring: [], expired: [], active: [] });
   const [loading, setLoading] = useState(true);
   const [adjustTarget, setAdjustTarget] = useState<StockProduct | null>(null);
 
@@ -144,10 +144,18 @@ function StockAlertsTab({ tab }: { tab: 'reposicao' | 'garantia' }) {
       )}
 
       {tab === 'garantia' && (
-        <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <WarrantyCard title="Garantia vencida" rows={warranty.expired} tone="red" />
-          <WarrantyCard title="Garantia vencendo (60 dias)" rows={warranty.expiring} tone="amber" />
-        </section>
+        <div className="space-y-4">
+          <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <WarrantyCard title="Garantia vencida" rows={warranty.expired} tone="red" />
+            <WarrantyCard title="Garantia vencendo (60 dias)" rows={warranty.expiring} tone="amber" />
+          </section>
+          <WarrantyCard title="Garantia vigente (no prazo)" rows={warranty.active} tone="emerald" />
+          {warranty.expired.length === 0 && warranty.expiring.length === 0 && warranty.active.length === 0 && (
+            <p className="rounded-2xl border-2 border-dashed border-stone-200 bg-white py-10 text-center text-sm text-stone-400">
+              Nenhum produto com data de compra lançada ainda. Informe a data de compra no cadastro do produto para acompanhar a garantia.
+            </p>
+          )}
+        </div>
       )}
 
       {adjustTarget && (
@@ -161,14 +169,18 @@ function StockAlertsTab({ tab }: { tab: 'reposicao' | 'garantia' }) {
   );
 }
 
-function WarrantyCard({ title, rows, tone }: { title: string; rows: WarrantyRow[]; tone: 'red' | 'amber' }) {
+function WarrantyCard({ title, rows, tone }: { title: string; rows: WarrantyRow[]; tone: 'red' | 'amber' | 'emerald' }) {
+  const badgeClass = tone === 'red' ? 'bg-red-100 text-red-600'
+    : tone === 'amber' ? 'bg-amber-100 text-amber-700'
+    : 'bg-emerald-100 text-emerald-700';
+  const dateClass = tone === 'red' ? 'text-red-500 font-medium'
+    : tone === 'amber' ? 'text-amber-600 font-medium'
+    : 'text-emerald-600 font-medium';
   return (
     <div className="rounded-2xl border border-stone-200 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4">
         <h2 className="text-sm font-semibold text-stone-800">{title}</h2>
-        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-          tone === 'red' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'
-        }`}>{rows.length}</span>
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badgeClass}`}>{rows.length}</span>
       </div>
       {rows.length === 0 ? (
         <p className="px-5 py-8 text-center text-sm text-stone-400">Nenhum item.</p>
@@ -182,7 +194,7 @@ function WarrantyCard({ title, rows, tone }: { title: string; rows: WarrantyRow[
               </div>
               <div className="text-right text-xs text-stone-500">
                 <p>compra: {BRL_DATE(r.purchaseDate)}</p>
-                <p className={tone === 'red' ? 'text-red-500 font-medium' : 'text-amber-600 font-medium'}>
+                <p className={dateClass}>
                   vence: {BRL_DATE(r.warrantyExpiresAt)}
                 </p>
               </div>

@@ -66,15 +66,18 @@ public class StockController {
     }
 
     /**
-     * Alertas de garantia. Retorna produtos cuja garantia vence dentro de `days`
-     * dias (default 30) ou já venceu, classificados.
+     * Panorama de garantia. Classifica os produtos com data de compra em três
+     * faixas: vencida (já passou), vencendo (dentro de `days` dias, default 60)
+     * e vigente (dentro do prazo, além da janela de alerta). Assim tudo que tem
+     * data lançada é visível — não só o que está próximo do vencimento.
      */
     @GetMapping("/warranty")
-    public ResponseEntity<?> warranty(@RequestParam(required = false, defaultValue = "30") int days) {
+    public ResponseEntity<?> warranty(@RequestParam(required = false, defaultValue = "60") int days) {
         LocalDate today = LocalDate.now();
         LocalDate limit = today.plusDays(Math.max(0, days));
         List<Map<String, Object>> expiring = new java.util.ArrayList<>();
         List<Map<String, Object>> expired = new java.util.ArrayList<>();
+        List<Map<String, Object>> active = new java.util.ArrayList<>();
 
         for (Product p : productRepository.findWithPurchaseDate()) {
             if (p.getWarrantyMonths() == null) continue;
@@ -90,9 +93,11 @@ public class StockController {
                 expired.add(row);
             } else if (!expiresAt.isAfter(limit)) {
                 expiring.add(row);
+            } else {
+                active.add(row);
             }
         }
-        return ResponseEntity.ok(Map.of("expiring", expiring, "expired", expired));
+        return ResponseEntity.ok(Map.of("expiring", expiring, "expired", expired, "active", active));
     }
 
     private Map<String, Object> movementToMap(StockMovement m) {
