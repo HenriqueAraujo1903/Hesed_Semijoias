@@ -25,6 +25,9 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
                                @Param("stockStatus") String stockStatus,
                                @Param("search") String search);
 
-    @Query("SELECT p FROM Product p ORDER BY p.category ASC, p.name ASC")
+    // Esgotados vão para o fim; o restante mantém a ordem por categoria e nome.
+    @Query("SELECT p FROM Product p " +
+           "ORDER BY CASE WHEN p.stockStatus = 'ESGOTADO' THEN 1 ELSE 0 END ASC, " +
+           "p.category ASC, p.name ASC")
     List<Product> findAllForCatalog();
 }
