@@ -34,7 +34,7 @@ export default function DashboardLayout() {
     <>
       {/* Brand */}
       <div className="px-6 py-6 border-b border-charcoal-100/40 dark:border-charcoal-700/40">
-        <Logo className="h-48 mx-auto" />
+        <Logo className="h-28 mx-auto" />
       </div>
 
       {/* Navigation */}

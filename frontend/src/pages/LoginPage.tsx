@@ -38,7 +38,7 @@ export default function LoginPage() {
         <div className="absolute bottom-0 left-0 w-72 h-72 bg-gold/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2" />
         
         <div className="relative text-center space-y-6">
-          <Logo className="h-[22rem] mx-auto" />
+          <Logo variant="dark" className="h-[22rem] mx-auto" />
           <p className="text-charcoal-300 text-sm max-w-xs mx-auto leading-relaxed italic">
             "Amor leal. Bondade. Misericórdia. Fidelidade."
           </p>
