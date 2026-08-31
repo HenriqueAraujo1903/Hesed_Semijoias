@@ -205,37 +205,44 @@ function KpiCard({ label, value, sub, accent }: {
 function TimeSeriesChart({ data }: { data: TimePoint[] }) {
   if (data.length === 0) return <EmptyChart />;
   const max = Math.max(...data.map(d => d.revenue), 1);
-  const barW = 100 / data.length;
+  // Com muitos períodos, dá largura mínima por barra e rola horizontalmente
+  // para não espremer as barras no celular.
+  const scrollable = data.length > 12;
 
   return (
     <div>
-      <div className="flex items-end gap-1 h-52">
-        {data.map((d) => {
-          const h = (d.revenue / max) * 100;
-          return (
-            <div key={d.period} className="flex-1 flex flex-col items-center justify-end group relative">
-              <div className="absolute -top-8 hidden group-hover:block bg-charcoal-800 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap z-10">
-                {BRL.format(d.revenue)} • {d.orders} pedido(s)
-              </div>
-              <div
-                className="w-full max-w-[40px] rounded-t bg-gold/80 hover:bg-gold transition-all"
-                style={{ height: `${Math.max(h, 2)}%` }}
-              />
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex gap-1 mt-2">
-        {data.map((d) => (
-          <div key={d.period} className="flex-1 text-center">
-            <span className="text-[9px] text-charcoal-400" style={{ writingMode: data.length > 15 ? 'vertical-rl' : undefined }}>
-              {formatPeriodLabel(d.period)}
-            </span>
+      <div className={scrollable ? 'overflow-x-auto pb-1' : ''}>
+        <div style={scrollable ? { minWidth: `${data.length * 28}px` } : undefined}>
+          <div className="flex items-end gap-1 h-52">
+            {data.map((d) => {
+              const h = (d.revenue / max) * 100;
+              return (
+                <div key={d.period} className="flex-1 flex flex-col items-center justify-end group relative min-w-[20px]">
+                  <div className="absolute -top-8 hidden group-hover:block bg-charcoal-800 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap z-10">
+                    {BRL.format(d.revenue)} • {d.orders} pedido(s)
+                  </div>
+                  <div
+                    className="w-full max-w-[40px] rounded-t bg-gold/80 hover:bg-gold transition-all"
+                    style={{ height: `${Math.max(h, 2)}%` }}
+                  />
+                </div>
+              );
+            })}
           </div>
-        ))}
+          <div className="flex gap-1 mt-2">
+            {data.map((d) => (
+              <div key={d.period} className="flex-1 text-center min-w-[20px]">
+                <span className="text-[9px] text-charcoal-400" style={{ writingMode: data.length > 15 ? 'vertical-rl' : undefined }}>
+                  {formatPeriodLabel(d.period)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
       <p className="text-[10px] text-charcoal-300 mt-2 text-right">
         Máx: {BRL.format(max)} • {data.length} período(s)
+        {scrollable && <span className="ml-1">· arraste para o lado →</span>}
       </p>
     </div>
   );

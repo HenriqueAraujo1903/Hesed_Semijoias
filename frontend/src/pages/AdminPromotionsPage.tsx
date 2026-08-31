@@ -306,7 +306,7 @@ function PromotionModal({ promotion, products, onClose, onSaved }: {
           </div>
 
           {/* Discount + Promo Price */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-400 mb-1 uppercase tracking-wide">
                 Desconto (%)
@@ -328,7 +328,7 @@ function PromotionModal({ promotion, products, onClose, onSaved }: {
           </div>
 
           {/* Dates */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-400 mb-1 uppercase tracking-wide">
                 Início (opcional)

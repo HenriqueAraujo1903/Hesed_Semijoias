@@ -115,37 +115,68 @@ export default function AdminProductsPage() {
           <p className="text-sm text-stone-500">Nenhum produto cadastrado.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-stone-100 text-sm">
-              <thead className="bg-stone-50">
-                <tr>
-                  {['SKU', 'Nome', 'Categoria', 'Custo', 'Venda', 'Estoque', 'Ações'].map((col) => (
-                    <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500">{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-50">
-                {products.map((p) => (
-                  <tr key={p.id} className="hover:bg-stone-50 transition-colors">
-                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-medium text-stone-800">{p.sku}</td>
-                    <td className="max-w-xs truncate px-4 py-3 font-medium text-stone-700">{p.name}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-stone-500">{p.category}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-stone-500">{BRL.format(p.costPrice)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-stone-800">{BRL.format(p.salePrice)}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-xs">{p.stockStatus}</td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      <div className="flex gap-2">
-                        <button onClick={() => openEdit(p)} className="text-xs text-gold hover:underline">Editar</button>
-                        <button onClick={() => handleDelete(p.id)} className="text-xs text-red-500 hover:underline">Excluir</button>
-                      </div>
-                    </td>
+        <>
+          {/* Tabela (desktop) */}
+          <div className="hidden md:block overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-stone-100 text-sm">
+                <thead className="bg-stone-50">
+                  <tr>
+                    {['SKU', 'Nome', 'Categoria', 'Custo', 'Venda', 'Estoque', 'Ações'].map((col) => (
+                      <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500">{col}</th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-stone-50">
+                  {products.map((p) => (
+                    <tr key={p.id} className="hover:bg-stone-50 transition-colors">
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-medium text-stone-800">{p.sku}</td>
+                      <td className="max-w-xs truncate px-4 py-3 font-medium text-stone-700">{p.name}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-stone-500">{p.category}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-stone-500">{BRL.format(p.costPrice)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 font-medium text-stone-800">{BRL.format(p.salePrice)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs">{p.stockStatus}</td>
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <div className="flex gap-2">
+                          <button onClick={() => openEdit(p)} className="text-xs text-gold hover:underline">Editar</button>
+                          <button onClick={() => handleDelete(p.id)} className="text-xs text-red-500 hover:underline">Excluir</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+
+          {/* Cards (mobile) */}
+          <div className="md:hidden space-y-3">
+            {products.map((p) => (
+              <div key={p.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-stone-800 truncate">{p.name}</p>
+                    <p className="font-mono text-xs text-stone-400 mt-0.5">{p.sku}</p>
+                  </div>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    p.stockStatus === 'ESGOTADO' ? 'bg-red-100 text-red-600'
+                    : p.stockStatus === 'BAIXO' ? 'bg-amber-100 text-amber-700'
+                    : 'bg-emerald-100 text-emerald-700'
+                  }`}>{p.stockStatus}</span>
+                </div>
+                <div className="mt-3 flex items-center gap-4 text-sm">
+                  <span className="text-stone-400 text-xs uppercase tracking-wide">{p.category}</span>
+                  <span className="text-stone-500">Custo: {BRL.format(p.costPrice)}</span>
+                  <span className="font-semibold text-stone-800">{BRL.format(p.salePrice)}</span>
+                </div>
+                <div className="mt-3 flex gap-4 border-t border-stone-100 pt-3">
+                  <button onClick={() => openEdit(p)} className="text-sm text-gold font-medium">Editar</button>
+                  <button onClick={() => handleDelete(p.id)} className="text-sm text-red-500 font-medium">Excluir</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
       {showModal && (
@@ -308,7 +339,7 @@ function ProductModal({ product, onClose, onSaved }: {
             onUploaded={(url) => setForm({ ...form, imageUrl: url })}
           />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-stone-600 mb-1">SKU *</label>
               <input required disabled={isEdit} value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })}
@@ -336,7 +367,7 @@ function ProductModal({ product, onClose, onSaved }: {
               className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm resize-none focus:border-gold focus:outline-none" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-stone-600 mb-1">Custo (R$) *</label>
               <input required type="number" step="0.01" min="0" value={form.costPrice}

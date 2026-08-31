@@ -424,28 +424,34 @@ function OrderEditModal({ order, products, onClose, onSaved }: {
             <label className="block text-xs font-medium text-charcoal-600 dark:text-charcoal-400 mb-2 uppercase tracking-wide">Itens</label>
             <div className="space-y-2">
               {items.map((item, idx) => (
-                <div key={idx} className="flex items-center gap-2 rounded-lg border border-charcoal-100 dark:border-charcoal-700 p-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-charcoal-700 dark:text-charcoal-200 truncate">{item.productName}</p>
-                    <p className="text-[11px] text-charcoal-400 font-mono">{item.productSku}</p>
+                <div key={idx} className="rounded-lg border border-charcoal-100 dark:border-charcoal-700 p-2">
+                  {/* Linha 1: nome + remover */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-charcoal-700 dark:text-charcoal-200 truncate">{item.productName}</p>
+                      <p className="text-[11px] text-charcoal-400 font-mono">{item.productSku}</p>
+                    </div>
+                    <button onClick={() => removeItem(idx)} title="Remover"
+                      className="shrink-0 text-charcoal-300 hover:text-red-500 transition-colors px-1">✕</button>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-charcoal-400 uppercase">Qtd</span>
-                    <input type="number" min={1} value={item.quantity}
-                      onChange={(e) => updateItem(idx, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
-                      className="w-14 rounded border border-charcoal-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-900 px-2 py-1 text-sm text-center" />
+                  {/* Linha 2: qtd, preço e subtotal */}
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-charcoal-400 uppercase">Qtd</span>
+                      <input type="number" min={1} value={item.quantity}
+                        onChange={(e) => updateItem(idx, { quantity: Math.max(1, parseInt(e.target.value) || 1) })}
+                        className="w-14 rounded border border-charcoal-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-900 px-2 py-1 text-sm text-center" />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-charcoal-400 uppercase">R$</span>
+                      <input type="number" min={0} step="0.01" value={item.effectivePrice}
+                        onChange={(e) => updateItem(idx, { effectivePrice: parseFloat(e.target.value) || 0 })}
+                        className="w-20 rounded border border-charcoal-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-900 px-2 py-1 text-sm text-right" />
+                    </div>
+                    <span className="ml-auto text-sm font-medium text-charcoal-700 dark:text-charcoal-200">
+                      {BRL.format(item.effectivePrice * item.quantity)}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] text-charcoal-400 uppercase">R$</span>
-                    <input type="number" min={0} step="0.01" value={item.effectivePrice}
-                      onChange={(e) => updateItem(idx, { effectivePrice: parseFloat(e.target.value) || 0 })}
-                      className="w-20 rounded border border-charcoal-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-900 px-2 py-1 text-sm text-right" />
-                  </div>
-                  <span className="w-20 text-right text-sm font-medium text-charcoal-700 dark:text-charcoal-200">
-                    {BRL.format(item.effectivePrice * item.quantity)}
-                  </span>
-                  <button onClick={() => removeItem(idx)} title="Remover"
-                    className="text-charcoal-300 hover:text-red-500 transition-colors px-1">✕</button>
                 </div>
               ))}
             </div>

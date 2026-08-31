@@ -181,31 +181,38 @@ function FunnelChart({ funnel }: { funnel: Funnel }) {
 function EngagementTimeSeries({ data }: { data: DayPoint[] }) {
   if (data.length === 0) return <EmptyChart />;
   const max = Math.max(...data.map(d => Math.max(d.visits, d.selections)), 1);
+  // Muitos períodos: rola horizontalmente com largura mínima para não espremer.
+  const scrollable = data.length > 12;
   return (
     <div>
-      <div className="flex items-end gap-2 h-52">
-        {data.map((d) => (
-          <div key={d.period} className="flex-1 flex flex-col items-center justify-end gap-0.5 group relative">
-            <div className="absolute -top-10 hidden group-hover:block bg-charcoal-800 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap z-10">
-              {d.visits} visitas • {d.selections} seleções
-            </div>
-            <div className="w-full flex items-end justify-center gap-0.5 h-full">
-              <div className="w-1/2 max-w-[16px] rounded-t bg-blue-400/80" style={{ height: `${(d.visits / max) * 100}%` }} />
-              <div className="w-1/2 max-w-[16px] rounded-t bg-violet-400/80" style={{ height: `${(d.selections / max) * 100}%` }} />
-            </div>
+      <div className={scrollable ? 'overflow-x-auto pb-1' : ''}>
+        <div style={scrollable ? { minWidth: `${data.length * 34}px` } : undefined}>
+          <div className="flex items-end gap-2 h-52">
+            {data.map((d) => (
+              <div key={d.period} className="flex-1 flex flex-col items-center justify-end gap-0.5 group relative min-w-[24px]">
+                <div className="absolute -top-10 hidden group-hover:block bg-charcoal-800 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap z-10">
+                  {d.visits} visitas • {d.selections} seleções
+                </div>
+                <div className="w-full flex items-end justify-center gap-0.5 h-full">
+                  <div className="w-1/2 max-w-[16px] rounded-t bg-blue-400/80" style={{ height: `${(d.visits / max) * 100}%` }} />
+                  <div className="w-1/2 max-w-[16px] rounded-t bg-violet-400/80" style={{ height: `${(d.selections / max) * 100}%` }} />
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="flex gap-2 mt-2">
-        {data.map((d) => (
-          <div key={d.period} className="flex-1 text-center">
-            <span className="text-[9px] text-charcoal-400">{formatDay(d.period)}</span>
+          <div className="flex gap-2 mt-2">
+            {data.map((d) => (
+              <div key={d.period} className="flex-1 text-center min-w-[24px]">
+                <span className="text-[9px] text-charcoal-400">{formatDay(d.period)}</span>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
       </div>
       <div className="flex gap-4 mt-3 text-xs">
         <span className="flex items-center gap-1.5 text-charcoal-500"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400/80" /> Visitas</span>
         <span className="flex items-center gap-1.5 text-charcoal-500"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400/80" /> Seleções</span>
+        {scrollable && <span className="ml-auto text-charcoal-300">arraste para o lado →</span>}
       </div>
     </div>
   );

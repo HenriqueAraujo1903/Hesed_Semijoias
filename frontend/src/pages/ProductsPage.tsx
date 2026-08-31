@@ -74,42 +74,72 @@ export default function ProductsPage() {
           <p className="text-sm text-stone-500">Nenhum produto encontrado.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-stone-100 text-sm">
-              <thead className="bg-stone-50">
-                <tr>
-                  {['SKU', 'Nome', 'Categoria', 'Preço Venda', 'Estoque'].map((col) => (
-                    <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500">
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-stone-50">
-                {products.map((p) => {
-                  const stock = STOCK_STYLES[p.stockStatus] ?? STOCK_STYLES.DISPONIVEL;
-                  return (
-                    <tr key={p.id} className="hover:bg-stone-50 transition-colors">
-                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-medium text-stone-800">{p.sku}</td>
-                      <td className="max-w-xs truncate px-4 py-3 font-medium text-stone-700">{p.name}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-stone-500">{p.category}</td>
-                      <td className="whitespace-nowrap px-4 py-3 font-medium text-stone-800">{BRL.format(p.salePrice)}</td>
-                      <td className="whitespace-nowrap px-4 py-3">
-                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${stock.className}`}>
-                          {stock.label}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        <>
+          {/* Tabela (desktop) */}
+          <div className="hidden md:block overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-stone-100 text-sm">
+                <thead className="bg-stone-50">
+                  <tr>
+                    {['SKU', 'Nome', 'Categoria', 'Preço Venda', 'Estoque'].map((col) => (
+                      <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500">
+                        {col}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-50">
+                  {products.map((p) => {
+                    const stock = STOCK_STYLES[p.stockStatus] ?? STOCK_STYLES.DISPONIVEL;
+                    return (
+                      <tr key={p.id} className="hover:bg-stone-50 transition-colors">
+                        <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-medium text-stone-800">{p.sku}</td>
+                        <td className="max-w-xs truncate px-4 py-3 font-medium text-stone-700">{p.name}</td>
+                        <td className="whitespace-nowrap px-4 py-3 text-xs text-stone-500">{p.category}</td>
+                        <td className="whitespace-nowrap px-4 py-3 font-medium text-stone-800">{BRL.format(p.salePrice)}</td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${stock.className}`}>
+                            {stock.label}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="border-t border-stone-100 bg-stone-50 px-4 py-2 text-right text-xs text-stone-400">
+              {products.length} {products.length === 1 ? 'produto' : 'produtos'}
+            </div>
           </div>
-          <div className="border-t border-stone-100 bg-stone-50 px-4 py-2 text-right text-xs text-stone-400">
-            {products.length} {products.length === 1 ? 'produto' : 'produtos'}
+
+          {/* Cards (mobile) */}
+          <div className="md:hidden space-y-3">
+            {products.map((p) => {
+              const stock = STOCK_STYLES[p.stockStatus] ?? STOCK_STYLES.DISPONIVEL;
+              return (
+                <div key={p.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-stone-800 truncate">{p.name}</p>
+                      <p className="font-mono text-xs text-stone-400 mt-0.5">{p.sku}</p>
+                    </div>
+                    <span className={`shrink-0 inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-medium ${stock.className}`}>
+                      {stock.label}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between text-sm">
+                    <span className="text-stone-400 text-xs uppercase tracking-wide">{p.category}</span>
+                    <span className="font-semibold text-stone-800">{BRL.format(p.salePrice)}</span>
+                  </div>
+                </div>
+              );
+            })}
+            <p className="text-right text-xs text-stone-400">
+              {products.length} {products.length === 1 ? 'produto' : 'produtos'}
+            </p>
           </div>
-        </div>
+        </>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
 import Logo from '../components/Logo';
@@ -15,98 +16,146 @@ const NAV_ITEMS = [
 
 export default function DashboardLayout() {
   const { user, logout, isAdmin } = useAuth();
+  const location = useLocation();
   const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+
+  // Fecha o menu mobile ao trocar de rota
+  useEffect(() => { setMobileNavOpen(false); }, [location.pathname]);
+
+  // Bloqueia o scroll do fundo quando o drawer está aberto
+  useEffect(() => {
+    document.body.style.overflow = mobileNavOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileNavOpen]);
+
+  // Conteúdo de navegação reutilizado no sidebar (desktop) e no drawer (mobile)
+  const navContent = (
+    <>
+      {/* Brand */}
+      <div className="px-6 py-6 border-b border-charcoal-100/40 dark:border-charcoal-700/40">
+        <Logo className="h-48 mx-auto" />
+      </div>
+
+      {/* Navigation */}
+      <nav className="flex-1 px-3 py-5 space-y-1 overflow-y-auto">
+        <p className="px-3 mb-3 text-[10px] font-semibold text-charcoal-300 dark:text-charcoal-500 uppercase tracking-wider">Menu</p>
+        {visibleItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) =>
+              `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                isActive
+                  ? 'bg-gold-50 dark:bg-gold-900/30 text-gold-700 dark:text-gold-400 shadow-sm border border-gold-200/50 dark:border-gold-800/50'
+                  : 'text-charcoal-500 dark:text-charcoal-400 hover:bg-cream-200 dark:hover:bg-charcoal-700 hover:text-charcoal-700 dark:hover:text-charcoal-200'
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <item.icon active={isActive} />
+                <span>{item.label}</span>
+              </>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Catalog link */}
+      <div className="px-4 pb-3">
+        <a
+          href="/catalogo"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 rounded-xl border border-dashed border-charcoal-200 dark:border-charcoal-600 px-3 py-2.5 text-xs text-charcoal-400 dark:text-charcoal-500 hover:border-gold hover:text-gold transition-all"
+        >
+          <ExternalIcon />
+          <span>Ver catálogo público</span>
+        </a>
+      </div>
+
+      {/* Theme toggle + User section */}
+      <div className="border-t border-charcoal-100/40 dark:border-charcoal-700/40 px-4 py-4 space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[10px] font-semibold text-charcoal-300 dark:text-charcoal-500 uppercase tracking-wider">Tema</span>
+          <ThemeToggle />
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cream-200 dark:bg-charcoal-700 text-charcoal-500 dark:text-charcoal-300 text-xs font-semibold">
+            {user?.name?.charAt(0).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="truncate text-sm font-medium text-charcoal-700 dark:text-charcoal-200">{user?.name}</p>
+            <p className="truncate text-xs text-charcoal-400 dark:text-charcoal-500">
+              {user?.role === 'ROLE_ADMIN' ? 'Administrador' : 'Operador'}
+            </p>
+          </div>
+          <button
+            onClick={logout}
+            className="shrink-0 rounded-lg p-2 text-charcoal-300 dark:text-charcoal-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-colors"
+            title="Sair"
+          >
+            <LogoutIcon />
+          </button>
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <div className="flex h-screen bg-cream dark:bg-charcoal-900">
-      {/* Sidebar */}
+      {/* Sidebar (desktop) */}
       <aside className="hidden md:flex w-[260px] flex-col bg-white dark:bg-charcoal-800 border-r border-charcoal-100/40 dark:border-charcoal-700/40">
-        {/* Brand */}
-        <div className="px-6 py-6 border-b border-charcoal-100/40 dark:border-charcoal-700/40">
-          <Logo className="h-48 mx-auto" />
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-5 space-y-1">
-          <p className="px-3 mb-3 text-[10px] font-semibold text-charcoal-300 dark:text-charcoal-500 uppercase tracking-wider">Menu</p>
-          {visibleItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? 'bg-gold-50 dark:bg-gold-900/30 text-gold-700 dark:text-gold-400 shadow-sm border border-gold-200/50 dark:border-gold-800/50'
-                    : 'text-charcoal-500 dark:text-charcoal-400 hover:bg-cream-200 dark:hover:bg-charcoal-700 hover:text-charcoal-700 dark:hover:text-charcoal-200'
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <item.icon active={isActive} />
-                  <span>{item.label}</span>
-                </>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* Catalog link */}
-        <div className="px-4 pb-3">
-          <a
-            href="/catalogo"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 rounded-xl border border-dashed border-charcoal-200 dark:border-charcoal-600 px-3 py-2.5 text-xs text-charcoal-400 dark:text-charcoal-500 hover:border-gold hover:text-gold transition-all"
-          >
-            <ExternalIcon />
-            <span>Ver catálogo público</span>
-          </a>
-        </div>
-
-        {/* Theme toggle + User section */}
-        <div className="border-t border-charcoal-100/40 dark:border-charcoal-700/40 px-4 py-4 space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <span className="text-[10px] font-semibold text-charcoal-300 dark:text-charcoal-500 uppercase tracking-wider">Tema</span>
-            <ThemeToggle />
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-cream-200 dark:bg-charcoal-700 text-charcoal-500 dark:text-charcoal-300 text-xs font-semibold">
-              {user?.name?.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-medium text-charcoal-700 dark:text-charcoal-200">{user?.name}</p>
-              <p className="truncate text-xs text-charcoal-400 dark:text-charcoal-500">
-                {user?.role === 'ROLE_ADMIN' ? 'Administrador' : 'Operador'}
-              </p>
-            </div>
-            <button
-              onClick={logout}
-              className="shrink-0 rounded-lg p-2 text-charcoal-300 dark:text-charcoal-500 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-500 transition-colors"
-              title="Sair"
-            >
-              <LogoutIcon />
-            </button>
-          </div>
-        </div>
+        {navContent}
       </aside>
+
+      {/* Drawer de navegação (mobile) */}
+      {mobileNavOpen && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          {/* Overlay */}
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => setMobileNavOpen(false)}
+            aria-hidden="true"
+          />
+          {/* Painel deslizante */}
+          <aside className="absolute left-0 top-0 h-full w-[80%] max-w-[300px] flex flex-col bg-white dark:bg-charcoal-800 shadow-2xl">
+            <button
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Fechar menu"
+              className="absolute right-3 top-3 z-10 rounded-lg p-2 text-charcoal-400 hover:text-charcoal-600 dark:hover:text-charcoal-200"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            {navContent}
+          </aside>
+        </div>
+      )}
 
       {/* Main Content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile Header */}
         <header className="flex items-center justify-between border-b border-charcoal-100/40 dark:border-charcoal-700/40 bg-white dark:bg-charcoal-800 px-4 py-3 md:hidden">
-          <Logo className="h-[4.5rem]" />
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <button onClick={logout} className="text-xs text-charcoal-400 dark:text-charcoal-500 hover:text-charcoal-600 dark:hover:text-charcoal-300 transition-colors">
-              Sair
-            </button>
-          </div>
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Abrir menu"
+            aria-expanded={mobileNavOpen}
+            className="rounded-lg p-2 text-charcoal-500 dark:text-charcoal-300 hover:bg-cream-200 dark:hover:bg-charcoal-700 transition-colors"
+          >
+            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5M3.75 17.25h16.5" />
+            </svg>
+          </button>
+          <Logo className="h-12" />
+          <ThemeToggle />
         </header>
 
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-6xl px-6 py-8">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-8">
             <Outlet />
           </div>
         </main>
