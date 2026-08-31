@@ -17,9 +17,12 @@ import urllib.request
 import urllib.error
 import urllib.parse
 
-BASE = "http://localhost:8080"
-ADMIN_EMAIL = "admin@hesed.com"
-ADMIN_PASS = "admin123"
+import os
+
+# Parametrizável por env para rodar contra dev (8080) ou homolog (8081).
+BASE = os.environ.get("QA_BASE", "http://localhost:8080")
+ADMIN_EMAIL = os.environ.get("QA_ADMIN_EMAIL", "admin@hesed.com")
+ADMIN_PASS = os.environ.get("QA_ADMIN_PASS", "admin123")
 
 
 class Results:
