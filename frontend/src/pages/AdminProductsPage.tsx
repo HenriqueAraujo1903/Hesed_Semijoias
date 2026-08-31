@@ -36,7 +36,7 @@ const STOCK_OPTIONS = [
   { value: 'ESGOTADO', label: 'Esgotado' },
 ];
 
-export default function AdminProductsPage() {
+export function ProductsManager() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -592,3 +592,7 @@ function ProductModal({ product, onClose, onSaved }: {
     </div>
   );
 }
+
+// Mantido como default export por compatibilidade; a página agora vive dentro
+// da aba Estoque (StockPage) como a sub-aba "Produtos".
+export default ProductsManager;

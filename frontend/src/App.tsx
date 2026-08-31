@@ -8,8 +8,6 @@ import DashboardsPage from './pages/DashboardsPage';
 import SalesDashboardPage from './pages/dashboards/SalesDashboardPage';
 import EngagementDashboardPage from './pages/dashboards/EngagementDashboardPage';
 import OrdersPage from './pages/OrdersPage';
-import ProductsPage from './pages/ProductsPage';
-import AdminProductsPage from './pages/AdminProductsPage';
 import AdminPromotionsPage from './pages/AdminPromotionsPage';
 import ConsigneesPage from './pages/ConsigneesPage';
 import SuppliersPage from './pages/SuppliersPage';
@@ -35,14 +33,13 @@ export default function App() {
         <Route path="/dashboards/engajamento" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><EngagementDashboardPage /></ProtectedRoute>
         } />
-        <Route path="/produtos" element={<ProductsPage />} />
         <Route path="/pedidos" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><OrdersPage /></ProtectedRoute>
         } />
         <Route path="/revendedoras" element={<ConsigneesPage />} />
-        <Route path="/admin/produtos" element={
-          <ProtectedRoute requiredRole="ROLE_ADMIN"><AdminProductsPage /></ProtectedRoute>
-        } />
+        {/* Rotas antigas de produtos consolidadas na aba Estoque */}
+        <Route path="/produtos" element={<Navigate to="/admin/estoque" replace />} />
+        <Route path="/admin/produtos" element={<Navigate to="/admin/estoque" replace />} />
         <Route path="/admin/promocoes" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><AdminPromotionsPage /></ProtectedRoute>
         } />
