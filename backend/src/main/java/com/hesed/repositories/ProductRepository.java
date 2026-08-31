@@ -15,6 +15,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     boolean existsBySku(String sku);
 
+    boolean existsBySupplierId(UUID supplierId);
+
     @Query("SELECT p FROM Product p WHERE " +
            "(:category IS NULL OR p.category = :category) AND " +
            "(:stockStatus IS NULL OR p.stockStatus = :stockStatus) AND " +
@@ -30,4 +32,13 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
            "ORDER BY CASE WHEN p.stockStatus = 'ESGOTADO' THEN 1 ELSE 0 END ASC, " +
            "p.category ASC, p.name ASC")
     List<Product> findAllForCatalog();
+
+    // Produtos com estoque baixo ou esgotado (para o painel de reposição).
+    @Query("SELECT p FROM Product p WHERE p.stockQuantity <= p.lowStockThreshold " +
+           "ORDER BY p.stockQuantity ASC, p.name ASC")
+    List<Product> findLowStock();
+
+    // Produtos com data de compra definida (para cálculo de garantia).
+    @Query("SELECT p FROM Product p WHERE p.purchaseDate IS NOT NULL ORDER BY p.purchaseDate ASC")
+    List<Product> findWithPurchaseDate();
 }

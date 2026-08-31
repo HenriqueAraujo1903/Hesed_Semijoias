@@ -12,6 +12,8 @@ import ProductsPage from './pages/ProductsPage';
 import AdminProductsPage from './pages/AdminProductsPage';
 import AdminPromotionsPage from './pages/AdminPromotionsPage';
 import ConsigneesPage from './pages/ConsigneesPage';
+import SuppliersPage from './pages/SuppliersPage';
+import StockPage from './pages/StockPage';
 import CatalogoPage from './pages/CatalogoPage';
 
 export default function App() {
@@ -43,6 +45,12 @@ export default function App() {
         } />
         <Route path="/admin/promocoes" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><AdminPromotionsPage /></ProtectedRoute>
+        } />
+        <Route path="/admin/fornecedores" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><SuppliersPage /></ProtectedRoute>
+        } />
+        <Route path="/admin/estoque" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><StockPage /></ProtectedRoute>
         } />
       </Route>
 

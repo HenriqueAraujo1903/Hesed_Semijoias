@@ -30,13 +30,16 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final PromotionRepository promotionRepository;
+    private final StockService stockService;
 
     public OrderService(OrderRepository orderRepository,
                         ProductRepository productRepository,
-                        PromotionRepository promotionRepository) {
+                        PromotionRepository promotionRepository,
+                        StockService stockService) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.promotionRepository = promotionRepository;
+        this.stockService = stockService;
     }
 
     /**
@@ -113,7 +116,14 @@ public class OrderService {
         }
 
         recalcTotal(order);
-        return OrderResponse.from(orderRepository.save(order));
+        Order saved = orderRepository.save(order);
+
+        // Venda direta que já nasce confirmada consome o estoque imediatamente.
+        if (confirm) {
+            stockService.consumeForOrder(saved);
+        }
+
+        return OrderResponse.from(saved);
     }
 
     /**
@@ -188,6 +198,18 @@ public class OrderService {
         if (normalized.equals("CONFIRMADO")
                 && (order.getCustomerName() == null || order.getCustomerName().isBlank())) {
             throw new RuntimeException("Informe o nome do cliente antes de confirmar a venda.");
+        }
+
+        String previous = order.getStatus();
+
+        // Baixa/estorno de estoque conforme a transição.
+        // O estoque só é consumido enquanto o pedido está CONFIRMADO.
+        boolean wasConfirmed = "CONFIRMADO".equals(previous);
+        boolean willBeConfirmed = "CONFIRMADO".equals(normalized);
+        if (!wasConfirmed && willBeConfirmed) {
+            stockService.consumeForOrder(order);   // passou a vender → dá baixa
+        } else if (wasConfirmed && !willBeConfirmed) {
+            stockService.restockForOrder(order);    // deixou de vender → estorna
         }
 
         order.setStatus(normalized);

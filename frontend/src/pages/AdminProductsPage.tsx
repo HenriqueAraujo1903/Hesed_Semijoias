@@ -9,10 +9,23 @@ interface Product {
   category: string;
   imageUrl: string | null;
   imageUrls: string[] | null;
+  supplierPrice: number | null;
   costPrice: number;
   salePrice: number;
   status: string;
   stockStatus: string;
+  stockQuantity: number;
+  lowStockThreshold: number;
+  supplierId: string | null;
+  supplierName: string | null;
+  purchaseDate: string | null;
+  warrantyMonths: number | null;
+  warrantyExpiresAt: string | null;
+}
+
+interface SupplierOption {
+  id: string;
+  name: string;
 }
 
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -124,7 +137,7 @@ export default function AdminProductsPage() {
                 <thead className="bg-stone-50">
                   <tr>
                     {['SKU', 'Nome', 'Categoria', 'Custo', 'Venda', 'Estoque', 'Ações'].map((col) => (
-                      <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500">{col}</th>
+                      <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500">{col === 'Estoque' ? 'Estoque (qtd)' : col}</th>
                     ))}
                   </tr>
                 </thead>
@@ -136,7 +149,14 @@ export default function AdminProductsPage() {
                       <td className="whitespace-nowrap px-4 py-3 text-xs text-stone-500">{p.category}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-stone-500">{BRL.format(p.costPrice)}</td>
                       <td className="whitespace-nowrap px-4 py-3 font-medium text-stone-800">{BRL.format(p.salePrice)}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-xs">{p.stockStatus}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs">
+                        <span className="font-medium text-stone-700">{p.stockQuantity ?? 0}</span>
+                        <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          p.stockStatus === 'ESGOTADO' ? 'bg-red-100 text-red-600'
+                          : p.stockStatus === 'BAIXO' ? 'bg-amber-100 text-amber-700'
+                          : 'bg-emerald-100 text-emerald-700'
+                        }`}>{p.stockStatus}</span>
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3">
                         <div className="flex gap-2">
                           <button onClick={() => openEdit(p)} className="text-xs text-gold hover:underline">Editar</button>
@@ -163,7 +183,7 @@ export default function AdminProductsPage() {
                     p.stockStatus === 'ESGOTADO' ? 'bg-red-100 text-red-600'
                     : p.stockStatus === 'BAIXO' ? 'bg-amber-100 text-amber-700'
                     : 'bg-emerald-100 text-emerald-700'
-                  }`}>{p.stockStatus}</span>
+                  }`}>{p.stockQuantity ?? 0} · {p.stockStatus}</span>
                 </div>
                 <div className="mt-3 flex items-center gap-4 text-sm">
                   <span className="text-stone-400 text-xs uppercase tracking-wide">{p.category}</span>
@@ -344,17 +364,51 @@ function ProductModal({ product, onClose, onSaved }: {
     name: product?.name ?? '',
     description: product?.description ?? '',
     category: product?.category ?? 'Brinco',
+    supplierPrice: product?.supplierPrice != null ? product.supplierPrice.toString() : '',
     costPrice: product?.costPrice?.toString() ?? '',
     salePrice: product?.salePrice?.toString() ?? '',
-    stockStatus: product?.stockStatus ?? 'DISPONIVEL',
+    stockQuantity: product?.stockQuantity != null ? product.stockQuantity.toString() : (isEdit ? '0' : ''),
+    lowStockThreshold: product?.lowStockThreshold != null ? product.lowStockThreshold.toString() : '3',
+    supplierId: product?.supplierId ?? '',
+    purchaseDate: product?.purchaseDate ?? '',
+    warrantyMonths: product?.warrantyMonths != null ? product.warrantyMonths.toString() : '12',
   });
   const [images, setImages] = useState<string[]>(() => {
     if (product?.imageUrls && product.imageUrls.length > 0) return product.imageUrls;
     if (product?.imageUrl) return [product.imageUrl];
     return [];
   });
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    api.get('/admin/suppliers').then((res) => setSuppliers(res.data)).catch(() => setSuppliers([]));
+  }, []);
+
+  // Status de estoque derivado (espelha a regra do backend) para pré-visualização.
+  const qtyNum = parseInt(form.stockQuantity || '0', 10) || 0;
+  const thresholdNum = parseInt(form.lowStockThreshold || '3', 10) || 0;
+  const derivedStatus = qtyNum <= 0 ? 'ESGOTADO' : qtyNum <= thresholdNum ? 'BAIXO' : 'DISPONIVEL';
+
+  // Margens calculadas para exibição.
+  const supplierNum = parseFloat(form.supplierPrice || '');
+  const costNum = parseFloat(form.costPrice || '');
+  const saleNum = parseFloat(form.salePrice || '');
+  const purchaseDiscount = (!isNaN(supplierNum) && supplierNum > 0 && !isNaN(costNum))
+    ? (1 - costNum / supplierNum) * 100 : null;
+  const saleMargin = (!isNaN(costNum) && costNum > 0 && !isNaN(saleNum))
+    ? (1 - costNum / saleNum) * 100 : null;
+
+  // Vencimento de garantia previsto.
+  const warrantyExpiry = (() => {
+    if (!form.purchaseDate) return null;
+    const months = parseInt(form.warrantyMonths || '12', 10) || 0;
+    const d = new Date(form.purchaseDate + 'T00:00:00');
+    if (isNaN(d.getTime())) return null;
+    d.setMonth(d.getMonth() + months);
+    return d.toLocaleDateString('pt-BR');
+  })();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -362,10 +416,18 @@ function ProductModal({ product, onClose, onSaved }: {
     setLoading(true);
 
     const body = {
-      ...form,
+      sku: form.sku,
+      name: form.name,
+      category: form.category,
+      description: form.description || null,
+      supplierPrice: form.supplierPrice ? parseFloat(form.supplierPrice) : null,
       costPrice: parseFloat(form.costPrice),
       salePrice: parseFloat(form.salePrice),
-      description: form.description || null,
+      stockQuantity: form.stockQuantity !== '' ? parseInt(form.stockQuantity, 10) : 0,
+      lowStockThreshold: form.lowStockThreshold !== '' ? parseInt(form.lowStockThreshold, 10) : 3,
+      supplierId: form.supplierId || null,
+      purchaseDate: form.purchaseDate || null,
+      warrantyMonths: form.warrantyMonths !== '' ? parseInt(form.warrantyMonths, 10) : 12,
       imageUrls: images,
       imageUrl: images[0] || null,
     };
@@ -426,9 +488,17 @@ function ProductModal({ product, onClose, onSaved }: {
               className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm resize-none focus:border-gold focus:outline-none" />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Valores: fornecedor (tabela) / custo (pago) / venda (cliente) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Custo (R$) *</label>
+              <label className="block text-xs font-medium text-stone-600 mb-1">Preço fornecedor (R$)</label>
+              <input type="number" step="0.01" min="0" value={form.supplierPrice}
+                onChange={(e) => setForm({ ...form, supplierPrice: e.target.value })}
+                placeholder="tabela"
+                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-stone-600 mb-1">Custo pago (R$) *</label>
               <input required type="number" step="0.01" min="0" value={form.costPrice}
                 onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
                 className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
@@ -441,14 +511,71 @@ function ProductModal({ product, onClose, onSaved }: {
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Status de Estoque</label>
-            <select value={form.stockStatus} onChange={(e) => setForm({ ...form, stockStatus: e.target.value })}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none">
-              <option value="DISPONIVEL">Disponível</option>
-              <option value="BAIXO">Baixo</option>
-              <option value="ESGOTADO">Esgotado</option>
-            </select>
+          {(purchaseDiscount !== null || saleMargin !== null) && (
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-stone-500">
+              {purchaseDiscount !== null && (
+                <span>Desconto na compra: <strong className="text-emerald-600">{purchaseDiscount.toFixed(1)}%</strong></span>
+              )}
+              {saleMargin !== null && (
+                <span>Margem na venda: <strong className={saleMargin >= 0 ? 'text-emerald-600' : 'text-red-500'}>{saleMargin.toFixed(1)}%</strong></span>
+              )}
+            </div>
+          )}
+
+          {/* Estoque: quantidade + limiar; status é derivado */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-stone-600 mb-1">Quantidade em estoque</label>
+              <input type="number" step="1" min="0" value={form.stockQuantity}
+                onChange={(e) => setForm({ ...form, stockQuantity: e.target.value })}
+                placeholder="0"
+                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-stone-600 mb-1">Alerta de estoque baixo (≤)</label>
+              <input type="number" step="1" min="0" value={form.lowStockThreshold}
+                onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })}
+                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-stone-500">
+            <span>Situação (automática):</span>
+            <span className={`rounded-full px-2 py-0.5 font-medium ${
+              derivedStatus === 'ESGOTADO' ? 'bg-red-100 text-red-600'
+              : derivedStatus === 'BAIXO' ? 'bg-amber-100 text-amber-700'
+              : 'bg-emerald-100 text-emerald-700'
+            }`}>{derivedStatus}</span>
+          </div>
+
+          {/* Fornecedor + garantia */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-stone-600 mb-1">Fornecedor</label>
+              <select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
+                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none">
+                <option value="">— nenhum —</option>
+                {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-stone-600 mb-1">Data da compra (garantia)</label>
+              <input type="date" value={form.purchaseDate}
+                onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })}
+                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-stone-600 mb-1">Garantia (meses)</label>
+              <input type="number" step="1" min="0" value={form.warrantyMonths}
+                onChange={(e) => setForm({ ...form, warrantyMonths: e.target.value })}
+                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+            </div>
+            {warrantyExpiry && (
+              <div className="flex items-end pb-2 text-[11px] text-stone-500">
+                Garantia até <strong className="ml-1 text-stone-700">{warrantyExpiry}</strong>
+              </div>
+            )}
           </div>
 
           {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-600">{error}</div>}

@@ -4,7 +4,9 @@ import com.hesed.models.Product;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -15,11 +17,20 @@ public class ProductResponse {
     private String description;
     private String category;
     private String imageUrl;
-    private java.util.List<String> imageUrls;
+    private List<String> imageUrls;
+    private BigDecimal supplierPrice;
     private BigDecimal costPrice;
     private BigDecimal salePrice;
     private String status;
     private String stockStatus;
+    private Integer stockQuantity;
+    private Integer lowStockThreshold;
+    private UUID supplierId;
+    private String supplierName;
+    private LocalDate purchaseDate;
+    private Integer warrantyMonths;
+    /** Data de expiração da garantia = purchaseDate + warrantyMonths (calculada). */
+    private LocalDate warrantyExpiresAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -32,10 +43,22 @@ public class ProductResponse {
         r.setCategory(p.getCategory());
         r.setImageUrl(p.getImageUrl());
         r.setImageUrls(p.getImageUrls());
+        r.setSupplierPrice(p.getSupplierPrice());
         r.setCostPrice(p.getCostPrice());
         r.setSalePrice(p.getSalePrice());
         r.setStatus(p.getStatus());
         r.setStockStatus(p.getStockStatus());
+        r.setStockQuantity(p.getStockQuantity());
+        r.setLowStockThreshold(p.getLowStockThreshold());
+        if (p.getSupplier() != null) {
+            r.setSupplierId(p.getSupplier().getId());
+            r.setSupplierName(p.getSupplier().getName());
+        }
+        r.setPurchaseDate(p.getPurchaseDate());
+        r.setWarrantyMonths(p.getWarrantyMonths());
+        if (p.getPurchaseDate() != null && p.getWarrantyMonths() != null) {
+            r.setWarrantyExpiresAt(p.getPurchaseDate().plusMonths(p.getWarrantyMonths()));
+        }
         r.setCreatedAt(p.getCreatedAt());
         r.setUpdatedAt(p.getUpdatedAt());
         return r;

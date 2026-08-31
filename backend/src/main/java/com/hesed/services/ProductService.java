@@ -3,7 +3,9 @@ package com.hesed.services;
 import com.hesed.dto.ProductRequest;
 import com.hesed.dto.ProductResponse;
 import com.hesed.models.Product;
+import com.hesed.models.Supplier;
 import com.hesed.repositories.ProductRepository;
+import com.hesed.repositories.SupplierRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,9 +16,12 @@ import java.util.UUID;
 public class ProductService {
 
     private final ProductRepository productRepository;
+    private final SupplierRepository supplierRepository;
 
-    public ProductService(ProductRepository productRepository) {
+    public ProductService(ProductRepository productRepository,
+                          SupplierRepository supplierRepository) {
         this.productRepository = productRepository;
+        this.supplierRepository = supplierRepository;
     }
 
     public List<ProductResponse> findAll(String category, String stockStatus, String search) {
@@ -50,15 +55,86 @@ public class ProductService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .category(request.getCategory())
+                .supplierPrice(request.getSupplierPrice())
                 .costPrice(request.getCostPrice())
                 .salePrice(request.getSalePrice())
-                .stockStatus(request.getStockStatus())
                 .build();
 
         applyImages(product, request);
+        applyStockAndWarranty(product, request);
 
         return ProductResponse.from(productRepository.save(product));
     }
+
+    @Transactional
+    public ProductResponse update(UUID id, ProductRequest request) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Produto não encontrado."));
+
+        // Check SKU uniqueness if changed
+        if (!product.getSku().equals(request.getSku()) && productRepository.existsBySku(request.getSku())) {
+            throw new RuntimeException("Já existe um produto com este SKU.");
+        }
+
+        product.setSku(request.getSku());
+        product.setName(request.getName());
+        product.setDescription(request.getDescription());
+        product.setCategory(request.getCategory());
+        product.setSupplierPrice(request.getSupplierPrice());
+        product.setCostPrice(request.getCostPrice());
+        product.setSalePrice(request.getSalePrice());
+        applyImages(product, request);
+        applyStockAndWarranty(product, request);
+
+        return ProductResponse.from(productRepository.save(product));
+    }
+
+    @Transactional
+    public void delete(UUID id) {
+        if (!productRepository.existsById(id)) {
+            throw new RuntimeException("Produto não encontrado.");
+        }
+        productRepository.deleteById(id);
+    }
+
+    @Transactional
+    public ProductResponse upsertBySku(ProductRequest request) {
+        Product existing = productRepository.findBySku(request.getSku()).orElse(null);
+
+        boolean hasImages = (request.getImageUrls() != null && !request.getImageUrls().isEmpty())
+                || (request.getImageUrl() != null && !request.getImageUrl().isBlank());
+
+        if (existing != null) {
+            existing.setName(request.getName());
+            existing.setCategory(request.getCategory());
+            if (request.getSupplierPrice() != null) existing.setSupplierPrice(request.getSupplierPrice());
+            existing.setCostPrice(request.getCostPrice());
+            existing.setSalePrice(request.getSalePrice());
+            if (request.getDescription() != null) existing.setDescription(request.getDescription());
+            // Só mexe nas imagens se o request trouxer alguma (evita apagar galeria em reimport sem fotos)
+            if (hasImages) applyImages(existing, request);
+            // Estoque/garantia: só atualiza o que o request trouxer (import CSV não envia esses campos)
+            applyStockAndWarranty(existing, request);
+            return ProductResponse.from(productRepository.save(existing));
+        }
+
+        Product product = Product.builder()
+                .sku(request.getSku())
+                .name(request.getName())
+                .description(request.getDescription())
+                .category(request.getCategory())
+                .supplierPrice(request.getSupplierPrice())
+                .costPrice(request.getCostPrice())
+                .salePrice(request.getSalePrice())
+                .build();
+
+        applyImages(product, request);
+        applyStockAndWarranty(product, request);
+
+        return ProductResponse.from(productRepository.save(product));
+    }
+
+    // ---- helpers ----
 
     /**
      * Normaliza a galeria de imagens: prioriza imageUrls; se ausente, usa imageUrl
@@ -83,67 +159,42 @@ public class ProductService {
         product.setImageUrl(gallery.isEmpty() ? null : gallery.get(0));
     }
 
-    @Transactional
-    public ProductResponse update(UUID id, ProductRequest request) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Produto não encontrado."));
-
-        // Check SKU uniqueness if changed
-        if (!product.getSku().equals(request.getSku()) && productRepository.existsBySku(request.getSku())) {
-            throw new RuntimeException("Já existe um produto com este SKU.");
+    /**
+     * Aplica estoque, fornecedor e garantia. Só sobrescreve campos que o request
+     * traz preenchidos (import CSV e chamadas antigas não os enviam → preservados).
+     * Ao final, DERIVA o stockStatus da quantidade — fonte única da verdade.
+     */
+    private void applyStockAndWarranty(Product product, ProductRequest request) {
+        if (request.getStockQuantity() != null) {
+            product.setStockQuantity(Math.max(0, request.getStockQuantity()));
+        }
+        if (request.getLowStockThreshold() != null) {
+            product.setLowStockThreshold(Math.max(0, request.getLowStockThreshold()));
+        }
+        if (request.getWarrantyMonths() != null) {
+            product.setWarrantyMonths(Math.max(0, request.getWarrantyMonths()));
+        }
+        if (request.getPurchaseDate() != null) {
+            product.setPurchaseDate(request.getPurchaseDate());
+        }
+        if (request.getSupplierId() != null) {
+            Supplier supplier = supplierRepository.findById(request.getSupplierId())
+                    .orElseThrow(() -> new RuntimeException("Fornecedor não encontrado."));
+            product.setSupplier(supplier);
         }
 
-        product.setSku(request.getSku());
-        product.setName(request.getName());
-        product.setDescription(request.getDescription());
-        product.setCategory(request.getCategory());
-        product.setCostPrice(request.getCostPrice());
-        product.setSalePrice(request.getSalePrice());
-        product.setStockStatus(request.getStockStatus());
-        applyImages(product, request);
-
-        return ProductResponse.from(productRepository.save(product));
+        product.setStockStatus(deriveStockStatus(product.getStockQuantity(), product.getLowStockThreshold()));
     }
 
-    @Transactional
-    public void delete(UUID id) {
-        if (!productRepository.existsById(id)) {
-            throw new RuntimeException("Produto não encontrado.");
-        }
-        productRepository.deleteById(id);
-    }
-
-    @Transactional
-    public ProductResponse upsertBySku(ProductRequest request) {
-        Product existing = productRepository.findBySku(request.getSku()).orElse(null);
-
-        boolean hasImages = (request.getImageUrls() != null && !request.getImageUrls().isEmpty())
-                || (request.getImageUrl() != null && !request.getImageUrl().isBlank());
-
-        if (existing != null) {
-            existing.setName(request.getName());
-            existing.setCategory(request.getCategory());
-            existing.setCostPrice(request.getCostPrice());
-            existing.setSalePrice(request.getSalePrice());
-            existing.setStockStatus(request.getStockStatus());
-            if (request.getDescription() != null) existing.setDescription(request.getDescription());
-            // Só mexe nas imagens se o request trouxer alguma (evita apagar galeria em reimport sem fotos)
-            if (hasImages) applyImages(existing, request);
-            return ProductResponse.from(productRepository.save(existing));
-        }
-
-        Product product = Product.builder()
-                .sku(request.getSku())
-                .name(request.getName())
-                .description(request.getDescription())
-                .category(request.getCategory())
-                .costPrice(request.getCostPrice())
-                .salePrice(request.getSalePrice())
-                .stockStatus(request.getStockStatus())
-                .build();
-
-        applyImages(product, request);
-
-        return ProductResponse.from(productRepository.save(product));
+    /**
+     * Regra de derivação do status de estoque:
+     * 0 (ou nulo) = ESGOTADO; até o limiar = BAIXO; acima = DISPONIVEL.
+     */
+    public static String deriveStockStatus(Integer quantity, Integer threshold) {
+        int q = quantity != null ? quantity : 0;
+        int t = threshold != null ? threshold : 3;
+        if (q <= 0) return "ESGOTADO";
+        if (q <= t) return "BAIXO";
+        return "DISPONIVEL";
     }
 }

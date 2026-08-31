@@ -40,6 +40,9 @@ class ProductServiceTest {
     @Mock
     private ProductRepository productRepository;
 
+    @Mock
+    private com.hesed.repositories.SupplierRepository supplierRepository;
+
     @InjectMocks
     private ProductService productService;
 
@@ -311,6 +314,84 @@ class ProductServiceTest {
 
             assertThat(captor.getValue().getName()).isEqualTo("Nome Novo");
             assertThat(captor.getValue().getStockStatus()).isEqualTo("ESGOTADO");
+        }
+    }
+
+    @Nested
+    @DisplayName("deriveStockStatus() — regra de status derivado")
+    class DeriveStockStatus {
+
+        @Test
+        @DisplayName("quantidade 0 ou negativa: ESGOTADO")
+        void zeroOrNegative_esgotado() {
+            assertThat(ProductService.deriveStockStatus(0, 3)).isEqualTo("ESGOTADO");
+            assertThat(ProductService.deriveStockStatus(-1, 3)).isEqualTo("ESGOTADO");
+            assertThat(ProductService.deriveStockStatus(null, 3)).isEqualTo("ESGOTADO");
+        }
+
+        @Test
+        @DisplayName("quantidade até o limiar: BAIXO")
+        void upToThreshold_baixo() {
+            assertThat(ProductService.deriveStockStatus(1, 3)).isEqualTo("BAIXO");
+            assertThat(ProductService.deriveStockStatus(3, 3)).isEqualTo("BAIXO");
+        }
+
+        @Test
+        @DisplayName("quantidade acima do limiar: DISPONIVEL")
+        void aboveThreshold_disponivel() {
+            assertThat(ProductService.deriveStockStatus(4, 3)).isEqualTo("DISPONIVEL");
+            assertThat(ProductService.deriveStockStatus(100, 3)).isEqualTo("DISPONIVEL");
+        }
+
+        @Test
+        @DisplayName("limiar nulo usa default 3")
+        void nullThreshold_defaultsTo3() {
+            assertThat(ProductService.deriveStockStatus(3, null)).isEqualTo("BAIXO");
+            assertThat(ProductService.deriveStockStatus(4, null)).isEqualTo("DISPONIVEL");
+        }
+    }
+
+    @Nested
+    @DisplayName("create() — estoque e status derivado")
+    class CreateStock {
+
+        @Test
+        @DisplayName("cria com quantidade acima do limiar: status DISPONIVEL")
+        void createWithStock_derivesDisponivel() {
+            baseRequest.setStockQuantity(10);
+            baseRequest.setLowStockThreshold(3);
+            when(productRepository.existsBySku("SKU-001")).thenReturn(false);
+            stubSaveEcho();
+
+            ProductResponse res = productService.create(baseRequest);
+
+            assertThat(res.getStockQuantity()).isEqualTo(10);
+            assertThat(res.getStockStatus()).isEqualTo("DISPONIVEL");
+        }
+
+        @Test
+        @DisplayName("cria com quantidade 0: status ESGOTADO")
+        void createWithZeroStock_derivesEsgotado() {
+            baseRequest.setStockQuantity(0);
+            when(productRepository.existsBySku("SKU-001")).thenReturn(false);
+            stubSaveEcho();
+
+            ProductResponse res = productService.create(baseRequest);
+
+            assertThat(res.getStockStatus()).isEqualTo("ESGOTADO");
+        }
+
+        @Test
+        @DisplayName("cria com quantidade dentro do limiar: status BAIXO")
+        void createWithLowStock_derivesBaixo() {
+            baseRequest.setStockQuantity(2);
+            baseRequest.setLowStockThreshold(3);
+            when(productRepository.existsBySku("SKU-001")).thenReturn(false);
+            stubSaveEcho();
+
+            ProductResponse res = productService.create(baseRequest);
+
+            assertThat(res.getStockStatus()).isEqualTo("BAIXO");
         }
     }
 
