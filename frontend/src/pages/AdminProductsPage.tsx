@@ -395,8 +395,10 @@ function ProductModal({ product, onClose, onSaved }: {
   const supplierNum = parseFloat(form.supplierPrice || '');
   const costNum = parseFloat(form.costPrice || '');
   const saleNum = parseFloat(form.salePrice || '');
-  const purchaseDiscount = (!isNaN(supplierNum) && supplierNum > 0 && !isNaN(costNum))
-    ? (1 - costNum / supplierNum) * 100 : null;
+  // Variação do custo pago sobre o preço de tabela do fornecedor.
+  // Positivo = pagamos ACIMA da tabela (acréscimo); negativo = ABAIXO (desconto).
+  const purchaseVariation = (!isNaN(supplierNum) && supplierNum > 0 && !isNaN(costNum))
+    ? (costNum / supplierNum - 1) * 100 : null;
   const saleMargin = (!isNaN(costNum) && costNum > 0 && !isNaN(saleNum))
     ? (1 - costNum / saleNum) * 100 : null;
 
@@ -511,10 +513,16 @@ function ProductModal({ product, onClose, onSaved }: {
             </div>
           </div>
 
-          {(purchaseDiscount !== null || saleMargin !== null) && (
+          {(purchaseVariation !== null || saleMargin !== null) && (
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-stone-500">
-              {purchaseDiscount !== null && (
-                <span>Desconto na compra: <strong className="text-emerald-600">{purchaseDiscount.toFixed(1)}%</strong></span>
+              {purchaseVariation !== null && (
+                purchaseVariation > 0 ? (
+                  <span>Acréscimo na compra: <strong className="text-red-500">+{purchaseVariation.toFixed(1)}%</strong> <span className="text-stone-400">(pagou acima da tabela)</span></span>
+                ) : purchaseVariation < 0 ? (
+                  <span>Desconto na compra: <strong className="text-emerald-600">{Math.abs(purchaseVariation).toFixed(1)}%</strong> <span className="text-stone-400">(pagou abaixo da tabela)</span></span>
+                ) : (
+                  <span>Compra: <strong className="text-stone-600">no preço de tabela</strong></span>
+                )
               )}
               {saleMargin !== null && (
                 <span>Margem na venda: <strong className={saleMargin >= 0 ? 'text-emerald-600' : 'text-red-500'}>{saleMargin.toFixed(1)}%</strong></span>
