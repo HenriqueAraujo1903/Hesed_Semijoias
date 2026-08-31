@@ -1,65 +1,96 @@
 # Contexto da Sessão — HESED Semijoias
 
-**Última atualização:** 29/08/2026
-**Status:** 🟢 Sistema em produção, estável e autônomo. Próximo: melhorias na `dev`.
+**Última atualização:** 31/08/2026
+**Status:** 🟢 Sistema em produção, estável. Leva de ESTOQUE + LOGO nova entregues em produção. Próximo: definir a próxima melhoria na `dev`.
 
 ---
 
-## 🎯 Retomar amanhã: melhorias em DEV
+## 🎯 Retomar amanhã
 
-- Trabalhar na branch **`dev`** (é onde estou parado, working tree limpo).
-- Subir ambiente local para desenvolver:
-  - Backend dev: `mvn spring-boot:run` na pasta backend (porta 8080, banco `hesed_db`)
-  - Frontend dev: `npm run dev` na pasta frontend (porta 5173)
-- Fluxo: desenvolver na `dev` → validar local → promover `dev → homolog` → QA → `homolog → main` (deploy prod).
+- Trabalhar na branch **`dev`** (working tree limpo, sincronizada com homolog e main).
+- As 3 branches (`dev`, `homolog`, `main`) e a produção estão TODAS no mesmo commit: **`3944336`**.
+- Fluxo de sempre: desenvolver na `dev` → validar local → `dev → homolog` → QA → `homolog → main` (deploy prod, com backup antes).
+
+### Subir ambiente local para desenvolver
+- Backend dev: `/opt/homebrew/opt/openjdk/bin/java -jar target/hesed-api-0.1.0.jar` (porta 8080, banco `hesed_db`) — ou `mvn spring-boot:run`
+- Frontend dev: `npm run dev` na pasta frontend (porta 5173)
+- Admin dev: `admin@hesed.com` / `admin123`
+
+---
+
+## 📦 O que foi feito nesta sessão (31/08)
+
+### 1. Gestão de Estoque completa (em produção)
+- **Fornecedores** (entidade dedicada): CRUD em `/api/admin/suppliers`, página admin "Fornecedores". Produto referencia fornecedor; não deixa excluir fornecedor com produto vinculado.
+- **3 valores por produto:** `supplierPrice` (tabela do fornecedor), `costPrice` (o que pagamos), `salePrice` (venda). O form mostra % de acréscimo/desconto na compra e margem na venda.
+- **Estoque numérico:** `stockQuantity` + `lowStockThreshold`. O `stockStatus` (DISPONIVEL/BAIXO/ESGOTADO) agora é **DERIVADO** da quantidade (0=ESGOTADO, ≤limiar=BAIXO, senão DISPONIVEL). Regra em `ProductService.deriveStockStatus`.
+- **Baixa automática:** confirmar pedido dá baixa no estoque; cancelar pedido confirmado estorna; venda direta confirmada consome. Entidade `StockMovement` registra histórico (ENTRADA/SAIDA/AJUSTE/ESTORNO).
+- **Garantia por produto:** `purchaseDate` + `warrantyMonths` (default 12). Vencimento calculado = purchaseDate + meses. Aba mostra 3 faixas: vencida, vencendo (60 dias), vigente.
+- **Aba Estoque consolidada** (`/admin/estoque`, `StockPage.tsx`): sub-abas Produtos (CRUD, reusa `ProductsManager` do AdminProductsPage), Reposição (estoque baixo + ajuste manual), Garantia. Removidas as abas antigas "Gerenciar Produtos" e "Estoque" (ProductsPage.tsx foi deletada). Rotas `/produtos` e `/admin/produtos` redirecionam para `/admin/estoque`.
+- **Retrocompat CSV/legado:** se o request traz `stockStatus` sem `stockQuantity` (import CSV), respeita o status e semeia quantidade coerente (senão tudo viraria ESGOTADO). Migração idempotente no `DataInitializer` deu quantidade inicial aos produtos existentes.
+- **Bug de migração corrigido:** colunas NOT NULL novas em tabela populada exigiram `columnDefinition="integer default X"` (senão o ddl-auto falha com "column contains null values").
+
+### 2. Logo nova (em produção)
+- Trocada a logo pixelada (150x150) pela versão em alta resolução **622x658, fundo transparente** (removido o branco via ImageMagick).
+- `logo-dark.png` **tratada**: atenua os reflexos branco-puro do dourado que criavam "riscos" sobre fundo escuro (login/tema escuro). Highlights estourados: 0.00000 na dark vs 0.00317 na clara.
+- Componente `Logo` ganhou prop `variant` (`auto`/`light`/`dark`). Painel escuro do login força `variant="dark"`; demais telas usam `auto` (seguem o tema).
+- Tamanho da logo na sidebar do admin reduzido (h-48 → h-28).
+
+### 3. QA
+- Bateria E2E: **qa/qa_homolog.py** (330 testes gerais) + **qa/qa_estoque_dev.py** (103 testes de estoque) — ambos parametrizáveis por env `QA_BASE`/`QA_ADMIN_EMAIL`/`QA_ADMIN_PASS`.
+- **qa/qa_logo_assets.py** (14 checagens técnicas dos assets de logo).
+- Rodadas em dev e homolog: 447 asserções, 100% aprovado. Zero regressão.
+
+### Commits desta sessão (todos em produção)
+`ad854bc` feat estoque → `73dfff6` consolida aba → `c86c1a6` fix garantia 3 faixas → `b14b32f` fix acréscimo compra → `2c57903` fix retrocompat CSV → `8010f0a` (deploy estoque) → `849ac65` logo → `3944336` QA logo (deploy logo).
 
 ---
 
 ## Estado atual das branches
 
-| Branch | Último commit | Situação |
-|--------|--------------|----------|
-| `main` (produção) | `47d53ee` | No ar em https://hesedsemijoias.online |
-| `dev` | `2fd669f` | Sincronizada com main (trabalho aqui) |
-| `homolog` | `dbde533` | 1 commit atrás (só doc; sem impacto) |
+| Branch | Commit | Situação |
+|--------|--------|----------|
+| `main` (produção) | `3944336` | No ar em https://hesedsemijoias.online |
+| `dev` | `3944336` | Sincronizada (trabalhar aqui) |
+| `homolog` | `3944336` | Sincronizada |
+
+Rollback do último deploy, se necessário: `git checkout 8010f0a` + rebuild. Backups do banco em `/root/Hesed_Semijoias/backups/` no VPS (o mais recente: `prod_pre_logo_20260831_193743.sql`).
 
 ---
 
-## O que está EM PRODUÇÃO (funcionando)
+## Infra de produção (VPS Hostinger)
 
-- **Catálogo público** (sacola minimizável, carrossel de promoções, telemetria de engajamento)
-- **Pedidos**: registro automático via catálogo, edição (qtd/preço/itens/cliente), confirmação, venda direta (canal DIRETA)
-- **Dashboards**: Vendas (KPIs, funil, série temporal) e Engajamento (funil visitas→seleções→pedidos→vendas, desejados vs vendidos)
-- **Gestão**: produtos, promoções, revendedoras
-- **Dados de produção:** 10 produtos (catálogo curado pela Su), 3 usuários admin/operador. NUNCA re-semear (seed foi removido do DataInitializer).
-
----
-
-## Infra de produção (VPS Hostinger — 103.199.184.97)
-
-- Acesso: `ssh root@103.199.184.97` (chave ed25519 já configurada)
-- Domínio: **hesedsemijoias.online** (HTTPS Let's Encrypt, válido até 27/11/2026)
-- Containers Docker: postgres, backend, frontend, nginx, certbot — todos com `restart: unless-stopped`
-- **Roda sozinho**: restart automático, SSL auto-renova, Docker inicia no boot
-- **Backup automático**: `/root/backup-hesed.sh` via cron — a cada 3 dias às 05:00 UTC (02:00 Brasília), retenção 10 dias, em `/root/backups/`
-- Deploy: `git pull origin main` + `docker compose up -d --build backend frontend` + **reiniciar nginx** (importante: nginx cacheia IPs dos containers)
+- **Acesso SSH:** `ssh root@srv1939516.hstgr.cloud` (chave ed25519 `~/.ssh/id_ed25519` = "hesed-vps-deploy", já autorizada). (IP antigo de referência: 103.199.184.97.)
+- Projeto no VPS: `/root/Hesed_Semijoias`. Docker compose v5.5.0.
+- Containers: `hesed-postgres` (banco `hesed_db`, user `hesed`), `hesed-backend` (8080), `hesed-frontend`, `hesed-nginx` (80/443), `hesed-certbot`. Todos `restart: unless-stopped`.
+- Domínio **hesedsemijoias.online** (HTTPS Let's Encrypt).
+- **Backup automático:** `/root/backup-hesed.sh` via cron, a cada 3 dias 05:00 UTC (02:00 Brasília), retenção 10 dias.
+- **Deploy:** backup pg_dump → `git pull origin main` → `docker compose up -d --build frontend backend` → `docker compose restart nginx` → smoke test HTTPS. (Nginx precisa reiniciar para re-resolver IPs dos containers recriados.)
 
 ### Logins de produção
 - Admin Henrique: `henriquecorreadearaujo@gmail.com` / `Pai912510!`
 - Admin Su: `suhsilvarodrigues@gmail.com` / `Su!190717`
-- (operador legado também existe)
 
 ---
 
 ## Ambientes locais
 
-| Ambiente | Backend | Banco | Frontend |
-|----------|---------|-------|----------|
-| dev | 8080 | `hesed_db` | 5173 |
-| homolog | 8081 (`--spring.profiles.active=homolog`) | `hesed_homolog` | 5174 (`VITE_PROXY_TARGET=http://localhost:8081 VITE_DEV_PORT=5174`) |
-| Admin homolog | — | — | `admin@homolog.com` / `homolog123` |
+| Ambiente | Backend | Banco | Frontend | Admin |
+|----------|---------|-------|----------|-------|
+| dev | 8080 | `hesed_db` | 5173 | `admin@hesed.com` / `admin123` |
+| homolog | 8081 (`--spring.profiles.active=homolog`) | `hesed_homolog` | 5174 (`VITE_PROXY_TARGET=http://localhost:8081 VITE_DEV_PORT=5174`) | `admin@homolog.com` / `homolog123` |
 
-Nota: Java local via `/opt/homebrew/opt/openjdk/bin/java`. JDK 26, Lombok 1.18.46.
+- Java local: `/opt/homebrew/opt/openjdk/bin/java`. Maven: `mvn`. ImageMagick disponível (`magick`).
+- JAR já compilado em `backend/target/hesed-api-0.1.0.jar`.
+- Rodar QA: `QA_BASE=http://localhost:8080 QA_ADMIN_EMAIL=admin@hesed.com QA_ADMIN_PASS=admin123 python3 qa/qa_homolog.py` (e `qa_estoque_dev.py`). Limpar resíduo QA do banco depois (SKUs `QA-`/`EST-`, pedidos `HSD-QA%`, fornecedores com "QA"/"Fornecedor").
+
+---
+
+## Stack
+
+- Backend: Java 21 + Spring Boot 3.3.2 + PostgreSQL 16 + JWT
+- Frontend: React 18 + TypeScript + Vite 5.4 + Tailwind + PWA
+- Infra: Docker + Nginx + Let's Encrypt
 
 ---
 
@@ -69,11 +100,4 @@ Nota: Java local via `/opt/homebrew/opt/openjdk/bin/java`. JDK 26, Lombok 1.18.4
 - `DEPLOY.md` — guia de deploy
 - `FLUXO_TRABALHO.md` — fluxo dev/homolog/prod
 - `QA_REPORT.md` / `QA_REPORT_HOMOLOG.md` — relatórios de QA
-
----
-
-## Stack
-
-- Backend: Java 21 + Spring Boot 3.3.2 + PostgreSQL 16 + JWT
-- Frontend: React 18 + TypeScript + Vite 5.4 + Tailwind
-- Infra: Docker + Nginx + Let's Encrypt
+- `qa/qa_homolog.py`, `qa/qa_estoque_dev.py`, `qa/qa_logo_assets.py` — baterias de QA automatizadas
