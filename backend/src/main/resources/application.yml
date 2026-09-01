@@ -26,12 +26,14 @@ server:
   port: 8080
 
 # JWT Configuration
-# O secret vem da variável de ambiente JWT_SECRET.
-# O valor abaixo é APENAS um fallback para desenvolvimento local.
-# Em produção, JWT_SECRET é obrigatório e definido via .env (nunca commitado).
+# O secret DEVE vir da variável de ambiente JWT_SECRET.
+# O fallback abaixo é um valor de DESENVOLVIMENTO LOCAL, sem valor em produção.
+# Em produção usa-se o perfil 'prod' (application-prod.yml), onde o secret é
+# ${JWT_SECRET} SEM fallback — a aplicação falha ao subir se a env não existir,
+# impedindo o uso acidental de um segredo conhecido.
 app:
   jwt:
-    secret: ${JWT_SECRET:qZ/wqb6mWZQ87F9yvlxT84gfBH2rUT43pOCZsxNXO8dIDyzxu4334ml8IxgSDIiS}
+    secret: ${JWT_SECRET:dev-only-insecure-secret-change-me-in-every-real-environment-0000}
     expiration-ms: ${JWT_EXPIRATION_MS:86400000}  # 24 hours
 
   upload:

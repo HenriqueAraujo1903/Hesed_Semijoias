@@ -14,6 +14,7 @@ interface AuthContextType {
   logout: () => Promise<void>;
   isAdmin: boolean;
   isAuthenticated: boolean;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -32,6 +33,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return stored ? JSON.parse(stored) : null;
   });
 
+  // `loading` cobre o intervalo da verificação inicial de sessão (/auth/me).
+  // Enquanto true, as rotas protegidas aguardam em vez de redirecionar,
+  // evitando flash de tela / piscar.
+  const [loading, setLoading] = useState(true);
+
   // Persiste o user (dados não-sensíveis) no localStorage para inicialização
   // rápida. O token sensível nunca chega aqui.
   useEffect(() => {
@@ -45,7 +51,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   /**
    * Valida a sessão com o servidor na montagem do Provider. Se o cookie for
    * inválido ou expirado, limpa o user do estado (forçando redirecionamento
-   * para o login pelo ProtectedRoute).
+   * para o login pelo ProtectedRoute). O interceptor da API ignora o 401 de
+   * /auth/me, então essa verificação não dispara redirecionamento em loop.
    */
   useEffect(() => {
     api.get('/auth/me')
@@ -56,7 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(() => {
         // Cookie ausente, expirado ou inválido — garante estado limpo
         setUser(null);
-      });
+      })
+      .finally(() => setLoading(false));
   }, []); // roda uma vez na montagem
 
   async function login(email: string, password: string) {
@@ -81,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAdmin, isAuthenticated }}>
+    <AuthContext.Provider value={{ user, login, logout, isAdmin, isAuthenticated, loading }}>
       {children}
     </AuthContext.Provider>
   );

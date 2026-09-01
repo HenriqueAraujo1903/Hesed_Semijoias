@@ -52,7 +52,9 @@ export function ProductsManager() {
       if (search) params.search = search;
       if (categoryFilter) params.category = categoryFilter;
       if (stockFilter) params.stockStatus = stockFilter;
-      const res = await api.get('/products', { params });
+      // Endpoint admin: retorna a visão completa (custo, estoque, fornecedor).
+      // O /products público não expõe mais esses campos sensíveis.
+      const res = await api.get('/admin/products', { params });
       setProducts(res.data);
     } catch (e) {
       console.error(e);

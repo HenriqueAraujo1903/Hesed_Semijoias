@@ -72,7 +72,8 @@ public class OrderService {
         }
 
         recalcTotal(order);
-        return OrderResponse.from(orderRepository.save(order));
+        // Fluxo PÚBLICO (catálogo): não expõe o custo dos itens no retorno.
+        return OrderResponse.fromPublic(orderRepository.save(order));
     }
 
     /**

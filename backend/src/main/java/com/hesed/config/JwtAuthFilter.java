@@ -66,13 +66,18 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         // 1. Cookie HttpOnly (caminho preferido pós-migração)
         Cookie[] cookies = request.getCookies();
         if (cookies != null) {
-            return Arrays.stream(cookies)
+            String fromCookie = Arrays.stream(cookies)
                     .filter(c -> COOKIE_NAME.equals(c.getName()))
                     .map(Cookie::getValue)
+                    .filter(v -> v != null && !v.isBlank())
                     .findFirst()
                     .orElse(null);
+            if (fromCookie != null) {
+                return fromCookie;
+            }
+            // importante: se há cookies mas nenhum é o 'jwt', ainda tentamos o header
         }
-        // 2. Header Authorization (retrocompat QA/scripts)
+        // 2. Header Authorization (retrocompat QA/scripts/integrações)
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
             return header.substring(7);

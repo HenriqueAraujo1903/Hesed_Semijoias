@@ -15,12 +15,24 @@ import StockPage from './pages/StockPage';
 import CatalogoPage from './pages/CatalogoPage';
 
 export default function App() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+
+  // Enquanto a sessão inicial não foi verificada, evita decidir o redirect
+  // da rota /login (senão pisca entre login e dashboard).
+  const loginElement = loading ? (
+    <div className="flex min-h-screen items-center justify-center bg-cream dark:bg-charcoal-900">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-gold border-t-transparent" />
+    </div>
+  ) : isAuthenticated ? (
+    <Navigate to="/dashboard" />
+  ) : (
+    <LoginPage />
+  );
 
   return (
     <Routes>
       {/* Public */}
-      <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <LoginPage />} />
+      <Route path="/login" element={loginElement} />
       <Route path="/catalogo" element={<CatalogoPage />} />
 
       {/* Protected */}

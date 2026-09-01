@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,6 +29,19 @@ public class AdminProductController {
         this.productService = productService;
         this.csvImportService = csvImportService;
         this.fileStorageService = fileStorageService;
+    }
+
+    /**
+     * Listagem ADMIN (autenticada): retorna a visão completa do produto,
+     * incluindo custo, estoque numérico e fornecedor. Substitui o uso do
+     * endpoint público GET /api/products pelo painel admin.
+     */
+    @GetMapping
+    public ResponseEntity<List<ProductResponse>> list(
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String stockStatus,
+            @RequestParam(required = false) String search) {
+        return ResponseEntity.ok(productService.findAllAdmin(category, stockStatus, search));
     }
 
     @PostMapping

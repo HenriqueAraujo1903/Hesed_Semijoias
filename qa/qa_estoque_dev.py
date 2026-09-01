@@ -124,9 +124,10 @@ def create_supplier(**overrides):
 
 
 def find_qty(pid, name):
-    """Retorna a quantidade em estoque de um produto pela busca (search encodado)."""
+    """Retorna a quantidade em estoque via endpoint ADMIN (o /products público
+    não expõe mais stockQuantity)."""
     q = urllib.parse.quote(name)
-    st, lst = request("GET", f"/api/products?search={q}", token=TOKEN)
+    st, lst = request("GET", f"/api/admin/products?search={q}", token=TOKEN)
     if isinstance(lst, list):
         m = [x for x in lst if x.get("id") == pid]
         if m:
@@ -337,11 +338,17 @@ def suite_regression():
     st, cat = request("GET", "/api/products/catalog")
     R.check("S4.catalog.200_lista", st == 200 and isinstance(cat, list), "200 lista", (st, type(cat).__name__))
 
-    # 4.2 catálogo traz os novos campos sem quebrar
+    # 4.2 catálogo público NÃO deve expor dados internos (custo/estoque/fornecedor)
     if isinstance(cat, list) and cat:
         p = cat[0]
-        R.check("S4.catalog.campos_novos", all(k in p for k in ("stockQuantity", "supplierPrice", "warrantyMonths")),
-                "campos presentes", list(p.keys()))
+        sensiveis = ("costPrice", "supplierPrice", "stockQuantity", "lowStockThreshold",
+                     "supplierId", "supplierName", "purchaseDate", "warrantyMonths")
+        vazados = [k for k in sensiveis if k in p]
+        R.check("S4.catalog.sem_dados_sensiveis", len(vazados) == 0,
+                "nenhum campo sensível no catálogo público", vazados)
+        # o essencial público deve estar presente
+        R.check("S4.catalog.campos_publicos", all(k in p for k in ("id", "name", "salePrice", "stockStatus")),
+                "id/name/salePrice/stockStatus", list(p.keys()))
         # capa continua consistente (regressão fotos)
         inconsist = [x.get("sku") for x in cat if x.get("imageUrls") and x.get("imageUrl") != x["imageUrls"][0]]
         R.check("S4.catalog.capa_consistente", len(inconsist) == 0, "0 inconsistências", inconsist)

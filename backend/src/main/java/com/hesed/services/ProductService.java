@@ -2,6 +2,7 @@ package com.hesed.services;
 
 import com.hesed.dto.ProductRequest;
 import com.hesed.dto.ProductResponse;
+import com.hesed.dto.PublicProductResponse;
 import com.hesed.models.Product;
 import com.hesed.models.Supplier;
 import com.hesed.repositories.ProductRepository;
@@ -24,15 +25,26 @@ public class ProductService {
         this.supplierRepository = supplierRepository;
     }
 
-    public List<ProductResponse> findAll(String category, String stockStatus, String search) {
+    // ---- Visão PÚBLICA (catálogo, sem auth): não expõe custo/estoque/fornecedor ----
+
+    public List<PublicProductResponse> findAllPublic(String category, String stockStatus, String search) {
         return productRepository.findFiltered(category, stockStatus, search)
                 .stream()
-                .map(ProductResponse::from)
+                .map(PublicProductResponse::from)
                 .toList();
     }
 
-    public List<ProductResponse> findForCatalog() {
+    public List<PublicProductResponse> findForCatalog() {
         return productRepository.findAllForCatalog()
+                .stream()
+                .map(PublicProductResponse::from)
+                .toList();
+    }
+
+    // ---- Visão ADMIN (autenticada): dados completos, incluindo custo/estoque ----
+
+    public List<ProductResponse> findAllAdmin(String category, String stockStatus, String search) {
+        return productRepository.findFiltered(category, stockStatus, search)
                 .stream()
                 .map(ProductResponse::from)
                 .toList();
@@ -42,6 +54,11 @@ public class ProductService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Produto não encontrado."));
         return ProductResponse.from(product);
+    }
+
+    /** Usado internamente pelo import CSV para checar existência por SKU. */
+    public boolean existsAnyBySearch(String search) {
+        return !productRepository.findFiltered(null, null, search).isEmpty();
     }
 
     @Transactional

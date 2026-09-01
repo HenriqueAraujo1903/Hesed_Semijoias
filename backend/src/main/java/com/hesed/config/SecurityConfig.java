@@ -57,6 +57,9 @@ public class SecurityConfig {
                 .requestMatchers("/uploads/**").permitAll()
                 // Admin-only endpoints
                 .requestMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
+                // Revendedoras (consignados) contêm dados de contato e comissão —
+                // restrito a ADMIN (antes exigia apenas autenticação).
+                .requestMatchers("/api/consignees/**").hasAuthority("ROLE_ADMIN")
                 // All others require authentication
                 .anyRequest().authenticated()
             )

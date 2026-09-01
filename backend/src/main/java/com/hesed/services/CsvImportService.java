@@ -14,11 +14,20 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class CsvImportService {
+
+    /**
+     * Hosts permitidos para importação. Validação por igualdade EXATA do host
+     * (não substring), evitando SSRF via URLs como
+     * http://interno/docs.google.com/spreadsheets ou uso de fragment/query.
+     */
+    private static final Set<String> ALLOWED_HOSTS = Set.of("docs.google.com");
 
     private final ProductService productService;
 
@@ -27,31 +36,69 @@ public class CsvImportService {
     }
 
     public Map<String, Object> importFromUrl(String sheetUrl) {
-        if (!sheetUrl.contains("docs.google.com/spreadsheets")) {
-            throw new RuntimeException("URL inválida. Use a URL de publicação CSV da Google Sheets.");
-        }
-
-        String csvUrl = sheetUrl.contains("output=csv")
-                ? sheetUrl
-                : sheetUrl.replaceAll("/pub.*", "/pub?output=csv");
+        URI uri = validateAndNormalize(sheetUrl);
 
         String csvText;
         try {
-            HttpClient client = HttpClient.newHttpClient();
+            HttpClient client = HttpClient.newBuilder()
+                    .followRedirects(HttpClient.Redirect.NEVER) // impede bypass via redirect para host interno
+                    .connectTimeout(Duration.ofSeconds(10))
+                    .build();
             HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(csvUrl))
+                    .uri(uri)
+                    .timeout(Duration.ofSeconds(20))
                     .GET()
                     .build();
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() != 200) {
-                throw new RuntimeException("HTTP " + response.statusCode());
+                // Mensagem genérica — não vaza detalhe da resposta interna
+                throw new RuntimeException("Não foi possível ler a planilha. Verifique se ela está publicada como CSV.");
             }
             csvText = response.body();
+        } catch (RuntimeException re) {
+            throw re;
         } catch (Exception e) {
-            throw new RuntimeException("Não foi possível buscar a planilha: " + e.getMessage());
+            // Não propaga a mensagem original (evita oráculo de SSRF)
+            throw new RuntimeException("Não foi possível buscar a planilha. Verifique a URL de publicação.");
         }
 
         return parseCsvAndUpsert(csvText);
+    }
+
+    /**
+     * Valida a URL da planilha contra SSRF: exige HTTPS, host EXATAMENTE em
+     * ALLOWED_HOSTS, e normaliza para o export CSV. Rejeita qualquer outra coisa.
+     */
+    private URI validateAndNormalize(String sheetUrl) {
+        if (sheetUrl == null || sheetUrl.isBlank()) {
+            throw new RuntimeException("URL obrigatória.");
+        }
+        URI uri;
+        try {
+            uri = URI.create(sheetUrl.trim());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("URL inválida.");
+        }
+
+        String scheme = uri.getScheme();
+        String host = uri.getHost();
+
+        if (scheme == null || !scheme.equalsIgnoreCase("https")) {
+            throw new RuntimeException("A URL deve usar HTTPS.");
+        }
+        if (host == null || !ALLOWED_HOSTS.contains(host.toLowerCase())) {
+            throw new RuntimeException("URL inválida. Use a URL de publicação da Google Sheets (docs.google.com).");
+        }
+        // Exige que seja de fato uma planilha publicada
+        String path = uri.getPath() != null ? uri.getPath() : "";
+        if (!path.startsWith("/spreadsheets/")) {
+            throw new RuntimeException("URL inválida. Use a URL de publicação CSV da Google Sheets.");
+        }
+
+        // Normaliza para export CSV, preservando host/path validados
+        String full = uri.toString();
+        String csvUrl = full.contains("output=csv") ? full : full.replaceAll("/pub.*", "/pub?output=csv");
+        return URI.create(csvUrl);
     }
 
     public Map<String, Object> importFromCsvContent(String csvContent) {
@@ -94,16 +141,14 @@ public class CsvImportService {
                     req.setCostPrice(parsePrice(getField(record, headerMap, "costPrice")));
                     req.setStockStatus(parseStockStatus(getField(record, headerMap, "stockStatus")));
 
+                    // Existência ANTES do upsert define se foi criação ou atualização
+                    boolean existedBefore = productService.existsAnyBySearch(sku);
                     productService.upsertBySku(req);
-
-                    // Count as created or updated based on existence
-                    if (productService.findAll(null, null, sku).isEmpty()) {
-                        created++;
-                    } else {
+                    if (existedBefore) {
                         updated++;
+                    } else {
+                        created++;
                     }
-                    // Simplification: count all as "updated" since upsert handles both
-                    updated++;
                 } catch (Exception e) {
                     errors++;
                 }

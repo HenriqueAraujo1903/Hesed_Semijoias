@@ -73,4 +73,17 @@ public class OrderResponse {
         r.setItems(o.getItems().stream().map(Item::from).toList());
         return r;
     }
+
+    /**
+     * Versão PÚBLICA (retorno do POST /api/orders do catálogo, sem auth):
+     * omite o costPrice de cada item — o cliente não deve ver o custo interno.
+     * Demais campos (preço de venda, total) são mantidos para confirmação do pedido.
+     */
+    public static OrderResponse fromPublic(Order o) {
+        OrderResponse r = from(o);
+        if (r.getItems() != null) {
+            r.getItems().forEach(i -> i.setCostPrice(null));
+        }
+        return r;
+    }
 }
