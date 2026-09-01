@@ -16,6 +16,7 @@ import time
 import urllib.request
 import urllib.error
 import urllib.parse
+import http.cookiejar
 
 import os
 
@@ -45,8 +46,12 @@ CREATED_PRODUCTS = set()
 CREATED_SUPPLIERS = set()
 CREATED_ORDERS = set()
 
+# CookieJar partilhado — persiste o cookie jwt (autenticação via cookie HttpOnly)
+_cookie_jar = http.cookiejar.CookieJar()
+_opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(_cookie_jar))
 
-def request(method, path, token=None, body=None, raw_body=None, headers=None):
+
+def request(method, path, token=None, body=None, raw_body=None, headers=None, no_cookie=False):
     url = BASE + path
     data = None
     hdrs = headers or {}
@@ -58,8 +63,9 @@ def request(method, path, token=None, body=None, raw_body=None, headers=None):
     if token:
         hdrs["Authorization"] = "Bearer " + token
     req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
+    opener = urllib.request.urlopen if no_cookie else _opener.open
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with opener(req, timeout=30) as resp:
             text = resp.read().decode("utf-8")
             status = resp.getcode()
     except urllib.error.HTTPError as e:
@@ -74,9 +80,14 @@ def request(method, path, token=None, body=None, raw_body=None, headers=None):
 
 
 def admin_login():
+    """Login via cookie HttpOnly; retorna o token do cookie para retrocompat de header."""
     st, b = request("POST", "/api/auth/login", body={"email": ADMIN_EMAIL, "password": ADMIN_PASS})
-    if st == 200 and isinstance(b, dict) and b.get("token"):
-        return b["token"]
+    if st == 200 and isinstance(b, dict) and b.get("id"):
+        jwt_cookie = next((c.value for c in _cookie_jar if c.name == "jwt"), None)
+        if jwt_cookie:
+            return jwt_cookie
+        if b.get("token"):
+            return b["token"]
     print(f"FATAL: login admin dev falhou (status={st}, body={b})")
     sys.exit(1)
 
@@ -165,7 +176,7 @@ def suite_suppliers():
     R.check("S1.lista.200", st == 200 and isinstance(b, list), "200 lista", (st, type(b).__name__))
 
     # 1.7 sem token nega
-    st, b = request("GET", "/api/admin/suppliers")
+    st, b = request("GET", "/api/admin/suppliers", no_cookie=True)
     R.check("S1.sem_token.nega", st in (401, 403), "401/403", st)
 
     # 1.8 GET inexistente -> 404
@@ -354,9 +365,9 @@ def suite_regression():
         ("GET", "/api/admin/stock/00000000-0000-0000-0000-000000000000/movements"),
     ]
     for method, path in novas:
-        st, b = request(method, path)
+        st, b = request(method, path, no_cookie=True)
         R.check(f"S4.rbac.sem_token.{method} {path}", st in (401, 403), "401/403", st)
-        st2, b2 = request(method, path, token="tok.invalido")
+        st2, b2 = request(method, path, token="tok.invalido", no_cookie=True)
         R.check(f"S4.rbac.token_invalido.{method} {path}", st2 in (401, 403), "401/403", st2)
 
     # 4.4 integridade de pedido: total server-side

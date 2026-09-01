@@ -16,6 +16,8 @@ import sys
 import time
 import urllib.request
 import urllib.error
+import urllib.parse
+import http.cookiejar
 import os
 
 # Parametrizável por env para rodar contra dev (8080) ou homolog (8081).
@@ -24,7 +26,8 @@ ADMIN_EMAIL = os.environ.get("QA_ADMIN_EMAIL", "admin@homolog.com")
 ADMIN_PASS = os.environ.get("QA_ADMIN_PASS", "homolog123")
 
 # ---------------------------------------------------------------------------
-# Harness
+# Harness — usa CookieJar para suportar autenticação via cookie HttpOnly
+# e fallback para header Authorization (retrocompat).
 # ---------------------------------------------------------------------------
 
 class Results:
@@ -39,7 +42,7 @@ class Results:
         else:
             self.failed += 1
             self.failures.append((name, expected, got))
-            print(f"  ✗ FAIL: {name} | esperado={expected} obtido={got}")
+            print(f"  \u2717 FAIL: {name} | esperado={expected} obtido={got}")
 
 R = Results()
 
@@ -49,9 +52,17 @@ CREATED_PROMOS = set()
 CREATED_CONSIGNEES = set()
 CREATED_ORDERS = set()
 
+# CookieJar partilhado — persiste o cookie jwt entre requisições
+_cookie_jar = http.cookiejar.CookieJar()
+_opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(_cookie_jar))
 
-def request(method, path, token=None, body=None, raw_body=None, headers=None):
-    """Executa requisição HTTP. Retorna (status_code, parsed_body_or_text)."""
+
+def request(method, path, token=None, body=None, raw_body=None, headers=None, no_cookie=False):
+    """Executa requisição HTTP com suporte a cookie e header.
+    O CookieJar envia automaticamente o cookie jwt quando disponível.
+    Se `token` for passado explicitamente, também adiciona o header Authorization
+    (retrocompat para testes de RBAC que verificam acesso com/sem token).
+    Passe no_cookie=True para simular requisições sem sessão (testes de RBAC)."""
     url = BASE + path
     data = None
     hdrs = headers or {}
@@ -63,8 +74,9 @@ def request(method, path, token=None, body=None, raw_body=None, headers=None):
     if token:
         hdrs["Authorization"] = "Bearer " + token
     req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
+    opener = urllib.request.urlopen if no_cookie else _opener.open
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with opener(req, timeout=30) as resp:
             text = resp.read().decode("utf-8")
             status = resp.getcode()
     except urllib.error.HTTPError as e:
@@ -79,10 +91,20 @@ def request(method, path, token=None, body=None, raw_body=None, headers=None):
 
 
 def admin_login():
+    """Faz login e retorna o token JWT para uso no header Authorization (retrocompat).
+    O CookieJar também captura o cookie jwt automaticamente para as próximas chamadas."""
     st, b = request("POST", "/api/auth/login",
                     body={"email": ADMIN_EMAIL, "password": ADMIN_PASS})
-    if st == 200 and isinstance(b, dict) and b.get("token"):
-        return b["token"]
+    if st == 200 and isinstance(b, dict) and b.get("id"):
+        # Pós-migração: o token vive no cookie, não no body.
+        # Para retrocompat dos testes que usam header, fazemos /auth/me via cookie
+        # para confirmar a sessão, e obtemos o token do cookie jar.
+        jwt_cookie = next((c.value for c in _cookie_jar if c.name == "jwt"), None)
+        if jwt_cookie:
+            return jwt_cookie
+        # Fallback: ainda pode vir no body em ambientes antigos
+        if b.get("token"):
+            return b["token"]
     print(f"FATAL: login admin falhou (status={st}, body={b})")
     sys.exit(1)
 
@@ -114,13 +136,17 @@ print(f"Login admin homolog OK. Iniciando bateria...\n")
 def suite_a():
     print("== SUÍTE A: Auth / RBAC / Segurança ==")
 
-    # A1. Login válido
+    # A1. Login válido — pós-migração o token NÃO vem no body, vem no cookie jwt
     st, b = request("POST", "/api/auth/login", body={"email": ADMIN_EMAIL, "password": ADMIN_PASS})
     R.check("A.login.valido.status200", st == 200, 200, st)
-    R.check("A.login.valido.retorna_token", isinstance(b, dict) and bool(b.get("token")), "token", b)
     R.check("A.login.valido.role_admin",
-            isinstance(b, dict) and b.get("role") in ("ROLE_ADMIN", "ADMIN") or (isinstance(b, dict) and "token" in b),
-            "role admin", b.get("role") if isinstance(b, dict) else b)
+            isinstance(b, dict) and b.get("role") == "ROLE_ADMIN", "ROLE_ADMIN",
+            b.get("role") if isinstance(b, dict) else b)
+    R.check("A.login.valido.token_fora_do_body",
+            isinstance(b, dict) and not b.get("token"), "token ausente no body (está no cookie)",
+            b.get("token") if isinstance(b, dict) else b)
+    jwt_c = next((c.value for c in _cookie_jar if c.name == "jwt"), None)
+    R.check("A.login.valido.emite_cookie_jwt", bool(jwt_c), "cookie jwt setado", "ausente")
 
     # A2. Senha errada
     st, b = request("POST", "/api/auth/login", body={"email": ADMIN_EMAIL, "password": "senhaerrada"})
@@ -149,30 +175,30 @@ def suite_a():
     # A6. Acesso a endpoints admin SEM token -> 401/403
     admin_gets = ["/api/admin/orders", "/api/admin/orders/summary", "/api/admin/promotions"]
     for p in admin_gets:
-        st, b = request("GET", p)
+        st, b = request("GET", p, no_cookie=True)
         R.check(f"A.rbac.sem_token.GET {p}.nega", st in (401, 403), "401/403", st)
 
     # A7. Acesso a admin com token INVÁLIDO -> 401/403
     for p in admin_gets:
-        st, b = request("GET", p, token="token.invalido.aqui")
+        st, b = request("GET", p, token="token.invalido.aqui", no_cookie=True)
         R.check(f"A.rbac.token_invalido.GET {p}.nega", st in (401, 403), "401/403", st)
 
     # A8. POST admin sem token nega (produtos)
-    st, b = request("POST", "/api/admin/products", body={"sku": "X", "name": "Yyy", "costPrice": 1, "salePrice": 2})
+    st, b = request("POST", "/api/admin/products", body={"sku": "X", "name": "Yyy", "costPrice": 1, "salePrice": 2}, no_cookie=True)
     R.check("A.rbac.sem_token.POST produtos.nega", st in (401, 403), "401/403", st)
 
     # A9. DELETE admin sem token nega
-    st, b = request("DELETE", "/api/admin/products/00000000-0000-0000-0000-000000000000")
+    st, b = request("DELETE", "/api/admin/products/00000000-0000-0000-0000-000000000000", no_cookie=True)
     R.check("A.rbac.sem_token.DELETE produto.nega", st in (401, 403), "401/403", st)
 
-    # A10. Endpoints PÚBLICOS acessíveis sem token
+    # A10. Endpoints PÚBLICOS acessíveis sem token (no_cookie para simular cliente anônimo)
     for p in ["/api/products", "/api/products/catalog", "/api/promotions"]:
-        st, b = request("GET", p)
+        st, b = request("GET", p, no_cookie=True)
         R.check(f"A.publico.GET {p}.200", st == 200, 200, st)
 
     # A11. Header Authorization malformado
     for hv in ["Bearer", "Bearer ", "Basic abc", "xyz"]:
-        st, b = request("GET", "/api/admin/orders", headers={"Authorization": hv})
+        st, b = request("GET", "/api/admin/orders", headers={"Authorization": hv}, no_cookie=True)
         R.check(f"A.rbac.auth_malformado[{hv[:6]}].nega", st in (401, 403), "401/403", st)
 
     # A12. Token válido acessa admin
@@ -580,7 +606,7 @@ def suite_f():
     R.check("F.lista.200", st == 200 and isinstance(b, list), "200 + lista", (st, type(b).__name__))
 
     # F12. Sem token nega
-    st, b = request("GET", "/api/consignees")
+    st, b = request("GET", "/api/consignees", no_cookie=True)
     R.check("F.sem_token.nega", st in (401, 403), "401/403", st)
 
 
@@ -657,7 +683,7 @@ def suite_g():
         R.check("G.publico.excede_teto_itens.400", st == 400, 400, st)
 
     # G10. Admin orders sem token nega
-    st, b = request("GET", "/api/admin/orders")
+    st, b = request("GET", "/api/admin/orders", no_cookie=True)
     R.check("G.admin.sem_token.nega", st in (401, 403), "401/403", st)
 
     # G11. Filtro por status na listagem admin
@@ -693,9 +719,9 @@ def suite_i():
         ("GET", "/api/admin/analytics/engagement"),
     ]
     for method, path in admin_routes:
-        st, b = request(method, path)  # sem token
+        st, b = request(method, path, no_cookie=True)  # sem token nem cookie
         R.check(f"I.sem_token.{method} {path}.nega", st in (401, 403), "401/403", st)
-        st2, b2 = request(method, path, token="abc.def.ghi")  # token inválido
+        st2, b2 = request(method, path, token="abc.def.ghi", no_cookie=True)  # token inválido
         R.check(f"I.token_invalido.{method} {path}.nega", st2 in (401, 403), "401/403", st2)
 
     # Rotas públicas devem responder mesmo sem token (não podem estar protegidas por engano)
@@ -705,15 +731,15 @@ def suite_i():
         ("GET", "/api/promotions"),
     ]
     for method, path in public_routes:
-        st, b = request(method, path)
+        st, b = request(method, path, no_cookie=True)
         R.check(f"I.publico.{method} {path}.acessivel", st == 200, 200, st)
 
     # POST público de pedido é acessível sem token (mas valida corpo)
-    st, b = request("POST", "/api/orders", body={"productIds": []})
+    st, b = request("POST", "/api/orders", body={"productIds": []}, no_cookie=True)
     R.check("I.publico.POST orders.acessivel_valida", st == 400, 400, st)  # acessível, mas corpo inválido
 
     # POST público de telemetria é acessível sem token
-    st, b = request("POST", "/api/catalog-events", body={"type": "VIEW", "sessionId": "qa-sess"})
+    st, b = request("POST", "/api/catalog-events", body={"type": "VIEW", "sessionId": "qa-sess"}, no_cookie=True)
     R.check("I.publico.POST catalog-events.aceito", st in (200, 202, 204), "2xx", st)
 
     # Analytics com token válido responde 200 (regressão dos dashboards)

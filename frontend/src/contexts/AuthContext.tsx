@@ -10,9 +10,8 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   isAdmin: boolean;
   isAuthenticated: boolean;
 }
@@ -20,20 +19,21 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  /**
+   * O user é inicializado do localStorage para evitar flicker na primeira
+   * renderização. O useEffect abaixo valida imediatamente com o servidor
+   * (via cookie) e corrige o estado se a sessão tiver expirado.
+   *
+   * O token NÃO é mais armazenado no frontend — ele vive apenas no
+   * cookie HttpOnly gerenciado pelo browser.
+   */
   const [user, setUser] = useState<User | null>(() => {
     const stored = localStorage.getItem('user');
     return stored ? JSON.parse(stored) : null;
   });
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
 
-  useEffect(() => {
-    if (token) {
-      localStorage.setItem('token', token);
-    } else {
-      localStorage.removeItem('token');
-    }
-  }, [token]);
-
+  // Persiste o user (dados não-sensíveis) no localStorage para inicialização
+  // rápida. O token sensível nunca chega aqui.
   useEffect(() => {
     if (user) {
       localStorage.setItem('user', JSON.stringify(user));
@@ -42,23 +42,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
+  /**
+   * Valida a sessão com o servidor na montagem do Provider. Se o cookie for
+   * inválido ou expirado, limpa o user do estado (forçando redirecionamento
+   * para o login pelo ProtectedRoute).
+   */
+  useEffect(() => {
+    api.get('/auth/me')
+      .then((res) => {
+        const d = res.data;
+        setUser({ id: d.id, name: d.name, email: d.email, role: d.role });
+      })
+      .catch(() => {
+        // Cookie ausente, expirado ou inválido — garante estado limpo
+        setUser(null);
+      });
+  }, []); // roda uma vez na montagem
+
   async function login(email: string, password: string) {
     const res = await api.post('/auth/login', { email, password });
-    const data = res.data;
-    setToken(data.token);
-    setUser({ id: data.id, name: data.name, email: data.email, role: data.role });
+    const d = res.data;
+    // O token está no cookie HttpOnly; aqui só salvamos os dados de exibição
+    setUser({ id: d.id, name: d.name, email: d.email, role: d.role });
   }
 
-  function logout() {
-    setToken(null);
-    setUser(null);
+  async function logout() {
+    try {
+      // O backend limpa o cookie via Set-Cookie com maxAge=0
+      await api.post('/auth/logout');
+    } catch {
+      // Segue mesmo se a chamada falhar — o estado local será limpo de qualquer forma
+    } finally {
+      setUser(null);
+    }
   }
 
   const isAdmin = user?.role === 'ROLE_ADMIN';
-  const isAuthenticated = !!token && !!user;
+  const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, isAdmin, isAuthenticated }}>
+    <AuthContext.Provider value={{ user, login, logout, isAdmin, isAuthenticated }}>
       {children}
     </AuthContext.Provider>
   );
