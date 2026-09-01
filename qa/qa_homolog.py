@@ -926,6 +926,81 @@ def suite_j():
 
 
 # ===========================================================================
+# SUÍTE K — Varredura densa de validação (promoções, consignados, pedidos)
+# ===========================================================================
+def suite_k():
+    print("== SUÍTE K: Varredura densa de validação ==")
+
+    # K1. Consignados: comissão em toda a faixa 0..1 (válida) e fora (inválida)
+    for cr in [0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.75, 0.9, 1.0]:
+        n = int(time.time() * 1000000) % 1000000
+        st, b = request("POST", "/api/consignees", token=TOKEN, body={
+            "name": f"Consig {n}", "phone": "51999998888", "email": f"c{n}@ex.com", "commissionRate": cr})
+        if st == 201 and isinstance(b, dict):
+            CREATED_CONSIGNEES.add(b["id"])
+        R.check(f"K.comissao_valida[{cr}].201", st == 201, 201, st)
+    for cr in [-0.5, -0.01, 1.01, 1.5, 2.0, 10.0]:
+        n = int(time.time() * 1000000) % 1000000
+        st, b = request("POST", "/api/consignees", token=TOKEN, body={
+            "name": f"ConsigInv {n}", "phone": "51999998888", "email": f"ci{n}@ex.com", "commissionRate": cr})
+        R.check(f"K.comissao_invalida[{cr}].400", st == 400, 400, st)
+
+    # K2. Consignados: telefones válidos e inválidos
+    for ph in ["51999998888", "5133334444", "11987654321"]:
+        n = int(time.time() * 1000000) % 1000000
+        st, b = request("POST", "/api/consignees", token=TOKEN, body={
+            "name": f"Tel {n}", "phone": ph, "email": f"t{n}@ex.com", "commissionRate": 0.3})
+        if st == 201 and isinstance(b, dict):
+            CREATED_CONSIGNEES.add(b["id"])
+        R.check(f"K.telefone_valido[{ph}].201", st == 201, 201, st)
+    for ph in ["", "abc", "12", "!!!", "1"]:
+        n = int(time.time() * 1000000) % 1000000
+        st, b = request("POST", "/api/consignees", token=TOKEN, body={
+            "name": f"TelInv {n}", "phone": ph, "email": f"ti{n}@ex.com", "commissionRate": 0.3})
+        R.check(f"K.telefone_invalido[{ph[:6]}].400", st == 400, 400, st)
+
+    # K3. Promoções: desconto na faixa 0..100 válido, fora inválido
+    st, prod = create_product(TOKEN, name="Base Varredura Promo", salePrice=100.0)
+    pid = prod.get("id") if isinstance(prod, dict) else None
+    if pid:
+        for dp in [0, 1, 5, 10, 15, 20, 30, 50, 70, 90, 99, 100]:
+            st, b = request("POST", "/api/admin/promotions", token=TOKEN, body={
+                "productId": pid, "title": f"Promo {dp}", "discountPercent": dp, "promoPrice": 1.0})
+            if st == 201 and isinstance(b, dict):
+                CREATED_PROMOS.add(b["id"])
+            R.check(f"K.promo_desconto[{dp}].201", st == 201, 201, st)
+        for dp in [-1, -10, 101, 150, 999]:
+            st, b = request("POST", "/api/admin/promotions", token=TOKEN, body={
+                "productId": pid, "title": f"PromoInv {dp}", "discountPercent": dp, "promoPrice": 1.0})
+            R.check(f"K.promo_desconto_inv[{dp}].400", st == 400, 400, st)
+        # promoPrice não-positivo
+        for pp in [0, -1, -0.5]:
+            st, b = request("POST", "/api/admin/promotions", token=TOKEN, body={
+                "productId": pid, "title": "PromoPP", "discountPercent": 10, "promoPrice": pp})
+            R.check(f"K.promo_preco_inv[{pp}].400", st == 400, 400, st)
+
+    # K4. Pedido público: listas de vários tamanhos (1..10) válidas
+    st, p1 = create_product(TOKEN, name="Multi Item QA", salePrice=25.0, stockQuantity=100)
+    mid = p1.get("id") if isinstance(p1, dict) else None
+    if mid:
+        for size in [1, 2, 3, 5, 10, 20, 50]:
+            st, b = request("POST", "/api/orders", body={"productIds": [mid] * size}, no_cookie=True)
+            R.check(f"K.pedido_tamanho[{size}].201", st == 201, 201, st)
+            if isinstance(b, dict) and b.get("id"):
+                CREATED_ORDERS.add(b["id"])
+        # acima do teto (50) rejeita
+        for size in [51, 100, 200]:
+            st, b = request("POST", "/api/orders", body={"productIds": [mid] * size}, no_cookie=True)
+            R.check(f"K.pedido_excede[{size}].400", st == 400, 400, st)
+
+    # K5. Filtros de produto (admin) com combinações de categoria x status
+    for cat in ["Anel", "Brinco", "Colar", "Inexistente"]:
+        for stk in ["DISPONIVEL", "BAIXO", "ESGOTADO"]:
+            st, b = request("GET", f"/api/admin/products?category={urllib.parse.quote(cat)}&stockStatus={stk}", token=TOKEN)
+            R.check(f"K.filtro[{cat}/{stk}].200", st == 200 and isinstance(b, list), "200 lista", st)
+
+
+# ===========================================================================
 # CLEANUP + MAIN
 # ===========================================================================
 # Produtos que foram usados em pedidos (não podem ser deletados — FK protege o
@@ -979,6 +1054,7 @@ def main():
         suite_i()
         suite_h()
         suite_j()
+        suite_k()
     finally:
         cleanup()
 

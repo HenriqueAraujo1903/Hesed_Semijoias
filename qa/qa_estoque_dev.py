@@ -439,6 +439,78 @@ def suite_regression():
     R.check("S4.garantia_negativa.400", st == 400, 400, st)
 
 
+def suite_sweep():
+    """Varredura densa e significativa: exercita status derivado, garantia e
+    persistência de valores com muitas combinações reais (não repetição vazia)."""
+    print("== SUÍTE 5: Varredura densa (status/garantia/valores) ==")
+
+    # 5.1 Status derivado: matriz ampla de (quantidade x limiar)
+    for threshold in [0, 1, 2, 3, 4, 5, 8, 10, 13]:
+        for qty in [0, 1, 2, 3, 4, 5, 8, 10, 13, 21]:
+            st, b = create_product(stockQuantity=qty, lowStockThreshold=threshold,
+                                   name=f"Sweep q{qty} t{threshold}")
+            expected = "ESGOTADO" if qty <= 0 else ("BAIXO" if qty <= threshold else "DISPONIVEL")
+            R.check(f"5.status[q={qty},t={threshold}]", isinstance(b, dict) and b.get("stockStatus") == expected,
+                    expected, b.get("stockStatus") if isinstance(b, dict) else None)
+
+    # 5.2 Garantia: vencimento = purchaseDate + N meses, vários meses e datas
+    from datetime import date
+    def add_months(y, m, months):
+        total = (m - 1) + months
+        ny = y + total // 12
+        nm = total % 12 + 1
+        return f"{ny:04d}-{nm:02d}-01"
+    for pdate in ["2026-01-01", "2026-06-01", "2025-11-01", "2024-03-01"]:
+        y, m = int(pdate[:4]), int(pdate[5:7])
+        for months in [0, 3, 6, 12, 18, 24, 36]:
+            st, b = create_product(purchaseDate=pdate, warrantyMonths=months, name=f"Gar {pdate} {months}m")
+            exp = add_months(y, m, months)
+            R.check(f"5.garantia[{pdate}+{months}m]", isinstance(b, dict) and b.get("warrantyExpiresAt") == exp,
+                    exp, b.get("warrantyExpiresAt") if isinstance(b, dict) else None)
+
+    # 5.3 Persistência dos 3 valores (fornecedor/custo/venda) — várias combinações
+    combos = [(10.0, 12.0, 30.0), (25.5, 25.5, 60.0), (100.0, 80.0, 250.0),
+              (0.01, 0.02, 0.05), (999.99, 500.0, 1999.99), (33.33, 44.44, 88.88)]
+    for sp, cp, sale in combos:
+        st, b = create_product(supplierPrice=sp, costPrice=cp, salePrice=sale, name=f"Val {sp}/{cp}/{sale}")
+        R.check(f"5.valores[{sp}/{cp}/{sale}].201", st == 201, 201, st)
+        if isinstance(b, dict):
+            ok = (float(b.get("supplierPrice") or -1) == sp and float(b.get("costPrice") or -1) == cp
+                  and float(b.get("salePrice") or -1) == sale)
+            R.check(f"5.valores[{sp}/{cp}/{sale}].persist", ok, f"{sp}/{cp}/{sale}",
+                    (b.get("supplierPrice"), b.get("costPrice"), b.get("salePrice")))
+
+    # 5.4 Validação: preços/quantidades inválidos rejeitados (matriz)
+    invalidos = [
+        {"costPrice": 0}, {"costPrice": -1}, {"salePrice": 0}, {"salePrice": -0.01},
+        {"supplierPrice": -1}, {"stockQuantity": -1}, {"lowStockThreshold": -1}, {"warrantyMonths": -1},
+    ]
+    for i, inv in enumerate(invalidos):
+        st, b = create_product(name=f"Inv {i}", **inv)
+        R.check(f"5.invalido[{list(inv.keys())[0]}={list(inv.values())[0]}].400", st == 400, 400, st)
+
+    # 5.5 SKU: padrões válidos aceitos, inválidos rejeitados
+    validos_sku = ["ABC-123", "sku_underscore", "Mix-ED_99", "A1", "z9-z9"]
+    for s in validos_sku:
+        n = int(time.time() * 1000000) % 1000000
+        st, b = request("POST", "/api/admin/products", token=TOKEN, body={
+            "sku": f"{s}{n}", "name": "SKU valido teste", "category": "Anel",
+            "costPrice": 5.0, "salePrice": 10.0})
+        if st == 201 and isinstance(b, dict):
+            CREATED_PRODUCTS.add(b["id"])
+        R.check(f"5.sku_valido[{s}].201", st == 201, 201, st)
+    invalidos_sku = ["com espaco", "a@b", "a#b", "a/b", "a\\b", "a.b", "acento_ç", "emoji_🎉", ""]
+    for s in invalidos_sku:
+        st, b = request("POST", "/api/admin/products", token=TOKEN, body={
+            "sku": s, "name": "SKU teste", "category": "Anel", "costPrice": 5.0, "salePrice": 10.0})
+        R.check(f"5.sku_invalido[{s[:12]}].400", st == 400, 400, st)
+
+    # 5.6 Nome: limites de tamanho (3..120)
+    for length, expected in [(2, 400), (3, 201), (60, 201), (120, 201), (121, 400), (200, 400)]:
+        st, b = create_product(name="N" * length)
+        R.check(f"5.nome_len[{length}].{expected}", st == expected, expected, st)
+
+
 def cleanup():
     print("\n== CLEANUP ==")
     # cancela pedidos de teste
@@ -464,6 +536,7 @@ def main():
         suite_product_stock(sid)
         suite_order_stock()
         suite_regression()
+        suite_sweep()
     finally:
         cleanup()
 
