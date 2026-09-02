@@ -97,7 +97,7 @@ public class GoalService {
                 throw new RuntimeException("Esta meta já está definida. Informe uma justificativa para alterá-la.");
             }
 
-            boolean changed = !Objects.equals(existing.getRevenueTarget(), request.getRevenueTarget())
+            boolean changed = !sameAmount(existing.getRevenueTarget(), request.getRevenueTarget())
                     || !Objects.equals(existing.getOrdersTarget(), request.getOrdersTarget());
 
             if (changed) {
@@ -132,5 +132,17 @@ public class GoalService {
     /** Histórico de alterações de uma meta específica. */
     public List<GoalChangeLog> changeHistory(int year, int month) {
         return changeLogRepository.findByYearAndMonthOrderByCreatedAtDesc(year, month);
+    }
+
+    /**
+     * Compara dois valores monetários por VALOR, ignorando a escala (casas
+     * decimais). Ex.: 2000 e 2000.00 são o mesmo valor. Usar Objects.equals em
+     * BigDecimal daria falso-negativo porque considera a escala, gerando logs
+     * de auditoria espúrios ao re-salvar a mesma meta.
+     */
+    private static boolean sameAmount(java.math.BigDecimal a, java.math.BigDecimal b) {
+        if (a == null && b == null) return true;
+        if (a == null || b == null) return false;
+        return a.compareTo(b) == 0;
     }
 }

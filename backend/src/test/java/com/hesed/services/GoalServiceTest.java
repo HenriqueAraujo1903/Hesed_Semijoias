@@ -231,6 +231,27 @@ class GoalServiceTest {
     }
 
     @Test
+    @DisplayName("upsert não audita quando o valor é igual mas a escala difere (2000.00 vs 2000)")
+    void upsert_sameValueDifferentScale_noAudit() {
+        // Simula o valor vindo do banco com escala 2 (precision/scale da coluna).
+        MonthlyGoal existing = goal(2026, 9, "2000.00", 101);
+        when(goalRepository.findByYearAndMonth(2026, 9)).thenReturn(Optional.of(existing));
+
+        GoalRequest req = new GoalRequest();
+        req.setYear(2026);
+        req.setMonth(9);
+        req.setRevenueTarget(new BigDecimal("2000")); // sem casas decimais, como chega do JSON
+        req.setOrdersTarget(101);
+        req.setChangeReason("revisão sem mudança real");
+
+        goalService.upsert(req, "admin-1");
+
+        // Mesmo valor numérico → nenhuma auditoria e nenhum save espúrio.
+        verify(changeLogRepository, never()).save(any());
+        verify(goalRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("upsert aceita metas parciais (só receita, pedidos nulo)")
     void upsert_partialTargets() {
         when(goalRepository.findByYearAndMonth(2026, 10)).thenReturn(Optional.empty());
