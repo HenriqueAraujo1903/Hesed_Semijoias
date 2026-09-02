@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import KpiCard from '../../components/KpiCard';
+import { NUM } from '../../utils/format';
 
 interface Kpis {
   visits: number; uniqueSessions: number; selections: number;
@@ -15,8 +17,6 @@ interface Funnel {
 interface Engagement {
   kpis: Kpis; timeSeries: DayPoint[]; topSelected: SelectedProduct[]; funnel: Funnel;
 }
-
-const NUM = new Intl.NumberFormat('pt-BR');
 
 const RANGE_PRESETS = [
   { key: '30d', label: 'Últimos 30 dias', days: 30 },
@@ -123,24 +123,6 @@ export default function EngagementDashboardPage() {
           </div>
         </>
       )}
-    </div>
-  );
-}
-
-function KpiCard({ label, value, sub, accent }: {
-  label: string; value: string; sub?: string; accent: 'gold' | 'blue' | 'violet' | 'emerald';
-}) {
-  const styles = {
-    gold: 'bg-gold-50 dark:bg-gold-900/20 border-gold-200/50 dark:border-gold-800/40',
-    blue: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200/50 dark:border-blue-800/40',
-    violet: 'bg-violet-50 dark:bg-violet-900/20 border-violet-200/50 dark:border-violet-800/40',
-    emerald: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200/50 dark:border-emerald-800/40',
-  };
-  return (
-    <div className={`rounded-2xl border p-5 ${styles[accent]}`}>
-      <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 uppercase tracking-wide">{label}</p>
-      <p className="text-2xl font-serif font-semibold text-charcoal-800 dark:text-cream-200 mt-2">{value}</p>
-      {sub && <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-1">{sub}</p>}
     </div>
   );
 }

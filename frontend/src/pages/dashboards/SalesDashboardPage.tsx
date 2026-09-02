@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
+import KpiCard from '../../components/KpiCard';
+import { BRL, NUM, formatPeriodLabel } from '../../utils/format';
 
 // ─── Tipos do payload de /admin/analytics/sales ─────────────────────────────
 interface Kpis {
@@ -16,9 +18,6 @@ interface SalesAnalytics {
   kpis: Kpis; timeSeries: TimePoint[]; byCategory: CategorySlice[];
   topProducts: ProductRow[]; promotionSplit: PromotionSplit; conversion: Conversion;
 }
-
-const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const NUM = new Intl.NumberFormat('pt-BR');
 
 type Granularity = 'day' | 'month' | 'year';
 
@@ -182,25 +181,6 @@ export default function SalesDashboardPage() {
   );
 }
 
-// ─── KPI Card ────────────────────────────────────────────────────────────────
-function KpiCard({ label, value, sub, accent }: {
-  label: string; value: string; sub?: string; accent: 'gold' | 'blue' | 'violet' | 'emerald';
-}) {
-  const styles = {
-    gold: 'bg-gold-50 dark:bg-gold-900/20 border-gold-200/50 dark:border-gold-800/40',
-    blue: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200/50 dark:border-blue-800/40',
-    violet: 'bg-violet-50 dark:bg-violet-900/20 border-violet-200/50 dark:border-violet-800/40',
-    emerald: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200/50 dark:border-emerald-800/40',
-  };
-  return (
-    <div className={`rounded-2xl border p-5 ${styles[accent]}`}>
-      <p className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400 uppercase tracking-wide">{label}</p>
-      <p className="text-2xl font-serif font-semibold text-charcoal-800 dark:text-cream-200 mt-2">{value}</p>
-      {sub && <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-1">{sub}</p>}
-    </div>
-  );
-}
-
 // ─── Gráfico de série temporal (barras SVG) ─────────────────────────────────
 function TimeSeriesChart({ data }: { data: TimePoint[] }) {
   if (data.length === 0) return <EmptyChart />;
@@ -246,14 +226,6 @@ function TimeSeriesChart({ data }: { data: TimePoint[] }) {
       </p>
     </div>
   );
-}
-
-function formatPeriodLabel(period: string): string {
-  // yyyy-MM-dd → dd/MM ; yyyy-MM → MM/yy ; yyyy → yyyy
-  const parts = period.split('-');
-  if (parts.length === 3) return `${parts[2]}/${parts[1]}`;
-  if (parts.length === 2) return `${parts[1]}/${parts[0].slice(2)}`;
-  return period;
 }
 
 // ─── Barras horizontais por categoria ───────────────────────────────────────
