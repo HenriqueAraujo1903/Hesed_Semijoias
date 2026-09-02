@@ -12,7 +12,7 @@ import AdminPromotionsPage from './pages/AdminPromotionsPage';
 import ConsigneesPage from './pages/ConsigneesPage';
 import SuppliersPage from './pages/SuppliersPage';
 import StockPage from './pages/StockPage';
-import UsersPage from './pages/UsersPage';
+import SettingsPage from './pages/SettingsPage';
 import CatalogoPage from './pages/CatalogoPage';
 
 export default function App() {
@@ -62,9 +62,11 @@ export default function App() {
         <Route path="/admin/estoque" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><StockPage /></ProtectedRoute>
         } />
-        <Route path="/admin/usuarios" element={
-          <ProtectedRoute requiredRole="ROLE_ADMIN"><UsersPage /></ProtectedRoute>
+        <Route path="/admin/configuracoes" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><SettingsPage /></ProtectedRoute>
         } />
+        {/* Rota antiga de usuários consolidada em Configurações */}
+        <Route path="/admin/usuarios" element={<Navigate to="/admin/configuracoes" replace />} />
       </Route>
 
       {/* Catch-all */}

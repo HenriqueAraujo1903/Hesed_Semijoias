@@ -89,8 +89,12 @@ public class OrderService {
         }
 
         String customerName = trimToNull(request.getCustomerName());
+        String customerPhone = trimToNull(request.getCustomerPhone());
         if (confirm && customerName == null) {
             throw new RuntimeException("Informe o nome do cliente para confirmar a venda.");
+        }
+        if (confirm && customerPhone == null) {
+            throw new RuntimeException("Informe o telefone do cliente para confirmar a venda.");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -102,7 +106,7 @@ public class OrderService {
                 .orderedAt(now)
                 .resolvedAt(confirm ? now : null)
                 .customerName(customerName)
-                .customerPhone(trimToNull(request.getCustomerPhone()))
+                .customerPhone(customerPhone)
                 .notes(trimToNull(request.getNotes()))
                 .build();
 
@@ -195,10 +199,16 @@ public class OrderService {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Pedido não encontrado."));
 
-        // Nome do cliente é obrigatório para confirmar a venda
-        if (normalized.equals("CONFIRMADO")
-                && (order.getCustomerName() == null || order.getCustomerName().isBlank())) {
-            throw new RuntimeException("Informe o nome do cliente antes de confirmar a venda.");
+        // Nome e telefone do cliente são obrigatórios para resolver o pedido
+        // (confirmar ou cancelar) — necessários para o aviso automático via WhatsApp.
+        boolean resolving = normalized.equals("CONFIRMADO") || normalized.equals("CANCELADO");
+        if (resolving && (order.getCustomerName() == null || order.getCustomerName().isBlank())) {
+            throw new RuntimeException("Informe o nome do cliente antes de " +
+                    (normalized.equals("CONFIRMADO") ? "confirmar" : "cancelar") + " o pedido.");
+        }
+        if (resolving && (order.getCustomerPhone() == null || order.getCustomerPhone().isBlank())) {
+            throw new RuntimeException("Informe o telefone do cliente antes de " +
+                    (normalized.equals("CONFIRMADO") ? "confirmar" : "cancelar") + " o pedido.");
         }
 
         String previous = order.getStatus();

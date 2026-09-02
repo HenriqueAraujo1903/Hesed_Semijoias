@@ -26,11 +26,37 @@ public class DataInitializer {
      * sempre deriva ESGOTADO). Assim é seguro reexecutar no startup.
      */
     @Bean
-    CommandLineRunner initData(ProductRepository productRepository) {
+    CommandLineRunner initData(ProductRepository productRepository,
+                               com.hesed.repositories.MessageTemplateRepository messageTemplateRepository) {
         return args -> {
             backfillStockQuantities(productRepository);
+            seedMessageTemplates(messageTemplateRepository);
             System.out.println("🌿 HESED API pronta!");
         };
+    }
+
+    /**
+     * Semeia os templates de mensagem, apenas se ainda não existirem (idempotente
+     * por chave). Os textos são um ponto de partida — a operadora edita pela tela
+     * de Configurações. Variáveis suportadas: {cliente} {pedido} {total} {itens}.
+     */
+    private void seedMessageTemplates(com.hesed.repositories.MessageTemplateRepository repo) {
+        seedTemplate(repo, "ORDER_CONFIRMED", "Pedido confirmado",
+                "Olá {cliente}! 💛\n\nSeu pedido {pedido} foi confirmado.\n\n{itens}\n\nTotal: {total}\n\nObrigada por comprar na HESED Semijoias! Volte sempre. ✨");
+        seedTemplate(repo, "ORDER_CANCELLED", "Pedido cancelado",
+                "Olá {cliente}!\n\nSeu pedido {pedido} foi cancelado.\n\nSentiremos sua falta e esperamos você em uma próxima compra na HESED Semijoias. 💛");
+    }
+
+    private void seedTemplate(com.hesed.repositories.MessageTemplateRepository repo,
+                              String key, String title, String body) {
+        if (!repo.existsByTemplateKey(key)) {
+            repo.save(com.hesed.models.MessageTemplate.builder()
+                    .templateKey(key)
+                    .title(title)
+                    .body(body)
+                    .active(true)
+                    .build());
+        }
     }
 
     private void backfillStockQuantities(ProductRepository productRepository) {

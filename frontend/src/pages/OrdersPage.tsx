@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
+import { buildOrderMessage, openWhatsApp } from '../utils/whatsapp';
 
 interface OrderItem {
   id: string;
@@ -67,6 +68,8 @@ export default function OrdersPage() {
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<Order | null>(null);
   const [creating, setCreating] = useState(false);
+  // Templates de mensagem (para o aviso automático via WhatsApp). Chave -> body/ativo.
+  const [messageTemplates, setMessageTemplates] = useState<Record<string, { body: string; active: boolean }>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,21 +90,43 @@ export default function OrdersPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Carrega produtos do estoque uma vez (para o editor adicionar itens)
+  // Carrega produtos do estoque + templates de mensagem uma vez
   useEffect(() => {
     api.get('/products/catalog').then((res) => setProducts(res.data)).catch(() => {});
+    api.get('/admin/settings/messages').then((res) => {
+      const map: Record<string, { body: string; active: boolean }> = {};
+      for (const t of res.data) map[t.templateKey] = { body: t.body, active: t.active };
+      setMessageTemplates(map);
+    }).catch(() => {});
   }, []);
 
+  /** Abre o WhatsApp com o aviso do template, se ele existir e estiver ativo. */
+  function notifyCustomer(order: import('../utils/whatsapp').OrderLike, status: string) {
+    const key = status === 'CONFIRMADO' ? 'ORDER_CONFIRMED'
+      : status === 'CANCELADO' ? 'ORDER_CANCELLED' : null;
+    if (!key) return;
+    const tpl = messageTemplates[key];
+    if (!tpl || !tpl.active) return;                 // aviso desligado nas Configurações
+    if (!order.customerPhone) return;                // sem telefone não há como enviar
+    const msg = buildOrderMessage(tpl.body, order);
+    openWhatsApp(order.customerPhone, msg);
+  }
+
   async function changeStatus(order: Order, status: string) {
-    // Confirmar exige nome do cliente — se não houver, abre o editor
-    if (status === 'CONFIRMADO' && !order.customerName) {
-      alert('Informe o nome do cliente antes de confirmar. Abrindo edição do pedido...');
+    // Confirmar e cancelar exigem nome E telefone do cliente (necessários para o
+    // aviso automático). Se faltar, abre o editor para a operadora preencher.
+    const resolving = status === 'CONFIRMADO' || status === 'CANCELADO';
+    if (resolving && (!order.customerName || !order.customerPhone)) {
+      const verbo = status === 'CONFIRMADO' ? 'confirmar' : 'cancelar';
+      alert(`Informe nome e telefone do cliente antes de ${verbo}. Abrindo edição do pedido...`);
       setEditTarget(order);
       return;
     }
     setActioningId(order.id);
     try {
       await api.patch(`/admin/orders/${order.id}/status`, { status });
+      // Dispara o aviso ANTES do reload (usa os dados atuais do pedido).
+      notifyCustomer(order, status);
       await load();
     } catch (e: any) {
       alert(e.response?.data?.error || 'Erro ao atualizar o pedido');
@@ -283,6 +308,7 @@ export default function OrdersPage() {
           products={products}
           onClose={() => { setEditTarget(null); setCreating(false); }}
           onSaved={() => { setEditTarget(null); setCreating(false); load(); }}
+          onConfirmed={(o) => notifyCustomer(o, 'CONFIRMADO')}
         />
       )}
     </div>
@@ -298,8 +324,9 @@ interface EditItem {
   effectivePrice: number;
 }
 
-function OrderEditModal({ order, products, onClose, onSaved }: {
+function OrderEditModal({ order, products, onClose, onSaved, onConfirmed }: {
   order: Order | null; products: Product[]; onClose: () => void; onSaved: () => void;
+  onConfirmed: (order: import('../utils/whatsapp').OrderLike) => void;
 }) {
   const isCreate = order === null;
   const [items, setItems] = useState<EditItem[]>(
@@ -348,6 +375,7 @@ function OrderEditModal({ order, products, onClose, onSaved }: {
     setError(null);
     if (items.length === 0) { setError('O pedido precisa ter ao menos um item.'); return; }
     if (confirmAfter && !customerName.trim()) { setError('Informe o nome do cliente para confirmar a venda.'); return; }
+    if (confirmAfter && !customerPhone.trim()) { setError('Informe o telefone do cliente para confirmar a venda.'); return; }
 
     const payloadItems = items.map((i) => ({
       productId: i.productId,
@@ -357,15 +385,17 @@ function OrderEditModal({ order, products, onClose, onSaved }: {
 
     setLoading(true);
     try {
+      let orderNumber = order?.orderNumber ?? '';
       if (isCreate) {
         // Venda direta: cria já com o status desejado (confirm=true nasce CONFIRMADO)
-        await api.post('/admin/orders', {
+        const res = await api.post('/admin/orders', {
           items: payloadItems,
           customerName: customerName.trim() || null,
           customerPhone: customerPhone.trim() || null,
           notes: notes.trim() || null,
           confirm: confirmAfter,
         });
+        orderNumber = res.data?.orderNumber ?? orderNumber;
       } else {
         await api.put(`/admin/orders/${order!.id}`, {
           items: payloadItems,
@@ -376,6 +406,18 @@ function OrderEditModal({ order, products, onClose, onSaved }: {
         if (confirmAfter) {
           await api.patch(`/admin/orders/${order!.id}/status`, { status: 'CONFIRMADO' });
         }
+      }
+      // Aviso automático ao confirmar pela tela de edição/venda direta.
+      if (confirmAfter) {
+        onConfirmed({
+          orderNumber,
+          customerName: customerName.trim() || null,
+          customerPhone: customerPhone.trim() || null,
+          totalAmount: total,
+          items: items.map((i) => ({
+            productName: i.productName, quantity: i.quantity, effectivePrice: i.effectivePrice,
+          })),
+        });
       }
       onSaved();
     } catch (e: any) {
@@ -412,10 +454,11 @@ function OrderEditModal({ order, products, onClose, onSaved }: {
             </div>
             <div>
               <label className="block text-xs font-medium text-charcoal-600 dark:text-charcoal-400 mb-1 uppercase tracking-wide">
-                Telefone
+                Telefone <span className="text-red-400">*</span>
               </label>
               <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)}
                 placeholder="Ex: (51) 99999-9999" className="input-field" />
+              <p className="mt-1 text-[10px] text-charcoal-400">Obrigatório para confirmar ou cancelar (usado no aviso via WhatsApp).</p>
             </div>
           </div>
 
