@@ -18,6 +18,8 @@ public class OrderUpdateRequest {
     @NotEmpty(message = "O pedido deve conter ao menos um item.")
     private List<Item> items;
 
+    /** Cliente cadastrado (opcional). Se informado, nome/telefone são preenchidos a partir dele. */
+    private UUID customerId;
     private String customerName;
     private String customerPhone;
     private String notes;

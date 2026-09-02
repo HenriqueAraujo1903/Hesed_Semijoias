@@ -62,6 +62,16 @@ public class Order {
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
 
+    /**
+     * Cliente cadastrado vinculado ao pedido (opcional). Quando presente, os
+     * campos customerName/customerPhone abaixo são um snapshot dos dados no
+     * momento do pedido — preservados mesmo se o cadastro do cliente mudar/for
+     * removido. O aviso via WhatsApp e as validações usam o snapshot.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id")
+    private Customer customer;
+
     /** Nome do cliente que comprou (obrigatório ao confirmar a venda). */
     @Column(name = "customer_name", length = 120)
     private String customerName;

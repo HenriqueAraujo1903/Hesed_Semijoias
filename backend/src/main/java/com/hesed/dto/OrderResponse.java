@@ -18,6 +18,7 @@ public class OrderResponse {
     private BigDecimal totalAmount;
     private LocalDateTime orderedAt;
     private LocalDateTime resolvedAt;
+    private UUID customerId;
     private String customerName;
     private String customerPhone;
     private String notes;
@@ -67,6 +68,7 @@ public class OrderResponse {
         r.setTotalAmount(o.getTotalAmount());
         r.setOrderedAt(o.getOrderedAt());
         r.setResolvedAt(o.getResolvedAt());
+        r.setCustomerId(o.getCustomer() != null ? o.getCustomer().getId() : null);
         r.setCustomerName(o.getCustomerName());
         r.setCustomerPhone(o.getCustomerPhone());
         r.setNotes(o.getNotes());

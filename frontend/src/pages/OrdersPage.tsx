@@ -338,12 +338,30 @@ function OrderEditModal({ order, products, onClose, onSaved, onResolved }: {
       effectivePrice: i.effectivePrice,
     }))
   );
+  const [customerId, setCustomerId] = useState<string>((order as any)?.customerId ?? '');
   const [customerName, setCustomerName] = useState(order?.customerName ?? '');
   const [customerPhone, setCustomerPhone] = useState(order?.customerPhone ?? '');
+  const [customers, setCustomers] = useState<{ id: string; name: string; phone: string | null }[]>([]);
   const [notes, setNotes] = useState(order?.notes ?? '');
   const [addProductId, setAddProductId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Carrega clientes cadastrados para o seletor (opcional).
+  useEffect(() => {
+    api.get('/admin/customers').then((res) => setCustomers(res.data)).catch(() => {});
+  }, []);
+
+  // Ao escolher um cliente cadastrado, preenche nome e telefone a partir dele.
+  function selectCustomer(id: string) {
+    setCustomerId(id);
+    if (!id) return;
+    const c = customers.find((x) => x.id === id);
+    if (c) {
+      setCustomerName(c.name);
+      setCustomerPhone(c.phone ?? '');
+    }
+  }
 
   const total = useMemo(
     () => items.reduce((s, i) => s + i.effectivePrice * i.quantity, 0),
@@ -397,6 +415,7 @@ function OrderEditModal({ order, products, onClose, onSaved, onResolved }: {
         // Cancelar não faz sentido numa venda direta nova — só confirma ou fica pendente.
         const res = await api.post('/admin/orders', {
           items: payloadItems,
+          customerId: customerId || null,
           customerName: customerName.trim() || null,
           customerPhone: customerPhone.trim() || null,
           notes: notes.trim() || null,
@@ -406,6 +425,7 @@ function OrderEditModal({ order, products, onClose, onSaved, onResolved }: {
       } else {
         await api.put(`/admin/orders/${order!.id}`, {
           items: payloadItems,
+          customerId: customerId || null,
           customerName: customerName.trim() || null,
           customerPhone: customerPhone.trim() || null,
           notes: notes.trim() || null,
@@ -450,20 +470,35 @@ function OrderEditModal({ order, products, onClose, onSaved, onResolved }: {
         </div>
 
         <div className="px-6 py-5 space-y-5">
+          {/* Cliente cadastrado (opcional): preenche nome + telefone */}
+          {customers.length > 0 && (
+            <div>
+              <label className="block text-xs font-medium text-charcoal-600 dark:text-charcoal-400 mb-1 uppercase tracking-wide">
+                Cliente cadastrado
+              </label>
+              <select value={customerId} onChange={(e) => selectCustomer(e.target.value)} className="input-field">
+                <option value="">— Selecionar cliente cadastrado (ou digitar abaixo) —</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}{c.phone ? ` — ${c.phone}` : ''}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Cliente */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-charcoal-600 dark:text-charcoal-400 mb-1 uppercase tracking-wide">
                 Nome do cliente <span className="text-red-400">*</span>
               </label>
-              <input value={customerName} onChange={(e) => setCustomerName(e.target.value)}
+              <input value={customerName} onChange={(e) => { setCustomerName(e.target.value); setCustomerId(''); }}
                 placeholder="Ex: Maria Silva" className="input-field" />
             </div>
             <div>
               <label className="block text-xs font-medium text-charcoal-600 dark:text-charcoal-400 mb-1 uppercase tracking-wide">
                 Telefone <span className="text-red-400">*</span>
               </label>
-              <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)}
+              <input value={customerPhone} onChange={(e) => { setCustomerPhone(e.target.value); setCustomerId(''); }}
                 placeholder="Ex: (51) 99999-9999" className="input-field" />
               <p className="mt-1 text-[10px] text-charcoal-400">Obrigatório para confirmar ou cancelar (usado no aviso via WhatsApp).</p>
             </div>

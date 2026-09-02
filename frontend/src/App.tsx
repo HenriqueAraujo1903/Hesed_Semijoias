@@ -11,6 +11,7 @@ import OrdersPage from './pages/OrdersPage';
 import AdminPromotionsPage from './pages/AdminPromotionsPage';
 import ConsigneesPage from './pages/ConsigneesPage';
 import SuppliersPage from './pages/SuppliersPage';
+import CadastrosPage from './pages/CadastrosPage';
 import StockPage from './pages/StockPage';
 import SettingsPage from './pages/SettingsPage';
 import CatalogoPage from './pages/CatalogoPage';
@@ -56,9 +57,11 @@ export default function App() {
         <Route path="/admin/promocoes" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><AdminPromotionsPage /></ProtectedRoute>
         } />
-        <Route path="/admin/fornecedores" element={
-          <ProtectedRoute requiredRole="ROLE_ADMIN"><SuppliersPage /></ProtectedRoute>
+        <Route path="/admin/cadastros" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><CadastrosPage /></ProtectedRoute>
         } />
+        {/* Fornecedores foi consolidado na aba Cadastros */}
+        <Route path="/admin/fornecedores" element={<Navigate to="/admin/cadastros" replace />} />
         <Route path="/admin/estoque" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><StockPage /></ProtectedRoute>
         } />

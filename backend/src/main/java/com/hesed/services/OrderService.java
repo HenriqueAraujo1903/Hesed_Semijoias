@@ -4,10 +4,12 @@ import com.hesed.dto.AdminOrderCreateRequest;
 import com.hesed.dto.OrderRequest;
 import com.hesed.dto.OrderResponse;
 import com.hesed.dto.OrderUpdateRequest;
+import com.hesed.models.Customer;
 import com.hesed.models.Order;
 import com.hesed.models.OrderItem;
 import com.hesed.models.Product;
 import com.hesed.models.Promotion;
+import com.hesed.repositories.CustomerRepository;
 import com.hesed.repositories.OrderRepository;
 import com.hesed.repositories.ProductRepository;
 import com.hesed.repositories.PromotionRepository;
@@ -31,15 +33,18 @@ public class OrderService {
     private final ProductRepository productRepository;
     private final PromotionRepository promotionRepository;
     private final StockService stockService;
+    private final CustomerRepository customerRepository;
 
     public OrderService(OrderRepository orderRepository,
                         ProductRepository productRepository,
                         PromotionRepository promotionRepository,
-                        StockService stockService) {
+                        StockService stockService,
+                        CustomerRepository customerRepository) {
         this.orderRepository = orderRepository;
         this.productRepository = productRepository;
         this.promotionRepository = promotionRepository;
         this.stockService = stockService;
+        this.customerRepository = customerRepository;
     }
 
     /**
@@ -88,15 +93,6 @@ public class OrderService {
             throw new RuntimeException("Pedido excede o número máximo de itens (" + MAX_ITEMS_PER_ORDER + ").");
         }
 
-        String customerName = trimToNull(request.getCustomerName());
-        String customerPhone = trimToNull(request.getCustomerPhone());
-        if (confirm && customerName == null) {
-            throw new RuntimeException("Informe o nome do cliente para confirmar a venda.");
-        }
-        if (confirm && customerPhone == null) {
-            throw new RuntimeException("Informe o telefone do cliente para confirmar a venda.");
-        }
-
         LocalDateTime now = LocalDateTime.now();
 
         Order order = Order.builder()
@@ -105,10 +101,18 @@ public class OrderService {
                 .channel("DIRETA")
                 .orderedAt(now)
                 .resolvedAt(confirm ? now : null)
-                .customerName(customerName)
-                .customerPhone(customerPhone)
                 .notes(trimToNull(request.getNotes()))
                 .build();
+
+        // Vincula cliente cadastrado (se houver) e monta o snapshot de nome/telefone.
+        applyCustomer(order, request.getCustomerId(), request.getCustomerName(), request.getCustomerPhone());
+
+        if (confirm && order.getCustomerName() == null) {
+            throw new RuntimeException("Informe o nome do cliente para confirmar a venda.");
+        }
+        if (confirm && order.getCustomerPhone() == null) {
+            throw new RuntimeException("Informe o telefone do cliente para confirmar a venda.");
+        }
 
         for (AdminOrderCreateRequest.Item reqItem : request.getItems()) {
             if (reqItem.getProductId() == null) {
@@ -174,8 +178,7 @@ public class OrderService {
             order.getItems().add(item);
         }
 
-        order.setCustomerName(trimToNull(request.getCustomerName()));
-        order.setCustomerPhone(trimToNull(request.getCustomerPhone()));
+        applyCustomer(order, request.getCustomerId(), request.getCustomerName(), request.getCustomerPhone());
         order.setNotes(trimToNull(request.getNotes()));
 
         recalcTotal(order);
@@ -295,6 +298,28 @@ public class OrderService {
         if (s == null) return null;
         String t = s.trim();
         return t.isEmpty() ? null : t;
+    }
+
+    /**
+     * Resolve o cliente cadastrado (se customerId vier) e o vincula ao pedido,
+     * preenchendo o snapshot de nome/telefone a partir do cadastro. Se não vier
+     * id, mantém o cliente nulo e usa os campos de texto informados (fluxo antigo).
+     * Retorna o par [name, phone] a ser gravado como snapshot.
+     */
+    private void applyCustomer(Order order, UUID customerId, String nameText, String phoneText) {
+        if (customerId != null) {
+            Customer c = customerRepository.findById(customerId)
+                    .orElseThrow(() -> new RuntimeException("Cliente não encontrado."));
+            order.setCustomer(c);
+            // Snapshot: prioriza dados do cadastro; texto informado pode sobrescrever
+            // se preenchido (ex.: ajuste pontual do nome naquele pedido).
+            order.setCustomerName(trimToNull(nameText) != null ? trimToNull(nameText) : c.getName());
+            order.setCustomerPhone(trimToNull(phoneText) != null ? trimToNull(phoneText) : c.getPhone());
+        } else {
+            order.setCustomer(null);
+            order.setCustomerName(trimToNull(nameText));
+            order.setCustomerPhone(trimToNull(phoneText));
+        }
     }
 
     private String resolveOrderNumber(String requested) {
