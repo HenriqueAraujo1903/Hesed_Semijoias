@@ -27,6 +27,7 @@ CREATED_USER_IDS = set()
 CREATED_ORDER_IDS = set()
 CREATED_PROMO_IDS = set()
 CREATED_CUSTOMER_IDS = set()
+CREATED_PRODUCT_IDS = set()
 TOUCHED_TEMPLATES = {}  # key -> (body, active) original para restaurar
 
 
@@ -475,6 +476,75 @@ def suite_clientes():
 
 
 # ===========================================================================
+# SE — Produto sob encomenda (onDemand)
+# ===========================================================================
+def suite_sob_encomenda():
+    print("== SUÍTE SE: Sob encomenda ==")
+
+    sku = f"QA-OD-{uniq()}"
+    st, b = request("POST", "/api/admin/products",
+                    body={"sku": sku, "name": "Sob Encomenda QA", "category": "Corrente",
+                          "costPrice": 40, "salePrice": 120, "stockQuantity": 0,
+                          "onDemand": True, "leadTimeDays": 10})
+    R.check("SE.criar.201", st == 201, 201, st)
+    pid = b.get("id") if isinstance(b, dict) else None
+    if pid:
+        CREATED_PRODUCT_IDS.add(pid)
+    R.check("SE.criar.onDemand_true", isinstance(b, dict) and b.get("onDemand") is True, True,
+            b.get("onDemand") if isinstance(b, dict) else b)
+    R.check("SE.criar.status_disponivel", isinstance(b, dict) and b.get("stockStatus") == "DISPONIVEL",
+            "DISPONIVEL", b.get("stockStatus") if isinstance(b, dict) else b)
+    R.check("SE.criar.leadTime", isinstance(b, dict) and b.get("leadTimeDays") == 10, 10,
+            b.get("leadTimeDays") if isinstance(b, dict) else b)
+
+    # Catálogo público: aparece, comprável (não ESGOTADO), com onDemand + leadTimeDays
+    st, cat = request("GET", "/api/products/catalog", no_cookie=True)
+    pc = next((x for x in cat if x.get("id") == pid), None) if isinstance(cat, list) else None
+    R.check("SE.catalogo.presente", pc is not None, "no catálogo", None)
+    if pc:
+        R.check("SE.catalogo.nao_esgotado", pc.get("stockStatus") != "ESGOTADO", "!= ESGOTADO", pc.get("stockStatus"))
+        R.check("SE.catalogo.onDemand", pc.get("onDemand") is True, True, pc.get("onDemand"))
+        R.check("SE.catalogo.leadTime", pc.get("leadTimeDays") == 10, 10, pc.get("leadTimeDays"))
+
+    # Venda direta confirmada NÃO baixa estoque nem gera movimento
+    st, ord_ = request("POST", "/api/admin/orders",
+                       body={"items": [{"productId": pid, "quantity": 2}],
+                             "customerName": "Cliente OD", "customerPhone": "51988887777", "confirm": True})
+    R.check("SE.venda.confirmada.201", st in (200, 201), "200/201", st)
+    if isinstance(ord_, dict) and ord_.get("id"):
+        CREATED_ORDER_IDS.add(ord_["id"])
+        R.check("SE.venda.total", abs(float(ord_["totalAmount"]) - 240.0) < 0.01, 240.0, ord_["totalAmount"])
+
+    # Confirma via SQL: estoque continua 0 e não há StockMovement para o produto
+    q = subprocess.run(["psql", "-d", DB, "-tAc",
+                        f"SELECT stock_quantity FROM products WHERE id='{pid}';"],
+                       capture_output=True, text=True)
+    R.check("SE.estoque.inalterado_0", q.stdout.strip() == "0", "0", q.stdout.strip())
+    m = subprocess.run(["psql", "-d", DB, "-tAc",
+                        f"SELECT count(*) FROM stock_movements WHERE product_id='{pid}';"],
+                       capture_output=True, text=True)
+    R.check("SE.estoque.sem_movimento", m.stdout.strip() == "0", "0", m.stdout.strip())
+
+    # Produto NORMAL com qty 0 continua ESGOTADO (regressão da regra de estoque)
+    skun = f"QA-NORM-{uniq()}"
+    st, bn = request("POST", "/api/admin/products",
+                     body={"sku": skun, "name": "Normal QA", "category": "Brinco",
+                           "costPrice": 10, "salePrice": 30, "stockQuantity": 0})
+    npid = bn.get("id") if isinstance(bn, dict) else None
+    if npid:
+        CREATED_PRODUCT_IDS.add(npid)
+    R.check("SE.normal.esgotado", isinstance(bn, dict) and bn.get("stockStatus") == "ESGOTADO",
+            "ESGOTADO", bn.get("stockStatus") if isinstance(bn, dict) else bn)
+    R.check("SE.normal.onDemand_false", isinstance(bn, dict) and bn.get("onDemand") is False, False,
+            bn.get("onDemand") if isinstance(bn, dict) else bn)
+
+    # RBAC: criar produto sem sessão nega
+    st, _ = request("POST", "/api/admin/products", no_cookie=True,
+                    body={"sku": "X", "name": "X", "costPrice": 1, "salePrice": 2})
+    R.check("SE.rbac.sem_sessao", st in (401, 403), "401/403", st)
+
+
+# ===========================================================================
 # Cleanup
 # ===========================================================================
 def cleanup():
@@ -509,6 +579,13 @@ def cleanup():
     if CREATED_CUSTOMER_IDS:
         cust_ids = "','".join(CREATED_CUSTOMER_IDS)
         sql.append(f"DELETE FROM customers WHERE id IN ('{cust_ids}');")
+    # Produtos de teste criados pela suíte (sob encomenda / normal): remove vínculos e o produto.
+    if CREATED_PRODUCT_IDS:
+        prod_ids = "','".join(CREATED_PRODUCT_IDS)
+        sql.append(f"DELETE FROM product_images WHERE product_id IN ('{prod_ids}');")
+        sql.append(f"DELETE FROM stock_movements WHERE product_id IN ('{prod_ids}');")
+        sql.append(f"DELETE FROM order_items WHERE product_id IN ('{prod_ids}');")
+        sql.append(f"DELETE FROM products WHERE id IN ('{prod_ids}');")
     r = subprocess.run(["psql", "-d", DB, "-c", " ".join(sql)], capture_output=True, text=True)
     print(f"  psql cleanup rc={r.returncode} {r.stdout.strip()} {r.stderr.strip()}")
 
@@ -525,6 +602,11 @@ def cleanup():
     leaked_c = [c for c in custs if TEST_EMAIL_TAG in (c.get("email") or "")] if isinstance(custs, list) else ["?"]
     R.check("CLEANUP.sem_clientes_teste", len(leaked_c) == 0, 0, len(leaked_c))
 
+    leaked_prod = subprocess.run(["psql", "-d", DB, "-tAc",
+                                  "SELECT count(*) FROM products WHERE sku LIKE 'QA-OD-%' OR sku LIKE 'QA-NORM-%';"],
+                                 capture_output=True, text=True)
+    R.check("CLEANUP.sem_produtos_teste", leaked_prod.stdout.strip() == "0", "0", leaked_prod.stdout.strip())
+
 
 def main():
     t0 = time.time()
@@ -536,6 +618,7 @@ def main():
         suite_pedidos_telefone()
         suite_catalogo_promo()
         suite_clientes()
+        suite_sob_encomenda()
     finally:
         cleanup()
     dt = time.time() - t0
