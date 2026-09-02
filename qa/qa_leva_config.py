@@ -26,6 +26,7 @@ TEST_EMAIL_TAG = "qaleva"  # e-mails de usuários de teste contêm isto
 CREATED_USER_IDS = set()
 CREATED_ORDER_IDS = set()
 CREATED_PROMO_IDS = set()
+CREATED_CUSTOMER_IDS = set()
 TOUCHED_TEMPLATES = {}  # key -> (body, active) original para restaurar
 
 
@@ -368,6 +369,111 @@ def suite_catalogo_promo():
 
 
 # ===========================================================================
+# CL — Clientes (/api/admin/customers) + vínculo no pedido
+# ===========================================================================
+def suite_clientes():
+    print("== SUÍTE CL: Clientes ==")
+
+    # RBAC sem sessão
+    for method, path, body in [
+        ("GET", "/api/admin/customers", None),
+        ("POST", "/api/admin/customers", {"name": "X", "phone": "51999998888"}),
+    ]:
+        st, _ = request(method, path, body=body, no_cookie=True)
+        R.check(f"CL.rbac.sem_sessao.{method}", st in (401, 403), "401/403", st)
+
+    # Criar cliente válido (telefone formatado deve ser aceito)
+    email = f"cli.{TEST_EMAIL_TAG}.{uniq()}@ex.com"
+    st, b = request("POST", "/api/admin/customers",
+                    body={"name": "Maria QA Cliente", "phone": "(51) 98888-7777",
+                          "email": email, "notes": "Prefere dourado"})
+    R.check("CL.criar.201", st == 201, 201, st)
+    cid = b.get("id") if isinstance(b, dict) else None
+    if cid:
+        CREATED_CUSTOMER_IDS.add(cid)
+    R.check("CL.criar.retorna_campos",
+            isinstance(b, dict) and b.get("name") == "Maria QA Cliente" and b.get("notes") == "Prefere dourado",
+            "campos ok", b)
+
+    # Telefones válidos variados (aceita fixo, celular, com/sem máscara)
+    for tel in ["51988887777", "(51) 3333-0000", "51 98888 7777", "(51)988887777"]:
+        e = f"cli.{TEST_EMAIL_TAG}.{uniq()}@ex.com"
+        st, b2 = request("POST", "/api/admin/customers", body={"name": "Tel QA", "phone": tel, "email": e})
+        R.check(f"CL.tel_valido[{tel}].201", st == 201, 201, st)
+        if isinstance(b2, dict) and b2.get("id"):
+            CREATED_CUSTOMER_IDS.add(b2["id"])
+
+    # Telefones inválidos -> 400
+    for tel in ["123", "abc", "98888-7777"]:
+        st, _ = request("POST", "/api/admin/customers",
+                        body={"name": "Tel Ruim", "phone": tel, "email": f"x.{TEST_EMAIL_TAG}.{uniq()}@ex.com"})
+        R.check(f"CL.tel_invalido[{tel}].400", st == 400, 400, st)
+
+    # Nome curto / faltando -> 400
+    st, _ = request("POST", "/api/admin/customers", body={"name": "ab", "phone": "51988887777"})
+    R.check("CL.nome_curto.400", st == 400, 400, st)
+    st, _ = request("POST", "/api/admin/customers", body={"phone": "51988887777"})
+    R.check("CL.sem_nome.400", st == 400, 400, st)
+
+    # E-mail duplicado (mesmo e case-insensitive) -> 400
+    st, _ = request("POST", "/api/admin/customers", body={"name": "Dup", "phone": "51988887777", "email": email})
+    R.check("CL.email_dup.400", st == 400, 400, st)
+    st, _ = request("POST", "/api/admin/customers", body={"name": "Dup2", "phone": "51988887777", "email": email.upper()})
+    R.check("CL.email_dup_case.400", st == 400, 400, st)
+
+    # Busca por nome e por telefone
+    st, lst = request("GET", "/api/admin/customers?search=Maria QA")
+    R.check("CL.busca_nome", isinstance(lst, list) and any(c.get("id") == cid for c in lst), "acha por nome", None)
+    st, lst = request("GET", "/api/admin/customers?search=98888")
+    R.check("CL.busca_telefone", isinstance(lst, list) and len(lst) >= 1, ">=1", len(lst) if isinstance(lst, list) else None)
+
+    # Editar
+    st, b = request("PUT", f"/api/admin/customers/{cid}",
+                    body={"name": "Maria QA Editada", "phone": "(51) 98888-7777", "email": email, "notes": "VIP"})
+    R.check("CL.editar.200", st == 200, 200, st)
+    R.check("CL.editar.aplicado", isinstance(b, dict) and b.get("name") == "Maria QA Editada" and b.get("notes") == "VIP",
+            "editado", b)
+
+    # Not found
+    st, _ = request("GET", f"/api/admin/customers/{uniq()}0000-0000")
+    R.check("CL.getById.invalido", st in (400, 404), "400/404", st)
+
+    # --- Vínculo no pedido: venda direta só com customerId preenche snapshot ---
+    prod = _first_available_product()
+    if prod and cid:
+        st, ord_ = request("POST", "/api/admin/orders",
+                           body={"items": [{"productId": prod["id"], "quantity": 1}], "customerId": cid, "confirm": False})
+        R.check("CL.pedido.criar_com_customerId.201", st in (200, 201), "200/201", st)
+        if isinstance(ord_, dict) and ord_.get("id"):
+            CREATED_ORDER_IDS.add(ord_["id"])
+            R.check("CL.pedido.customerId_vinculado", ord_.get("customerId") == cid, cid, ord_.get("customerId"))
+            R.check("CL.pedido.snapshot_nome", ord_.get("customerName") == "Maria QA Editada",
+                    "Maria QA Editada", ord_.get("customerName"))
+            R.check("CL.pedido.snapshot_fone", (ord_.get("customerPhone") or "").replace(" ", "") != "",
+                    "telefone preenchido", ord_.get("customerPhone"))
+            # Confirmar funciona: o vínculo já satisfez nome+telefone
+            st, _ = request("PATCH", f"/api/admin/orders/{ord_['id']}/status", body={"status": "CONFIRMADO"})
+            R.check("CL.pedido.confirma_com_cliente.200", st == 200, 200, st)
+
+    # Catálogo público inalterado (não exige cliente)
+    if prod:
+        st, ord_ = request("POST", "/api/orders",
+                           body={"productIds": [prod["id"]], "orderNumber": f"HSD-QALEVA-CLI-{uniq()}"}, no_cookie=True)
+        R.check("CL.catalogo_publico_inalterado.201", st in (200, 201), "200/201", st)
+        if isinstance(ord_, dict) and ord_.get("id"):
+            CREATED_ORDER_IDS.add(ord_["id"])
+            R.check("CL.catalogo_publico_sem_cliente", ord_.get("customerId") is None, None, ord_.get("customerId"))
+
+    # Excluir um cliente de teste -> 200
+    if cid:
+        st, _ = request("DELETE", f"/api/admin/customers/{cid}")
+        # pode estar vinculado a pedido; aceitamos 200 (SET NULL) ou 400 (protegido). Registramos o comportamento.
+        R.check("CL.excluir.resposta_valida", st in (200, 400), "200/400", st)
+        if st == 200:
+            CREATED_CUSTOMER_IDS.discard(cid)
+
+
+# ===========================================================================
 # Cleanup
 # ===========================================================================
 def cleanup():
@@ -388,7 +494,8 @@ def cleanup():
         request("PUT", f"/api/admin/settings/messages/{key}",
                 body={"body": body, "active": active, "imageUrl": image_url})
 
-    # SQL: remove usuários de teste, pedidos de teste e seus vínculos
+    # SQL: remove usuários de teste, pedidos de teste e seus vínculos, e clientes de teste.
+    # Ordem importa: itens/movimentos -> pedidos -> clientes (FK customer_id nos pedidos).
     order_ids = "','".join(CREATED_ORDER_IDS)
     sql = []
     if CREATED_ORDER_IDS:
@@ -396,6 +503,11 @@ def cleanup():
         sql.append(f"DELETE FROM stock_movements WHERE order_id IN ('{order_ids}');")
         sql.append(f"DELETE FROM orders WHERE id IN ('{order_ids}');")
     sql.append(f"DELETE FROM users WHERE email LIKE '%{TEST_EMAIL_TAG}%';")
+    # Clientes de teste (por e-mail marcado ou por id criado)
+    sql.append(f"DELETE FROM customers WHERE email LIKE '%{TEST_EMAIL_TAG}%';")
+    if CREATED_CUSTOMER_IDS:
+        cust_ids = "','".join(CREATED_CUSTOMER_IDS)
+        sql.append(f"DELETE FROM customers WHERE id IN ('{cust_ids}');")
     r = subprocess.run(["psql", "-d", DB, "-c", " ".join(sql)], capture_output=True, text=True)
     print(f"  psql cleanup rc={r.returncode} {r.stdout.strip()} {r.stderr.strip()}")
 
@@ -408,6 +520,10 @@ def cleanup():
     leaked_p = [p for p in promos if p.get("id") in CREATED_PROMO_IDS] if isinstance(promos, list) else ["?"]
     R.check("CLEANUP.sem_promos_teste", len(leaked_p) == 0, 0, len(leaked_p))
 
+    st, custs = request("GET", "/api/admin/customers")
+    leaked_c = [c for c in custs if TEST_EMAIL_TAG in (c.get("email") or "")] if isinstance(custs, list) else ["?"]
+    R.check("CLEANUP.sem_clientes_teste", len(leaked_c) == 0, 0, len(leaked_c))
+
 
 def main():
     t0 = time.time()
@@ -418,6 +534,7 @@ def main():
         suite_templates()
         suite_pedidos_telefone()
         suite_catalogo_promo()
+        suite_clientes()
     finally:
         cleanup()
     dt = time.time() - t0
