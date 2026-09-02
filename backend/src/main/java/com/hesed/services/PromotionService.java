@@ -32,8 +32,12 @@ public class PromotionService {
     }
 
     public List<PromotionResponse> findActive() {
+        // Não anuncia no carrossel promoções de produtos esgotados — o cliente
+        // não conseguiria comprar. Voltam a aparecer sozinhas quando repostos.
         return promotionRepository.findActivePromotions(LocalDateTime.now())
                 .stream()
+                .filter(p -> p.getProduct() != null
+                        && !"ESGOTADO".equalsIgnoreCase(p.getProduct().getStockStatus()))
                 .map(PromotionResponse::from)
                 .toList();
     }
