@@ -34,10 +34,30 @@ export default defineConfig(({ mode }) => {
           ],
         },
         workbox: {
-          // Não faz cache das chamadas de API (dados sempre frescos);
-          // apenas os assets estáticos do app são cacheados para carregamento offline.
+          // O novo service worker assume o controle imediatamente e limpa caches
+          // antigos — evita que uma versão anterior continue servindo assets/imagens
+          // desatualizados para quem já tinha o site aberto (causava fotos quebradas).
+          clientsClaim: true,
+          skipWaiting: true,
+          cleanupOutdatedCaches: true,
+          // Não faz cache das chamadas de API nem dos uploads (imagens de produto):
+          // são sempre buscados da rede, nunca interceptados pelo SW.
           navigateFallbackDenylist: [/^\/api/, /^\/uploads/],
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          navigateFallback: '/index.html',
+          // Precache apenas dos assets do build (JS/CSS/HTML/fontes/ícones do app).
+          // As fotos de produto ficam em /uploads e NÃO entram no precache.
+          globPatterns: ['**/*.{js,css,html,ico,svg,woff2}'],
+          runtimeCaching: [
+            {
+              // Imagens de upload: sempre da rede primeiro (nunca ficam "presas" em cache).
+              urlPattern: ({ url }) => url.pathname.startsWith('/uploads/'),
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'uploads-img',
+                expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
+              },
+            },
+          ],
         },
         devOptions: {
           // Mantém o PWA desativado em desenvolvimento para não atrapalhar o hot-reload.
