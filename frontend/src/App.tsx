@@ -12,6 +12,7 @@ import AdminPromotionsPage from './pages/AdminPromotionsPage';
 import ConsigneesPage from './pages/ConsigneesPage';
 import SuppliersPage from './pages/SuppliersPage';
 import StockPage from './pages/StockPage';
+import UsersPage from './pages/UsersPage';
 import CatalogoPage from './pages/CatalogoPage';
 
 export default function App() {
@@ -60,6 +61,9 @@ export default function App() {
         } />
         <Route path="/admin/estoque" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><StockPage /></ProtectedRoute>
+        } />
+        <Route path="/admin/usuarios" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><UsersPage /></ProtectedRoute>
         } />
       </Route>
 

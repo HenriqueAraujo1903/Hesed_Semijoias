@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: '/admin/fornecedores', label: 'Fornecedores', icon: TruckIcon, adminOnly: true },
   { to: '/revendedoras', label: 'Revendedoras', icon: PeopleIcon },
   { to: '/admin/promocoes', label: 'Promoções', icon: SparkleIcon, adminOnly: true },
+  { to: '/admin/usuarios', label: 'Usuários', icon: UserGearIcon, adminOnly: true },
 ];
 
 export default function DashboardLayout() {
@@ -218,6 +219,14 @@ function BoxIcon({ active }: { active: boolean }) {
   return (
     <svg className={`h-[18px] w-[18px] ${active ? 'text-gold' : 'text-charcoal-400 group-hover:text-charcoal-600'} transition-colors`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25m0-9v9" />
+    </svg>
+  );
+}
+
+function UserGearIcon({ active }: { active: boolean }) {
+  return (
+    <svg className={`h-[18px] w-[18px] ${active ? 'text-gold' : 'text-charcoal-400 group-hover:text-charcoal-600'} transition-colors`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M15 6.75a3 3 0 11-6 0 3 3 0 016 0z" />
     </svg>
   );
 }
