@@ -39,6 +39,9 @@ public class MessageTemplateService {
         MessageTemplate t = getOrThrow(key);
         t.setBody(request.getBody().trim());
         t.setActive(Boolean.TRUE.equals(request.getActive()));
+        // Imagem opcional: string vazia/espacos viram null (sem imagem).
+        String img = request.getImageUrl() == null ? null : request.getImageUrl().trim();
+        t.setImageUrl(img == null || img.isEmpty() ? null : img);
         return MessageTemplateResponse.from(repository.save(t));
     }
 
@@ -50,8 +53,19 @@ public class MessageTemplateService {
     public String render(String key, Map<String, String> vars) {
         return repository.findByTemplateKey(key)
                 .filter(t -> Boolean.TRUE.equals(t.getActive()))
-                .map(t -> applyVars(t.getBody(), vars))
+                .map(t -> appendImage(applyVars(t.getBody(), vars), t.getImageUrl()))
                 .orElse(null);
+    }
+
+    /**
+     * Anexa o link da imagem ao final do texto, em linha própria (o WhatsApp gera
+     * o preview). Sem imagem, retorna o texto inalterado.
+     */
+    static String appendImage(String text, String imageUrl) {
+        if (imageUrl == null || imageUrl.isBlank()) {
+            return text;
+        }
+        return text + "\n\n" + imageUrl.trim();
     }
 
     static String applyVars(String body, Map<String, String> vars) {

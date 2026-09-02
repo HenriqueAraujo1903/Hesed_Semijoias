@@ -39,6 +39,14 @@ public class MessageTemplate {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String body;
 
+    /**
+     * URL de uma imagem opcional (ex.: cuidados/boas práticas) anexada ao aviso.
+     * Como o wa.me só carrega texto, o link é acrescentado ao corpo e o WhatsApp
+     * gera o preview. Nulo/vazio = sem imagem.
+     */
+    @Column(name = "image_url", columnDefinition = "TEXT")
+    private String imageUrl;
+
     /** Quando false, o envio automático daquele evento fica desligado. */
     @Column(nullable = false)
     @Builder.Default

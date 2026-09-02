@@ -69,7 +69,7 @@ export default function OrdersPage() {
   const [editTarget, setEditTarget] = useState<Order | null>(null);
   const [creating, setCreating] = useState(false);
   // Templates de mensagem (para o aviso automático via WhatsApp). Chave -> body/ativo.
-  const [messageTemplates, setMessageTemplates] = useState<Record<string, { body: string; active: boolean }>>({});
+  const [messageTemplates, setMessageTemplates] = useState<Record<string, { body: string; active: boolean; imageUrl: string | null }>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -94,8 +94,8 @@ export default function OrdersPage() {
   useEffect(() => {
     api.get('/products/catalog').then((res) => setProducts(res.data)).catch(() => {});
     api.get('/admin/settings/messages').then((res) => {
-      const map: Record<string, { body: string; active: boolean }> = {};
-      for (const t of res.data) map[t.templateKey] = { body: t.body, active: t.active };
+      const map: Record<string, { body: string; active: boolean; imageUrl: string | null }> = {};
+      for (const t of res.data) map[t.templateKey] = { body: t.body, active: t.active, imageUrl: t.imageUrl ?? null };
       setMessageTemplates(map);
     }).catch(() => {});
   }, []);
@@ -108,7 +108,7 @@ export default function OrdersPage() {
     const tpl = messageTemplates[key];
     if (!tpl || !tpl.active) return;                 // aviso desligado nas Configurações
     if (!order.customerPhone) return;                // sem telefone não há como enviar
-    const msg = buildOrderMessage(tpl.body, order);
+    const msg = buildOrderMessage(tpl.body, order, tpl.imageUrl);
     openWhatsApp(order.customerPhone, msg);
   }
 

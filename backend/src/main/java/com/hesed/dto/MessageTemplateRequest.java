@@ -18,4 +18,8 @@ public class MessageTemplateRequest {
 
     @NotNull(message = "Informe se a mensagem está ativa")
     private Boolean active;
+
+    /** Imagem opcional anexada ao aviso (link acrescentado ao texto). Nulo = sem imagem. */
+    @Size(max = 500, message = "URL da imagem é muito longa (máx. 500 caracteres)")
+    private String imageUrl;
 }

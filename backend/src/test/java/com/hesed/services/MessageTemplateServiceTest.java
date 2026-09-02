@@ -102,4 +102,60 @@ class MessageTemplateServiceTest {
         assertThat(MessageTemplateService.applyVars("Sem variaveis", Map.of("cliente", "Ana")))
                 .isEqualTo("Sem variaveis");
     }
+
+    @Test
+    @DisplayName("update: grava imageUrl (com trim)")
+    void update_setsImageUrl() {
+        MessageTemplate t = template("ORDER_CONFIRMED", "texto", true);
+        when(repository.findByTemplateKey("ORDER_CONFIRMED")).thenReturn(Optional.of(t));
+        when(repository.save(any(MessageTemplate.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MessageTemplateRequest req = new MessageTemplateRequest();
+        req.setBody("texto");
+        req.setActive(true);
+        req.setImageUrl("  https://ex.com/cuidados.jpg  ");
+
+        MessageTemplateResponse r = service.update("ORDER_CONFIRMED", req);
+
+        assertThat(t.getImageUrl()).isEqualTo("https://ex.com/cuidados.jpg");
+        assertThat(r.getImageUrl()).isEqualTo("https://ex.com/cuidados.jpg");
+    }
+
+    @Test
+    @DisplayName("update: imageUrl vazio/espaços é normalizado para null (sem imagem)")
+    void update_blankImageUrlBecomesNull() {
+        MessageTemplate t = template("ORDER_CONFIRMED", "texto", true);
+        t.setImageUrl("https://ex.com/antiga.jpg");
+        when(repository.findByTemplateKey("ORDER_CONFIRMED")).thenReturn(Optional.of(t));
+        when(repository.save(any(MessageTemplate.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        MessageTemplateRequest req = new MessageTemplateRequest();
+        req.setBody("texto");
+        req.setActive(true);
+        req.setImageUrl("   ");
+
+        MessageTemplateResponse r = service.update("ORDER_CONFIRMED", req);
+
+        assertThat(t.getImageUrl()).isNull();
+        assertThat(r.getImageUrl()).isNull();
+    }
+
+    @Test
+    @DisplayName("render: anexa o link da imagem ao final quando o template tem imagem")
+    void render_appendsImage() {
+        MessageTemplate t = template("ORDER_CONFIRMED", "Olá {cliente}!", true);
+        t.setImageUrl("https://ex.com/cuidados.jpg");
+        when(repository.findByTemplateKey("ORDER_CONFIRMED")).thenReturn(Optional.of(t));
+
+        String out = service.render("ORDER_CONFIRMED", Map.of("cliente", "Maria"));
+
+        assertThat(out).isEqualTo("Olá Maria!\n\nhttps://ex.com/cuidados.jpg");
+    }
+
+    @Test
+    @DisplayName("appendImage: sem imagem retorna o texto inalterado")
+    void appendImage_noImage() {
+        assertThat(MessageTemplateService.appendImage("texto", null)).isEqualTo("texto");
+        assertThat(MessageTemplateService.appendImage("texto", "   ")).isEqualTo("texto");
+    }
 }

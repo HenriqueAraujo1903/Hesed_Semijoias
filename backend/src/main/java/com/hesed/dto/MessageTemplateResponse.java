@@ -12,6 +12,7 @@ public class MessageTemplateResponse {
     private String templateKey;
     private String title;
     private String body;
+    private String imageUrl;
     private boolean active;
     private LocalDateTime updatedAt;
 
@@ -21,6 +22,7 @@ public class MessageTemplateResponse {
         r.setTemplateKey(t.getTemplateKey());
         r.setTitle(t.getTitle());
         r.setBody(t.getBody());
+        r.setImageUrl(t.getImageUrl());
         r.setActive(Boolean.TRUE.equals(t.getActive()));
         r.setUpdatedAt(t.getUpdatedAt());
         return r;

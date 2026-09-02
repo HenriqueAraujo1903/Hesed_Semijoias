@@ -42,17 +42,23 @@ function formatItems(items: OrderLike['items']): string {
 /**
  * Substitui as variáveis do template pelos dados do pedido:
  * {cliente} {pedido} {total} {itens}
+ *
+ * Se o template tiver uma imagem (imageUrl), o link é acrescentado ao final,
+ * em linha própria — o WhatsApp gera o preview a partir do link. O wa.me só
+ * carrega texto, então esse é o caminho para "mandar imagem" no aviso.
  */
-export function buildOrderMessage(templateBody: string, order: OrderLike): string {
+export function buildOrderMessage(templateBody: string, order: OrderLike, imageUrl?: string | null): string {
   const vars: Record<string, string> = {
     cliente: order.customerName ?? '',
     pedido: order.orderNumber ?? '',
     total: BRL.format(order.totalAmount ?? 0),
     itens: formatItems(order.items),
   };
-  return templateBody.replace(/\{(\w+)\}/g, (match, key: string) =>
+  const text = templateBody.replace(/\{(\w+)\}/g, (match, key: string) =>
     key in vars ? vars[key] : match
   );
+  const img = imageUrl?.trim();
+  return img ? `${text}\n\n${img}` : text;
 }
 
 /**
