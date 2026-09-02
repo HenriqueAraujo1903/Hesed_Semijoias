@@ -79,7 +79,7 @@ public class CustomerService {
     }
 
     private String normalizeEmail(String email) {
-        return (email != null && !email.isBlank()) ? email.trim() : null;
+        return (email != null && !email.isBlank()) ? email.trim().toLowerCase() : null;
     }
 
     private String normalizeNotes(String notes) {

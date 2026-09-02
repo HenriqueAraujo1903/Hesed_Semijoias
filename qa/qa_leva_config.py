@@ -421,8 +421,9 @@ def suite_clientes():
     st, _ = request("POST", "/api/admin/customers", body={"name": "Dup2", "phone": "51988887777", "email": email.upper()})
     R.check("CL.email_dup_case.400", st == 400, 400, st)
 
-    # Busca por nome e por telefone
-    st, lst = request("GET", "/api/admin/customers?search=Maria QA")
+    # Busca por nome e por telefone (URL-encode do termo)
+    from urllib.parse import quote
+    st, lst = request("GET", f"/api/admin/customers?search={quote('Maria QA')}")
     R.check("CL.busca_nome", isinstance(lst, list) and any(c.get("id") == cid for c in lst), "acha por nome", None)
     st, lst = request("GET", "/api/admin/customers?search=98888")
     R.check("CL.busca_telefone", isinstance(lst, list) and len(lst) >= 1, ">=1", len(lst) if isinstance(lst, list) else None)
