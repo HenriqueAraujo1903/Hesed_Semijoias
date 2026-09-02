@@ -4,13 +4,17 @@ import com.hesed.dto.ProductRequest;
 import com.hesed.dto.ProductResponse;
 import com.hesed.dto.PublicProductResponse;
 import com.hesed.models.Product;
+import com.hesed.models.Promotion;
 import com.hesed.models.Supplier;
 import com.hesed.repositories.ProductRepository;
+import com.hesed.repositories.PromotionRepository;
 import com.hesed.repositories.SupplierRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -18,27 +22,48 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final SupplierRepository supplierRepository;
+    private final PromotionRepository promotionRepository;
 
     public ProductService(ProductRepository productRepository,
-                          SupplierRepository supplierRepository) {
+                          SupplierRepository supplierRepository,
+                          PromotionRepository promotionRepository) {
         this.productRepository = productRepository;
         this.supplierRepository = supplierRepository;
+        this.promotionRepository = promotionRepository;
     }
 
     // ---- Visão PÚBLICA (catálogo, sem auth): não expõe custo/estoque/fornecedor ----
 
     public List<PublicProductResponse> findAllPublic(String category, String stockStatus, String search) {
+        Map<UUID, Promotion> promoByProduct = activePromotionsByProduct();
         return productRepository.findFiltered(category, stockStatus, search)
                 .stream()
-                .map(PublicProductResponse::from)
+                .map(p -> PublicProductResponse.from(p, promoByProduct.get(p.getId())))
                 .toList();
     }
 
     public List<PublicProductResponse> findForCatalog() {
+        Map<UUID, Promotion> promoByProduct = activePromotionsByProduct();
         return productRepository.findAllForCatalog()
                 .stream()
-                .map(PublicProductResponse::from)
+                .map(p -> PublicProductResponse.from(p, promoByProduct.get(p.getId())))
                 .toList();
+    }
+
+    /**
+     * Mapa produto → promoção ativa vigente (a primeira, respeitando a ordem
+     * sortOrder/createdAt de findActivePromotions). Uma única query evita o
+     * N+1 de consultar promoção por produto.
+     */
+    private Map<UUID, Promotion> activePromotionsByProduct() {
+        LocalDateTime now = LocalDateTime.now();
+        Map<UUID, Promotion> map = new java.util.HashMap<>();
+        for (Promotion promo : promotionRepository.findActivePromotions(now)) {
+            if (promo.getProduct() == null) continue;
+            // findActivePromotions já vem ordenado; mantém a primeira por produto.
+            map.putIfAbsent(promo.getProduct().getId(), promo);
+        }
+        return map;
     }
 
     // ---- Visão ADMIN (autenticada): dados completos, incluindo custo/estoque ----

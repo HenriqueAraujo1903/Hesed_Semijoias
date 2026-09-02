@@ -255,7 +255,8 @@ public class OrderService {
             } else if (promo.getDiscountPercent() != null) {
                 BigDecimal factor = BigDecimal.ONE.subtract(
                         promo.getDiscountPercent().divide(BigDecimal.valueOf(100)));
-                effectivePrice = unitPrice.multiply(factor);
+                effectivePrice = unitPrice.multiply(factor)
+                        .setScale(2, java.math.RoundingMode.HALF_UP);
             }
         }
 

@@ -43,6 +43,9 @@ class ProductServiceTest {
     @Mock
     private com.hesed.repositories.SupplierRepository supplierRepository;
 
+    @Mock
+    private com.hesed.repositories.PromotionRepository promotionRepository;
+
     @InjectMocks
     private ProductService productService;
 

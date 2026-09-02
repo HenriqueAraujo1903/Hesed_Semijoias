@@ -9,7 +9,10 @@ interface Product {
   sku: string;
   name: string;
   category: string;
-  salePrice: number;
+  salePrice: number;         // preço cheio (referência)
+  effectivePrice: number;    // preço a pagar (com promoção, se houver)
+  onSale: boolean;
+  discountPercent: number | null;
   stockStatus: string;
   imageUrl: string | null;
   imageUrls: string[] | null;
@@ -84,8 +87,8 @@ export default function CatalogoPage() {
   function sendWhatsApp() {
     if (selected.length === 0) return;
 
-    const total = selected.reduce((sum, p) => sum + p.salePrice, 0);
-    const items = selected.map((p, i) => `${i + 1}. ${p.name}\n   Ref: ${p.sku} | ${BRL.format(p.salePrice)}`).join('\n\n');
+    const total = selected.reduce((sum, p) => sum + p.effectivePrice, 0);
+    const items = selected.map((p, i) => `${i + 1}. ${p.name}\n   Ref: ${p.sku} | ${BRL.format(p.effectivePrice)}`).join('\n\n');
     const msg = `✨ *HESED Semijoias — Novo Pedido* ✨\n\n*Nº do Pedido:* ${orderNumber}\n\n*Itens selecionados:*\n${items}\n\n━━━━━━━━━━━━━━━━━\n*Total estimado:* ${BRL.format(total)}\n━━━━━━━━━━━━━━━━━\n\nOlá! Gostaria de finalizar este pedido. 😊`;
 
     // Registra o pedido no backend (não bloqueia o cliente).
@@ -272,8 +275,15 @@ export default function CatalogoPage() {
                     <p className="text-[10px] text-[#A8A5A0] dark:text-[#5C584F] mb-3 font-mono">Ref: {p.sku}</p>
 
                     <div className="flex items-center justify-between">
-                      <span className="font-serif text-xl font-semibold text-[#292620] dark:text-[#F5F0EA]">
-                        {BRL.format(p.salePrice)}
+                      <span className="flex flex-col leading-tight">
+                        {p.onSale && (
+                          <span className="text-[11px] text-[#A8A5A0] dark:text-[#5C584F] line-through">
+                            {BRL.format(p.salePrice)}
+                          </span>
+                        )}
+                        <span className={`font-serif text-xl font-semibold ${p.onSale ? 'text-[#C8A96E]' : 'text-[#292620] dark:text-[#F5F0EA]'}`}>
+                          {BRL.format(p.effectivePrice)}
+                        </span>
                       </span>
                       {!isEsgotado && (
                         <button
@@ -331,7 +341,7 @@ export default function CatalogoPage() {
                   </span>
                   {!cartExpanded && (
                     <span className="text-white/85 text-xs font-serif">
-                      {BRL.format(selected.reduce((s, p) => s + p.salePrice, 0))}
+                      {BRL.format(selected.reduce((s, p) => s + p.effectivePrice, 0))}
                     </span>
                   )}
                 </div>
@@ -363,8 +373,15 @@ export default function CatalogoPage() {
                     <p className="text-[10px] text-[#A8A5A0] dark:text-[#5C584F] font-mono mt-0.5">Ref: {p.sku}</p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
-                    <span className="font-serif text-sm font-semibold text-[#292620] dark:text-[#F5F0EA]">
-                      {BRL.format(p.salePrice)}
+                    <span className="flex flex-col items-end leading-tight">
+                      {p.onSale && (
+                        <span className="text-[10px] text-[#A8A5A0] dark:text-[#5C584F] line-through">
+                          {BRL.format(p.salePrice)}
+                        </span>
+                      )}
+                      <span className={`font-serif text-sm font-semibold ${p.onSale ? 'text-[#C8A96E]' : 'text-[#292620] dark:text-[#F5F0EA]'}`}>
+                        {BRL.format(p.effectivePrice)}
+                      </span>
                     </span>
                     <button
                       onClick={() => toggle(p)}
@@ -384,7 +401,7 @@ export default function CatalogoPage() {
               <div className="flex items-center justify-between mb-4">
                 <span className="text-sm text-[#7A766F] dark:text-[#A8A5A0]">Total estimado</span>
                 <span className="font-serif text-2xl font-bold text-[#292620] dark:text-[#F5F0EA]">
-                  {BRL.format(selected.reduce((s, p) => s + p.salePrice, 0))}
+                  {BRL.format(selected.reduce((s, p) => s + p.effectivePrice, 0))}
                 </span>
               </div>
               <button onClick={sendWhatsApp}
@@ -746,10 +763,20 @@ function ProductDetailModal({ product, isSelected, onClose, onToggle }: {
             )}
 
             <div className="mt-auto pt-6">
-              <div className="mb-4 flex items-baseline gap-2">
-                <span className="font-serif text-3xl font-bold text-[#292620] dark:text-[#F5F0EA]">
-                  {BRL.format(product.salePrice)}
+              <div className="mb-4 flex items-baseline gap-3">
+                {product.onSale && (
+                  <span className="font-serif text-lg text-[#A8A5A0] dark:text-[#5C584F] line-through">
+                    {BRL.format(product.salePrice)}
+                  </span>
+                )}
+                <span className={`font-serif text-3xl font-bold ${product.onSale ? 'text-[#C8A96E]' : 'text-[#292620] dark:text-[#F5F0EA]'}`}>
+                  {BRL.format(product.effectivePrice)}
                 </span>
+                {product.onSale && product.discountPercent != null && (
+                  <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                    {product.discountPercent}% OFF
+                  </span>
+                )}
               </div>
 
               {isEsgotado ? (
