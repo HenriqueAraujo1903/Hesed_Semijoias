@@ -1,7 +1,7 @@
 # HESED Semijoias — Documentação Oficial do Sistema
 
-**Versão do documento:** 1.0
-**Última atualização:** 29/08/2026
+**Versão do documento:** 1.1
+**Última atualização:** 02/09/2026
 **Ambiente de produção:** https://hesedsemijoias.online
 
 ---
@@ -50,6 +50,21 @@ Os usuários são gerenciados diretamente no banco de dados (não há tela de ca
 ---
 
 ## 4. Funcionalidades
+
+### 4.0 Visão Geral (`/` — tela inicial do admin)
+Resumo executivo do negócio, montado em uma única chamada (`GET /api/admin/overview`):
+- **Metas do mês** com barras de progresso (receita e pedidos vs. meta) e botão "Configurar".
+- **KPIs do mês:** receita, pedidos confirmados, itens, ticket médio, margem e margem %.
+- **Pedidos pendentes** (atalho para a central de pedidos).
+- **Alertas de estoque:** itens com estoque baixo/esgotado e garantias vencidas/vencendo (atalho para a aba Estoque).
+- **Totais e atalhos:** catálogo, revendedoras, dashboards.
+- **Receita dos últimos 6 meses** (mini-gráfico).
+
+**Metas mensais (configuráveis):**
+- Meta de **receita** e de **pedidos** por mês (ano+mês).
+- **Herança:** um mês sem meta própria herda automaticamente a última meta definida em mês anterior (marcada como "herdada" na UI).
+- **Trava + auditoria:** depois de criada, a meta fica travada; alterá-la exige uma **justificativa**. Cada alteração é registrada (valores antigo/novo, justificativa, autor e data) para rastreabilidade.
+- Progresso vs. meta é calculado no servidor (fonte única da verdade).
 
 ### 4.1 Catálogo Público (`/catalogo`)
 - Vitrine de produtos com filtro por categoria.
@@ -138,6 +153,12 @@ Autenticação: header `Authorization: Bearer <token>` (obtido no login).
 | PATCH | `/api/admin/orders/{id}/status` | Confirmar/cancelar/reabrir |
 | GET | `/api/admin/analytics/sales` | Analytics de vendas |
 | GET | `/api/admin/analytics/engagement` | Analytics de engajamento |
+| GET | `/api/admin/overview` | Resumo executivo da Visão Geral (KPIs do mês, meta, progresso, contagens, alertas, receita 6 meses) |
+| GET | `/api/admin/goals/current` | Meta efetiva do mês corrente (com herança) |
+| GET | `/api/admin/goals?year=&month=` | Meta efetiva de um mês (com herança) |
+| GET | `/api/admin/goals/history` | Metas definidas (mais recente primeiro) |
+| GET | `/api/admin/goals/changes?year=&month=` | Auditoria de alterações de uma meta |
+| PUT | `/api/admin/goals` | Cria/atualiza meta (alteração exige `changeReason`) |
 
 ---
 
@@ -150,6 +171,8 @@ Autenticação: header `Authorization: Bearer <token>` (obtido no login).
 - **Order** — pedidos (número HSD-, status, canal, total, cliente, timestamps).
 - **OrderItem** — itens do pedido (snapshot: SKU, nome, categoria, preço unitário, preço efetivo, custo, quantidade, flag/desconto de promoção).
 - **CatalogEvent** — eventos de engajamento anônimos (tipo VIEW/SELECT, sessão, produto).
+- **MonthlyGoal** — meta mensal (ano, mês, meta de receita, meta de pedidos; único por ano+mês).
+- **GoalChangeLog** — auditoria de alteração de meta (ano, mês, valores antigo/novo, justificativa, autor, data).
 - **Consignment / ConsignmentItem** — estrutura de consignação (base para evolução futura).
 
 ---

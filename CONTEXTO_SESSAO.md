@@ -1,14 +1,14 @@
 # Contexto da Sessão — HESED Semijoias
 
 **Última atualização:** 02/09/2026
-**Status:** 🟢 Em produção e estável. Leva de SEGURANÇA (cookie HttpOnly + correções red team) entregue em produção. Próximo: definir a próxima melhoria na `dev`.
+**Status:** 🟢 Em produção e estável. Leva da VISÃO GERAL + METAS MENSAIS entregue em produção. Próximo: definir a próxima melhoria na `dev`.
 
 ---
 
 ## 🎯 Retomar amanhã
 
 - Trabalhar na branch **`dev`** (working tree limpo).
-- As 3 branches (`dev`, `homolog`, `main`) e a produção estão TODAS no mesmo commit: **`da798ef`**.
+- As 3 branches (`dev`, `homolog`, `main`) e a produção estão TODAS no mesmo commit: **`ad15217`**.
 - Fluxo de sempre: `dev` → validar local → `dev → homolog` → QA → `homolog → main` (deploy prod, com backup antes).
 
 ### Subir ambiente local
@@ -20,38 +20,41 @@
 
 ---
 
-## 📦 O que foi feito nesta sessão (01–02/09) — leva de SEGURANÇA
+## 📦 O que foi feito nesta sessão (02/09) — leva VISÃO GERAL + METAS
 
-Origem: análise de segurança (red team) apontou 8 achados. Todos corrigidos, testados (1011 casos em homolog) e já em PRODUÇÃO.
+Objetivo: tornar a tela "Visão Geral" (antes um placeholder) funcional, como resumo executivo com atalhos, e permitir definir metas mensais configuráveis. Tudo testado (1294 casos em homolog) e já em PRODUÇÃO.
 
-### Migração de autenticação: localStorage → cookie HttpOnly
-- Token JWT agora vive em cookie `HttpOnly; SameSite=Strict; Secure` (Secure só em prod/HTTPS — `app.cookie.secure`, default true no perfil prod, false em dev/homolog local HTTP).
-- Login NÃO retorna mais o token no body (só dados do usuário). Novos endpoints `POST /api/auth/logout` (limpa cookie) e `GET /api/auth/me` (valida sessão).
-- `JwtAuthFilter` lê cookie `jwt` (prioridade) OU header `Authorization: Bearer` (retrocompat de scripts/QA). Corrigido bug: cai para header mesmo havendo outros cookies.
-- Frontend: `api.ts` com `withCredentials:true`, sem interceptor de Authorization; `AuthContext` sem token no estado, valida sessão via `/auth/me` na montagem, `logout()` chama backend. Estado `loading` no AuthContext/ProtectedRoute/App evita "tela piscando" (loop de redirect). O interceptor NÃO redireciona em `/auth/me`|`/auth/login`|`/login`.
-- CSRF: protegido por `SameSite=Strict` (sem token CSRF separado).
+### Metas mensais (novo)
+- Entidade `MonthlyGoal` (tabela `monthly_goals`, unique `uk_goal_year_month` em `goal_year`+`goal_month`): meta de **receita** e **pedidos** por mês.
+- **Herança:** se um mês não tem meta própria, herda a última meta definida em mês anterior (`MonthlyGoalRepository.findEffective` ordena por `year*12+month`). A resposta marca `inherited=true` quando herdada e `locked=false` (mês sem meta própria).
+- **Trava + auditoria:** uma vez criada, a meta fica travada (`locked=true`). Alterá-la EXIGE justificativa (`changeReason`), senão retorna 400. Toda alteração real é gravada em `GoalChangeLog` (tabela `goal_change_logs`): valores antigo/novo de receita e pedidos, `reason`, `changedBy` (id do usuário) e timestamp.
+- Endpoints (`GoalController`, `/api/admin/goals`, ROLE_ADMIN):
+  - `GET /current` — meta efetiva do mês corrente (com herança)
+  - `GET ?year=&month=` — meta efetiva de um mês (com herança)
+  - `GET /history` — metas definidas (mais recente primeiro)
+  - `GET /changes?year=&month=` — histórico de alterações (auditoria) de um mês
+  - `PUT` — upsert; criação livre, alteração exige `changeReason`
+- `GoalService.upsert` usa `sameAmount()` (compara `BigDecimal` por VALOR com `compareTo`, ignorando escala) — evita log de auditoria espúrio ao re-salvar `2000` vs `2000.00`.
 
-### Correções dos 8 achados do red team
-1. **Vazamento de custo (catálogo público):** novo `PublicProductResponse` (id, sku, name, description, category, imagens, salePrice, stockStatus). Custo/estoque/fornecedor só na visão admin. `GET /api/products` e `/catalog` = público enxuto; admin usa `GET /api/admin/products` (novo, ProductResponse completo).
-2. **Custo no pedido público:** `OrderResponse.fromPublic()` zera costPrice no retorno de `POST /api/orders`.
-3. **SSRF no import CSV:** `CsvImportService` valida URL de verdade (HTTPS + host EXATO docs.google.com + path /spreadsheets/, sem redirect, timeout), mensagens de erro genéricas (não vaza host interno).
-4. **Upload/XSS:** `FileStorageService` valida MAGIC BYTES reais (JPEG/PNG/WebP); extensão derivada do tipo detectado (ignora a do cliente). Bloqueia .html/.svg disfarçado.
-5. **RBAC consignados:** `/api/consignees/**` agora exige `ROLE_ADMIN` (SecurityConfig).
-6. **Segredo JWT:** fallback hardcoded do `application.yml` trocado por valor obviamente dev-only; prod sem fallback (`${JWT_SECRET}`).
-7. **Rate limiting login:** `LoginRateLimitFilter` — 20 tentativas/min por IP no `/api/auth/login` → 429.
-8. **Bug JwtAuthFilter:** corrigido (item da migração acima).
+### Visão Geral / Overview (novo)
+- Endpoint agregador `GET /api/admin/overview` (`OverviewController`/`OverviewService`, ROLE_ADMIN) monta em UMA chamada: `month_kpis` (receita, pedidos, itens, ticket, margem, margem%), `goal` (meta resolvida), `progress` (revenuePercent/ordersPercent, `null` se sem meta), `orders` (pendente/confirmado/cancelado), `counts` (products/consignees), `alerts` (lowStock/warrantyExpired/warrantyExpiring) e `revenue6m` (série dos últimos 6 meses, sempre 6 pontos yyyy-MM em ordem crescente). Reaproveita `AnalyticsService`, `OrderService.countByStatus`, repos de produto/consignee/estoque.
+- Progresso vs meta calculado no servidor (fonte única da verdade).
 
-Também no Nginx (`nginx/nginx.conf`): `server_tokens off`, `Content-Security-Policy` (self + Google Fonts + placehold.co + GA), `proxy_cookie_flags` reforçando atributos do cookie.
+### Frontend
+- `DashboardPage.tsx` reescrita: bloco de Metas com barras de progresso + botão engrenagem "Configurar" (modal com seletor de mês/ano, trava + campo de justificativa quando `locked`), KPIs do mês, card de pedidos pendentes (atalho), card de alertas de estoque/garantia (atalho `/admin/estoque`), atalhos/totais e mini-gráfico de receita 6 meses. Estados loading/erro.
+- Extração de duplicação: `components/KpiCard.tsx` (compartilhado) e `utils/format.ts` (`BRL`, `NUM`, `formatPeriodLabel`). `SalesDashboardPage` e `EngagementDashboardPage` passaram a importar esses compartilhados (removido código duplicado; só isso mudou nesses 2 arquivos, mais um ajuste cosmético `h-full` nas barras).
 
-### QA (1011 casos, 0 falhas em homolog)
-- `qa/qa_homolog.py` (398): geral/regressão + suíte K de varredura densa. Parametrizável por env `QA_BASE`/`QA_ADMIN_EMAIL`/`QA_ADMIN_PASS`. Usa CookieJar + flag `no_cookie` para testes RBAC.
-- `qa/qa_estoque_dev.py` (262): estoque + suíte 5 de varredura densa (status derivado 9x10, garantia, valores, SKU, nomes).
-- `qa/qa_seguranca.py` (311, NOVO): valida os 8 achados com muitas variações (SSRF ~90 URLs, upload magic bytes, RBAC, cookie/header, rate limit, métodos/rotas).
-- 40 testes unitários JUnit (inclui `JwtAuthFilterTest` — usa JwtService REAL, não @Mock, por causa de bug do Byte Buddy no JDK 26).
-- **ATENÇÃO ao rodar QA:** o rate limit é por IP; suítes que fazem muitos logins (A, J, seguranca) estouram 20/min. Rodar as suítes ESPAÇADAS (~65s entre elas) senão o login inicial da próxima falha com 429.
+### QA (1294 casos, 0 falhas em homolog)
+- `qa/qa_metas.py` (270, NOVO): RBAC de metas/overview, forma/tipos/coerência do overview (contagens e alertas batem com endpoints diretos, série de 6 meses), criação/trava/auditoria, herança (mês exato, meses seguintes, ano anterior, inserção posterior), validações (ano/mês/targets), progresso vs meta. Faz cleanup via psql (anos de teste 2093–2095 + mês vigente).
+- `qa/qa_homolog.py` (398), `qa/qa_estoque_dev.py` (262), `qa/qa_seguranca.py` (311) — regressão completa, 0 falhas.
+- 53 testes unitários JUnit (era 40; +12 `GoalServiceTest` +1 de regressão do bug de escala).
+- **ATENÇÃO ao rodar QA:** rate limit de login é por IP (20/min). Rodar as suítes ESPAÇADAS (~65s entre elas) senão o login inicial da próxima falha com 429.
+
+### Bug encontrado e corrigido durante o QA
+- Auditoria registrava alteração espúria ao re-salvar a mesma meta, porque `Objects.equals` em `BigDecimal` considera escala (`2000` ≠ `2000.00` vindo do banco com scale=2). Corrigido com `sameAmount()` (compareTo). Coberto por teste unitário + E2E.
 
 ### Commits desta sessão (todos em produção)
-`e2e00ad` (migração cookie) → `7c80972` (correções red team) → `da798ef` (bateria QA 1011). Deploy prod feito de `da798ef`.
+`1db3fee` (visão geral: resumo executivo + metas) → `9367936` (trava meta + auditoria com justificativa) → `ad15217` (fix auditoria por escala + qa_metas.py). Deploy prod feito de `ad15217` (VPS estava em `da798ef`, veio junto o `0643076` de docs).
 
 ---
 
@@ -59,25 +62,25 @@ Também no Nginx (`nginx/nginx.conf`): `server_tokens off`, `Content-Security-Po
 
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `da798ef` | No ar em https://hesedsemijoias.online |
-| `dev` | `da798ef` | Sincronizada (trabalhar aqui) |
-| `homolog` | `da798ef` | Sincronizada |
+| `main` (produção) | `ad15217` | No ar em https://hesedsemijoias.online |
+| `dev` | `ad15217` | Sincronizada (trabalhar aqui) |
+| `homolog` | `ad15217` | Sincronizada |
 
-Rollback do último deploy: `git checkout 3944336` + rebuild no VPS. Backup do banco: `/root/Hesed_Semijoias/backups/prod_pre_seguranca_20260902_000143.sql`.
+Rollback do último deploy: `git checkout 0643076` (ou `da798ef`) + rebuild no VPS. Backup do banco pré-deploy: `/root/backups/hesed_db_predeploy_20260902_131219.sql.gz`.
 
-**IMPORTANTE pós-deploy:** a mudança de localStorage→cookie invalidou todas as sessões abertas antes do deploy. Todos (Henrique, Su) precisam logar de novo — comportamento esperado, ocorre uma única vez.
+**Migração de schema deste deploy:** o `ddl-auto: update` (aditivo) criou as tabelas novas `monthly_goals` e `goal_change_logs` no banco de produção. Contagem de dados pré/pós-deploy idêntica (products=24, orders=11, users=3, consignees=0, promotions=0) — nada perdido.
 
 ---
 
 ## Infra de produção (VPS Hostinger)
 
-- **SSH:** `ssh root@srv1939516.hstgr.cloud` (chave ed25519 `~/.ssh/id_ed25519`, já autorizada).
-- Projeto: `/root/Hesed_Semijoias`. Docker compose v5.5.0. Profile Spring: `prod` (via `SPRING_PROFILES_ACTIVE: prod` no compose).
+- **SSH:** `ssh root@103.199.184.97` (= `srv1939516.hstgr.cloud`, chave já autorizada).
+- Projeto: `/root/Hesed_Semijoias`. Docker Compose. Profile Spring: `prod`.
 - Containers: `hesed-postgres` (banco `hesed_db`, user `hesed`), `hesed-backend` (8080), `hesed-frontend`, `hesed-nginx` (80/443), `hesed-certbot`. `restart: unless-stopped`.
 - Domínio **hesedsemijoias.online** (HTTPS Let's Encrypt).
-- `.env` de prod tem: CORS_ALLOWED_ORIGINS, DB_NAME, DB_PASSWORD, DB_USERNAME, JWT_EXPIRATION_MS, JWT_SECRET, UPLOAD_BASE_URL. (COOKIE_SECURE não está setado, mas o perfil prod default é true.)
+- `.env` de prod: CORS_ALLOWED_ORIGINS, DB_NAME, DB_PASSWORD, DB_USERNAME, JWT_EXPIRATION_MS, JWT_SECRET, UPLOAD_BASE_URL. (COOKIE_SECURE não setado, mas o perfil prod default é true.)
 - **Backup automático:** `/root/backup-hesed.sh` via cron, a cada 3 dias 05:00 UTC, retenção 10 dias, em `/root/backups/`.
-- **Deploy:** backup pg_dump → `git pull origin main` → `docker compose up -d --build backend frontend` → `docker compose restart nginx` (obrigatório: re-resolve IPs + aplica config nova) → smoke test HTTPS.
+- **Deploy:** backup pg_dump → merge `homolog→main` + push → no VPS `git pull origin main` → `docker compose up -d --build backend frontend` → `docker compose restart nginx` (obrigatório: re-resolve IPs) → smoke test HTTPS + comparar contagens de dados.
 
 ### Logins de produção
 - Admin Henrique: `henriquecorreadearaujo@gmail.com` / `Pai912510!`
@@ -95,6 +98,7 @@ Rollback do último deploy: `git checkout 3944336` + rebuild no VPS. Backup do b
 
 ## Funcionalidades em produção
 
+- **Visão Geral (resumo executivo):** metas mensais (receita/pedidos) com herança e trava+auditoria, progresso vs meta, KPIs do mês, pedidos pendentes, alertas de estoque/garantia, atalhos e gráfico de receita 6 meses
 - Catálogo público (sacola, carrossel de promoções, telemetria, modal de fotos com galeria até 5)
 - Pedidos (registro via catálogo/WhatsApp, edição, confirmação, venda direta)
 - Dashboards (Vendas: KPIs/margem/funil/série; Engajamento)
@@ -109,4 +113,4 @@ Rollback do último deploy: `git checkout 3944336` + rebuild no VPS. Backup do b
 - `DOCUMENTACAO.md` — documentação oficial
 - `DEPLOY.md` — guia de deploy
 - `FLUXO_TRABALHO.md` — fluxo dev/homolog/prod
-- `qa/qa_homolog.py`, `qa/qa_estoque_dev.py`, `qa/qa_seguranca.py` — baterias de QA (1011 casos)
+- `qa/qa_homolog.py`, `qa/qa_estoque_dev.py`, `qa/qa_seguranca.py`, `qa/qa_metas.py` — baterias de QA (1294 casos)
