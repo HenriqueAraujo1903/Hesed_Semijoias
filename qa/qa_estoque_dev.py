@@ -272,8 +272,10 @@ def suite_order_stock():
         return
 
     # 3.1 venda direta confirmada consome estoque (10 -> 9)
+    # Venda direta confirmada exige nome E telefone (regra do aviso via WhatsApp).
     st, b = request("POST", "/api/admin/orders", token=TOKEN,
-                    body={"items": [{"productId": pid, "quantity": 1}], "customerName": "Cliente QA", "confirm": True})
+                    body={"items": [{"productId": pid, "quantity": 1}], "customerName": "Cliente QA",
+                          "customerPhone": "51988887777", "confirm": True})
     R.check("S3.venda_direta_confirmada.201", st == 201, 201, st)
     oid = b.get("id") if isinstance(b, dict) else None
     if oid:

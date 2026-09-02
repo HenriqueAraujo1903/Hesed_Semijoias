@@ -656,17 +656,23 @@ def suite_g():
             "pendente/confirmado/cancelado", list(b.keys()) if isinstance(b, dict) else None)
 
     # G8. Transições de status de um pedido do catálogo (nasce SEM customerName).
-    # Regra de negócio: CONFIRMADO exige nome do cliente -> deve dar 400 aqui.
-    # CANCELADO e PENDENTE são permitidos.
+    # Regra de negócio (leva WhatsApp): CONFIRMAR e CANCELAR exigem nome E telefone
+    # do cliente (usados no aviso automático). Sem esses dados -> 400.
     if id1:
         st, b = request("POST", "/api/orders", body={"productIds": [id1], "orderNumber": "HSD-QA-STATUS"})
         oid = b.get("id") if isinstance(b, dict) else None
         if oid:
             CREATED_ORDERS.add(oid)
-            # CONFIRMADO sem nome do cliente -> bloqueado (integridade da venda)
+            # CONFIRMADO sem nome/telefone -> bloqueado (integridade da venda + aviso)
             st2, b2 = request("PATCH", f"/api/admin/orders/{oid}/status", token=TOKEN, body={"status": "CONFIRMADO"})
-            R.check("G.admin.confirmar_sem_nome.400", st2 == 400, 400, st2)
-            # CANCELADO permitido
+            R.check("G.admin.confirmar_sem_dados.400", st2 == 400, 400, st2)
+            # CANCELADO sem nome/telefone -> agora também bloqueado (telefone obrigatório)
+            st2b, _ = request("PATCH", f"/api/admin/orders/{oid}/status", token=TOKEN, body={"status": "CANCELADO"})
+            R.check("G.admin.cancelar_sem_dados.400", st2b == 400, 400, st2b)
+            # Preenche nome + telefone e então CANCELA -> permitido
+            request("PUT", f"/api/admin/orders/{oid}", token=TOKEN,
+                    body={"items": [{"productId": id1, "quantity": 1}],
+                          "customerName": "Cliente QA", "customerPhone": "51988887777"})
             st3, b3 = request("PATCH", f"/api/admin/orders/{oid}/status", token=TOKEN, body={"status": "CANCELADO"})
             R.check("G.admin.status.CANCELADO.200", st3 == 200, 200, st3)
             # Reabrir para PENDENTE permitido
