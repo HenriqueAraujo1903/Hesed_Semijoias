@@ -35,6 +35,8 @@ public class PublicProductResponse {
     private boolean onSale;
     private BigDecimal discountPercent; // % de desconto, quando a promo usa percentual
     private String stockStatus;
+    private boolean onDemand;           // sob encomenda: comprável mesmo sem estoque
+    private Integer leadTimeDays;       // prazo de entrega estimado (dias úteis), quando sob encomenda
 
     /** Sem promoção: effectivePrice = salePrice. */
     public static PublicProductResponse from(Product p) {
@@ -55,7 +57,11 @@ public class PublicProductResponse {
         r.setCategory(p.getCategory());
         r.setImageUrl(p.getImageUrl());
         r.setImageUrls(p.getImageUrls());
-        r.setStockStatus(p.getStockStatus());
+        boolean onDemand = Boolean.TRUE.equals(p.getOnDemand());
+        r.setOnDemand(onDemand);
+        r.setLeadTimeDays(p.getLeadTimeDays());
+        // Sob encomenda é sempre comprável: nunca expõe ESGOTADO ao catálogo.
+        r.setStockStatus(onDemand ? "DISPONIVEL" : p.getStockStatus());
 
         BigDecimal salePrice = p.getSalePrice();
         r.setSalePrice(salePrice);

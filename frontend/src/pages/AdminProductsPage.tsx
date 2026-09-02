@@ -21,6 +21,8 @@ interface Product {
   purchaseDate: string | null;
   warrantyMonths: number | null;
   warrantyExpiresAt: string | null;
+  onDemand: boolean | null;
+  leadTimeDays: number | null;
 }
 
 interface SupplierOption {
@@ -374,6 +376,8 @@ function ProductModal({ product, onClose, onSaved }: {
     supplierId: product?.supplierId ?? '',
     purchaseDate: product?.purchaseDate ?? '',
     warrantyMonths: product?.warrantyMonths != null ? product.warrantyMonths.toString() : '12',
+    onDemand: product?.onDemand ?? false,
+    leadTimeDays: product?.leadTimeDays != null ? product.leadTimeDays.toString() : '',
   });
   const [images, setImages] = useState<string[]>(() => {
     if (product?.imageUrls && product.imageUrls.length > 0) return product.imageUrls;
@@ -432,6 +436,8 @@ function ProductModal({ product, onClose, onSaved }: {
       supplierId: form.supplierId || null,
       purchaseDate: form.purchaseDate || null,
       warrantyMonths: form.warrantyMonths !== '' ? parseInt(form.warrantyMonths, 10) : 12,
+      onDemand: form.onDemand,
+      leadTimeDays: form.onDemand && form.leadTimeDays !== '' ? parseInt(form.leadTimeDays, 10) : null,
       imageUrls: images,
       imageUrl: images[0] || null,
     };
@@ -532,7 +538,33 @@ function ProductModal({ product, onClose, onSaved }: {
             </div>
           )}
 
-          {/* Estoque: quantidade + limiar; status é derivado */}
+          {/* Sob encomenda */}
+          <div className="rounded-lg border border-stone-200 p-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={form.onDemand}
+                onChange={(e) => setForm({ ...form, onDemand: e.target.checked })}
+                className="h-4 w-4 rounded border-stone-300 text-gold focus:ring-gold" />
+              <span className="text-sm font-medium text-stone-700">Produto sob encomenda</span>
+            </label>
+            <p className="mt-1 text-[11px] text-stone-500">
+              Anunciado no catálogo mesmo sem estoque. Não consome estoque nem entra nos alertas de reposição.
+              O <strong>preço de custo</strong> é uma estimativa do que será pago ao fornecedor.
+            </p>
+            {form.onDemand && (
+              <div className="mt-3">
+                <label className="block text-xs font-medium text-stone-600 mb-1">Prazo de entrega (dias úteis)</label>
+                <input type="number" step="1" min="0" value={form.leadTimeDays}
+                  onChange={(e) => setForm({ ...form, leadTimeDays: e.target.value })}
+                  placeholder="Ex: 10"
+                  className="w-full sm:w-48 rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                <p className="mt-1 text-[10px] text-stone-400">Mostrado no catálogo como "Entrega em até X dias úteis".</p>
+              </div>
+            )}
+          </div>
+
+          {/* Estoque: quantidade + limiar; status é derivado. Oculto p/ sob encomenda. */}
+          {!form.onDemand && (
+          <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-stone-600 mb-1">Quantidade em estoque</label>
@@ -556,6 +588,8 @@ function ProductModal({ product, onClose, onSaved }: {
               : 'bg-emerald-100 text-emerald-700'
             }`}>{derivedStatus}</span>
           </div>
+          </>
+          )}
 
           {/* Fornecedor + garantia */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

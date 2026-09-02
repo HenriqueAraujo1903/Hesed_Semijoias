@@ -426,4 +426,51 @@ class ProductServiceTest {
             verify(productRepository).deleteById(id);
         }
     }
+
+    @Nested
+    @DisplayName("create()/update() — sob encomenda (onDemand)")
+    class OnDemand {
+
+        @Test
+        @DisplayName("onDemand com quantidade 0: status fica DISPONIVEL (não ESGOTADO)")
+        void onDemandZeroStock_staysDisponivel() {
+            baseRequest.setOnDemand(true);
+            baseRequest.setStockQuantity(0);
+            baseRequest.setLeadTimeDays(7);
+            when(productRepository.existsBySku("SKU-001")).thenReturn(false);
+            stubSaveEcho();
+
+            ProductResponse res = productService.create(baseRequest);
+
+            assertThat(res.getOnDemand()).isTrue();
+            assertThat(res.getLeadTimeDays()).isEqualTo(7);
+            assertThat(res.getStockStatus()).isEqualTo("DISPONIVEL");
+        }
+
+        @Test
+        @DisplayName("onDemand sem informar quantidade: status DISPONIVEL")
+        void onDemandNoQuantity_disponivel() {
+            baseRequest.setOnDemand(true);
+            when(productRepository.existsBySku("SKU-001")).thenReturn(false);
+            stubSaveEcho();
+
+            ProductResponse res = productService.create(baseRequest);
+
+            assertThat(res.getStockStatus()).isEqualTo("DISPONIVEL");
+            assertThat(res.getOnDemand()).isTrue();
+        }
+
+        @Test
+        @DisplayName("produto normal (onDemand ausente) segue derivando ESGOTADO com qty 0")
+        void normalProduct_stillEsgotado() {
+            baseRequest.setStockQuantity(0);
+            when(productRepository.existsBySku("SKU-001")).thenReturn(false);
+            stubSaveEcho();
+
+            ProductResponse res = productService.create(baseRequest);
+
+            assertThat(res.getStockStatus()).isEqualTo("ESGOTADO");
+            assertThat(res.getOnDemand()).isFalse();
+        }
+    }
 }

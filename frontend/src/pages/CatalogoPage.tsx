@@ -14,6 +14,8 @@ interface Product {
   onSale: boolean;
   discountPercent: number | null;
   stockStatus: string;
+  onDemand: boolean;
+  leadTimeDays: number | null;
   imageUrl: string | null;
   imageUrls: string[] | null;
   description?: string | null;
@@ -197,8 +199,9 @@ export default function CatalogoPage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
             {filtered.map((p) => {
               const isSelected = !!selected.find((s) => s.id === p.id);
+              const isOnDemand = p.onDemand;
               const isEsgotado = p.stockStatus === 'ESGOTADO';
-              const isBaixo = p.stockStatus === 'BAIXO';
+              const isBaixo = p.stockStatus === 'BAIXO' && !isOnDemand;
               const gallery = (p.imageUrls && p.imageUrls.length > 0)
                 ? p.imageUrls
                 : (p.imageUrl ? [p.imageUrl] : []);
@@ -237,6 +240,11 @@ export default function CatalogoPage() {
                       Últimas peças
                     </div>
                   )}
+                  {isOnDemand && !isSelected && (
+                    <div className="absolute top-3 left-3 z-10 bg-gradient-to-r from-[#C8A96E] to-[#96784A] text-white text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide">
+                      Sob encomenda
+                    </div>
+                  )}
 
                   <div
                     className="relative aspect-square bg-gradient-to-br from-[#FAF7F2] to-[#F5F0EA] dark:from-[#292620] dark:to-[#1C1A16] overflow-hidden"
@@ -272,7 +280,16 @@ export default function CatalogoPage() {
                       {p.name}
                     </h3>
                     
-                    <p className="text-[10px] text-[#A8A5A0] dark:text-[#5C584F] mb-3 font-mono">Ref: {p.sku}</p>
+                    <p className="text-[10px] text-[#A8A5A0] dark:text-[#5C584F] mb-1 font-mono">Ref: {p.sku}</p>
+                    {isOnDemand && (
+                      <p className="text-[10px] text-[#96784A] dark:text-[#D4B87A] mb-3 flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        {p.leadTimeDays ? `Entrega em até ${p.leadTimeDays} dias úteis` : 'Sob encomenda'}
+                      </p>
+                    )}
+                    {!isOnDemand && <div className="mb-3" />}
 
                     <div className="flex items-center justify-between">
                       <span className="flex flex-col leading-tight">
@@ -652,7 +669,8 @@ function ProductDetailModal({ product, isSelected, onClose, onToggle }: {
     : (product.imageUrl ? [product.imageUrl] : []);
   const hasPhotos = gallery.length > 0;
   const [active, setActive] = useState(0);
-  const isEsgotado = product.stockStatus === 'ESGOTADO';
+  const isOnDemand = product.onDemand;
+  const isEsgotado = product.stockStatus === 'ESGOTADO' && !isOnDemand;
 
   // Fecha com ESC e bloqueia o scroll do fundo enquanto aberto
   useEffect(() => {
@@ -755,6 +773,18 @@ function ProductDetailModal({ product, isSelected, onClose, onToggle }: {
               {product.name}
             </h2>
             <p className="mt-1 font-mono text-[11px] text-[#A8A5A0] dark:text-[#5C584F]">Ref: {product.sku}</p>
+
+            {isOnDemand && (
+              <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-[#F9F3E8] dark:bg-[#292620] px-3 py-2 text-xs text-[#96784A] dark:text-[#D4B87A]">
+                <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>
+                  <strong>Sob encomenda.</strong>{' '}
+                  {product.leadTimeDays ? `Entrega em até ${product.leadTimeDays} dias úteis.` : 'Feito especialmente para você.'}
+                </span>
+              </div>
+            )}
 
             {product.description && (
               <p className="mt-4 text-sm leading-relaxed text-[#7A766F] dark:text-[#A8A5A0]">

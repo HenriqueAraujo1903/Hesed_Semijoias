@@ -134,4 +134,36 @@ class StockServiceTest {
 
         assertThat(product.getStockQuantity()).isEqualTo(13);
     }
+
+    @Test
+    @DisplayName("consumeForOrder IGNORA item sob encomenda (não baixa nem gera movimento)")
+    void consumeForOrder_skipsOnDemand() {
+        Product onDemand = Product.builder()
+                .id(UUID.randomUUID()).sku("SOB-1").name("Sob encomenda")
+                .costPrice(new BigDecimal("10")).salePrice(new BigDecimal("30"))
+                .stockQuantity(0).lowStockThreshold(3).onDemand(true).build();
+        Order order = Order.builder().orderNumber("HSD-OD").build();
+        order.getItems().add(OrderItem.builder().product(onDemand).quantity(2).build());
+
+        stockService.consumeForOrder(order);
+
+        assertThat(onDemand.getStockQuantity()).isEqualTo(0); // inalterado
+        verify(movementRepository, org.mockito.Mockito.never()).save(any(StockMovement.class));
+    }
+
+    @Test
+    @DisplayName("restockForOrder IGNORA item sob encomenda")
+    void restockForOrder_skipsOnDemand() {
+        Product onDemand = Product.builder()
+                .id(UUID.randomUUID()).sku("SOB-2").name("Sob encomenda")
+                .costPrice(new BigDecimal("10")).salePrice(new BigDecimal("30"))
+                .stockQuantity(0).lowStockThreshold(3).onDemand(true).build();
+        Order order = Order.builder().orderNumber("HSD-OD2").build();
+        order.getItems().add(OrderItem.builder().product(onDemand).quantity(2).build());
+
+        stockService.restockForOrder(order);
+
+        assertThat(onDemand.getStockQuantity()).isEqualTo(0);
+        verify(movementRepository, org.mockito.Mockito.never()).save(any(StockMovement.class));
+    }
 }

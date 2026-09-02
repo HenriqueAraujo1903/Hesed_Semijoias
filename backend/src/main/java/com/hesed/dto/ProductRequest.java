@@ -67,4 +67,11 @@ public class ProductRequest {
     /** Meses de garantia. Opcional; default 12 se ausente. */
     @PositiveOrZero(message = "Meses de garantia não pode ser negativo")
     private Integer warrantyMonths;
+
+    /** Produto sob encomenda (sem estoque próprio; comprável no catálogo). Opcional; default false. */
+    private Boolean onDemand;
+
+    /** Prazo de entrega estimado em dias úteis (sob encomenda). Opcional. */
+    @PositiveOrZero(message = "Prazo de entrega não pode ser negativo")
+    private Integer leadTimeDays;
 }

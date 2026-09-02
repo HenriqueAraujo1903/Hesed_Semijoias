@@ -214,6 +214,13 @@ public class ProductService {
      *   ESGOTADO por causa do default 0).
      */
     private void applyStockAndWarranty(Product product, ProductRequest request) {
+        // Sob encomenda (só sobrescreve se o request trouxer o campo).
+        if (request.getOnDemand() != null) {
+            product.setOnDemand(request.getOnDemand());
+        }
+        if (request.getLeadTimeDays() != null) {
+            product.setLeadTimeDays(Math.max(0, request.getLeadTimeDays()));
+        }
         if (request.getLowStockThreshold() != null) {
             product.setLowStockThreshold(Math.max(0, request.getLowStockThreshold()));
         }
@@ -249,6 +256,12 @@ public class ProductService {
         } else {
             // Nada informado: apenas re-deriva do que já existe.
             product.setStockStatus(deriveStockStatus(product.getStockQuantity(), threshold));
+        }
+
+        // Sob encomenda é sempre comprável: o status nunca vira ESGOTADO/BAIXO por
+        // quantidade — sobrescreve para DISPONIVEL independentemente do estoque.
+        if (Boolean.TRUE.equals(product.getOnDemand())) {
+            product.setStockStatus("DISPONIVEL");
         }
     }
 

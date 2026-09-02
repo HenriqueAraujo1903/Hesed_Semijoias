@@ -34,7 +34,9 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     List<Product> findAllForCatalog();
 
     // Produtos com estoque baixo ou esgotado (para o painel de reposição).
-    @Query("SELECT p FROM Product p WHERE p.stockQuantity <= p.lowStockThreshold " +
+    // Sob encomenda não tem estoque próprio → fora do alerta de reposição.
+    @Query("SELECT p FROM Product p WHERE (p.onDemand IS NULL OR p.onDemand = false) " +
+           "AND p.stockQuantity <= p.lowStockThreshold " +
            "ORDER BY p.stockQuantity ASC, p.name ASC")
     List<Product> findLowStock();
 

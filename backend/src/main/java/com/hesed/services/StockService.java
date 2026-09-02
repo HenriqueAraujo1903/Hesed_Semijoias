@@ -87,6 +87,8 @@ public class StockService {
         for (OrderItem item : order.getItems()) {
             Product product = item.getProduct();
             if (product == null) continue;
+            // Sob encomenda não tem estoque próprio: não dá baixa nem gera movimento.
+            if (Boolean.TRUE.equals(product.getOnDemand())) continue;
             int qty = item.getQuantity() != null ? item.getQuantity() : 1;
             applyMovement(product, "SAIDA", -qty,
                     "Venda pedido " + order.getOrderNumber(), order.getId());
@@ -102,6 +104,8 @@ public class StockService {
         for (OrderItem item : order.getItems()) {
             Product product = item.getProduct();
             if (product == null) continue;
+            // Sob encomenda não tem estoque próprio: não há o que estornar.
+            if (Boolean.TRUE.equals(product.getOnDemand())) continue;
             int qty = item.getQuantity() != null ? item.getQuantity() : 1;
             applyMovement(product, "ESTORNO", qty,
                     "Estorno pedido " + order.getOrderNumber(), order.getId());

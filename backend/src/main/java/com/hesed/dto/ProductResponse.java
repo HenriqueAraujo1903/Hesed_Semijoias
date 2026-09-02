@@ -31,6 +31,8 @@ public class ProductResponse {
     private Integer warrantyMonths;
     /** Data de expiração da garantia = purchaseDate + warrantyMonths (calculada). */
     private LocalDate warrantyExpiresAt;
+    private Boolean onDemand;
+    private Integer leadTimeDays;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -59,6 +61,8 @@ public class ProductResponse {
         if (p.getPurchaseDate() != null && p.getWarrantyMonths() != null) {
             r.setWarrantyExpiresAt(p.getPurchaseDate().plusMonths(p.getWarrantyMonths()));
         }
+        r.setOnDemand(Boolean.TRUE.equals(p.getOnDemand()));
+        r.setLeadTimeDays(p.getLeadTimeDays());
         r.setCreatedAt(p.getCreatedAt());
         r.setUpdatedAt(p.getUpdatedAt());
         return r;

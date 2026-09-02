@@ -97,6 +97,20 @@ public class Product {
     @Builder.Default
     private Integer warrantyMonths = 12;
 
+    /**
+     * Produto SOB ENCOMENDA: anunciado no catálogo mas sem estoque próprio.
+     * Quando true: fica sempre comprável (não vira ESGOTADO por quantidade 0),
+     * não consome/estorna estoque na venda e não entra nos alertas de reposição.
+     * O costPrice é uma ESTIMATIVA do que se pagará ao fornecedor.
+     */
+    @Column(name = "on_demand", nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private Boolean onDemand = false;
+
+    /** Prazo de entrega estimado em dias úteis (só faz sentido p/ sob encomenda). Opcional. */
+    @Column(name = "lead_time_days")
+    private Integer leadTimeDays;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
