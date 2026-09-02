@@ -23,4 +23,11 @@ public class GoalRequest {
 
     @PositiveOrZero(message = "Meta de pedidos não pode ser negativa")
     private Integer ordersTarget;
+
+    /**
+     * Justificativa da alteração. Obrigatória apenas quando já existe uma meta
+     * salva para o mês (a meta fica "travada" após criada). Ignorada na criação.
+     */
+    @Size(max = 500, message = "Justificativa muito longa (máx. 500 caracteres)")
+    private String changeReason;
 }

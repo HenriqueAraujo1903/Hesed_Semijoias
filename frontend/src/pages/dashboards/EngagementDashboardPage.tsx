@@ -171,7 +171,7 @@ function EngagementTimeSeries({ data }: { data: DayPoint[] }) {
         <div style={scrollable ? { minWidth: `${data.length * 34}px` } : undefined}>
           <div className="flex items-end gap-2 h-52">
             {data.map((d) => (
-              <div key={d.period} className="flex-1 flex flex-col items-center justify-end gap-0.5 group relative min-w-[24px]">
+              <div key={d.period} className="flex-1 h-full flex flex-col items-center justify-end gap-0.5 group relative min-w-[24px]">
                 <div className="absolute -top-10 hidden group-hover:block bg-charcoal-800 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap z-10">
                   {d.visits} visitas • {d.selections} seleções
                 </div>

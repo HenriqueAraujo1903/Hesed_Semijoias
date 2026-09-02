@@ -197,7 +197,7 @@ function TimeSeriesChart({ data }: { data: TimePoint[] }) {
             {data.map((d) => {
               const h = (d.revenue / max) * 100;
               return (
-                <div key={d.period} className="flex-1 flex flex-col items-center justify-end group relative min-w-[20px]">
+                <div key={d.period} className="flex-1 h-full flex flex-col items-center justify-end group relative min-w-[20px]">
                   <div className="absolute -top-8 hidden group-hover:block bg-charcoal-800 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap z-10">
                     {BRL.format(d.revenue)} • {d.orders} pedido(s)
                   </div>

@@ -12,7 +12,8 @@ interface MonthKpis {
 }
 interface Goal {
   id?: string; year: number; month: number;
-  revenueTarget: number | null; ordersTarget: number | null; inherited: boolean;
+  revenueTarget: number | null; ordersTarget: number | null;
+  inherited: boolean; locked: boolean;
 }
 interface Progress { revenuePercent: number | null; ordersPercent: number | null; }
 interface OrdersSummary { pendente: number; confirmado: number; cancelado: number; }
@@ -314,7 +315,7 @@ function MiniRevenueChart({ data }: { data: RevenuePoint[] }) {
         {data.map((d) => {
           const h = (d.revenue / max) * 100;
           return (
-            <div key={d.period} className="flex-1 flex flex-col items-center justify-end group relative">
+            <div key={d.period} className="flex-1 h-full flex flex-col items-center justify-end group relative">
               <div className="absolute -top-8 hidden group-hover:block bg-charcoal-800 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap z-10">
                 {BRL.format(d.revenue)} • {d.orders} pedido(s)
               </div>
@@ -342,34 +343,82 @@ function GoalModal({ year, month, current, onClose, onSaved }: {
   year: number; month: number; current: Goal;
   onClose: () => void; onSaved: () => void;
 }) {
+  // Mês/ano selecionados no modal (default: mês vigente vindo do overview).
+  const [selYear, setSelYear] = useState<number>(year);
+  const [selMonth, setSelMonth] = useState<number>(month);
+
+  // Meta do mês selecionado (recarregada ao trocar de mês).
+  const [goal, setGoal] = useState<Goal>(current);
+  const [loadingGoal, setLoadingGoal] = useState(false);
+
   const [revenueTarget, setRevenueTarget] = useState<string>(
     current.revenueTarget != null ? String(current.revenueTarget) : ''
   );
   const [ordersTarget, setOrdersTarget] = useState<string>(
     current.ordersTarget != null ? String(current.ordersTarget) : ''
   );
+  const [changeReason, setChangeReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const monthLabel = `${MONTH_NAMES[month - 1]} de ${year}`;
+  const locked = goal.locked;
+
+  // Ao trocar mês/ano, busca a meta efetiva daquele mês e repõe os campos.
+  useEffect(() => {
+    let active = true;
+    // Evita refetch redundante no mês inicial (já temos `current`).
+    if (selYear === year && selMonth === month && goal === current) return;
+    setLoadingGoal(true);
+    setError(null);
+    api.get('/admin/goals', { params: { year: selYear, month: selMonth } })
+      .then((res) => {
+        if (!active) return;
+        const g: Goal = res.data;
+        setGoal(g);
+        setRevenueTarget(g.revenueTarget != null ? String(g.revenueTarget) : '');
+        setOrdersTarget(g.ordersTarget != null ? String(g.ordersTarget) : '');
+        setChangeReason('');
+      })
+      .catch((e: any) => {
+        if (active) setError(e.response?.data?.error || 'Erro ao carregar a meta do mês.');
+      })
+      .finally(() => { if (active) setLoadingGoal(false); });
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selYear, selMonth]);
+
+  const monthLabel = `${MONTH_NAMES[selMonth - 1]} de ${selYear}`;
+
+  // Anos disponíveis: dois anos atrás até um ano à frente.
+  const yearOptions: number[] = [];
+  for (let y = year - 2; y <= year + 1; y++) yearOptions.push(y);
 
   const save = async () => {
-    setSaving(true);
     setError(null);
+
+    if (locked && changeReason.trim() === '') {
+      setError('Esta meta já está definida. Informe uma justificativa para alterá-la.');
+      return;
+    }
+
+    const revenue = revenueTarget.trim() === '' ? null : Number(revenueTarget);
+    const orders = ordersTarget.trim() === '' ? null : Math.round(Number(ordersTarget));
+    if (revenue != null && (isNaN(revenue) || revenue < 0)) {
+      setError('Meta de receita inválida.'); return;
+    }
+    if (orders != null && (isNaN(orders) || orders < 0)) {
+      setError('Meta de pedidos inválida.'); return;
+    }
+
+    setSaving(true);
     try {
-      const payload = {
-        year,
-        month,
-        revenueTarget: revenueTarget.trim() === '' ? null : Number(revenueTarget),
-        ordersTarget: ordersTarget.trim() === '' ? null : Math.round(Number(ordersTarget)),
-      };
-      if (payload.revenueTarget != null && (isNaN(payload.revenueTarget) || payload.revenueTarget < 0)) {
-        setError('Meta de receita inválida.'); setSaving(false); return;
-      }
-      if (payload.ordersTarget != null && (isNaN(payload.ordersTarget) || payload.ordersTarget < 0)) {
-        setError('Meta de pedidos inválida.'); setSaving(false); return;
-      }
-      await api.put('/admin/goals', payload);
+      await api.put('/admin/goals', {
+        year: selYear,
+        month: selMonth,
+        revenueTarget: revenue,
+        ordersTarget: orders,
+        changeReason: locked ? changeReason.trim() : undefined,
+      });
       onSaved();
     } catch (e: any) {
       setError(e.response?.data?.error || 'Erro ao salvar a meta.');
@@ -386,13 +435,48 @@ function GoalModal({ year, month, current, onClose, onSaved }: {
           Configurar metas
         </h3>
         <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-0.5 capitalize">{monthLabel}</p>
-        {current.inherited && (
-          <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-2">
-            Valores atuais herdados de um mês anterior. Salvar cria uma meta própria para este mês.
-          </p>
-        )}
 
-        <div className="space-y-4 mt-5">
+        {/* Seletor de mês/ano */}
+        <div className="grid grid-cols-2 gap-3 mt-4">
+          <div>
+            <label className="block text-xs font-medium text-charcoal-500 dark:text-charcoal-400 uppercase tracking-wide mb-1">
+              Mês
+            </label>
+            <select value={selMonth} onChange={(e) => setSelMonth(Number(e.target.value))}
+              className="input-field w-full capitalize">
+              {MONTH_NAMES.map((name, i) => (
+                <option key={i} value={i + 1} className="capitalize">{name}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-charcoal-500 dark:text-charcoal-400 uppercase tracking-wide mb-1">
+              Ano
+            </label>
+            <select value={selYear} onChange={(e) => setSelYear(Number(e.target.value))}
+              className="input-field w-full">
+              {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Estado da meta do mês selecionado */}
+        {locked ? (
+          <div className="mt-4 flex items-start gap-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 px-3 py-2">
+            <svg className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+            </svg>
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Meta já definida para este mês. Alterar exige justificativa.
+            </p>
+          </div>
+        ) : goal.inherited ? (
+          <p className="text-xs text-charcoal-400 dark:text-charcoal-500 mt-3">
+            Sem meta própria neste mês (valores herdados de um mês anterior). Salvar cria a meta deste mês.
+          </p>
+        ) : null}
+
+        <div className="space-y-4 mt-4">
           <div>
             <label className="block text-xs font-medium text-charcoal-500 dark:text-charcoal-400 uppercase tracking-wide mb-1">
               Meta de receita (R$)
@@ -400,7 +484,7 @@ function GoalModal({ year, month, current, onClose, onSaved }: {
             <input
               type="number" min="0" step="0.01" value={revenueTarget}
               onChange={(e) => setRevenueTarget(e.target.value)}
-              placeholder="Ex: 5000"
+              placeholder="Ex: 5000" disabled={loadingGoal}
               className="input-field w-full" />
           </div>
           <div>
@@ -410,9 +494,24 @@ function GoalModal({ year, month, current, onClose, onSaved }: {
             <input
               type="number" min="0" step="1" value={ordersTarget}
               onChange={(e) => setOrdersTarget(e.target.value)}
-              placeholder="Ex: 30"
+              placeholder="Ex: 30" disabled={loadingGoal}
               className="input-field w-full" />
           </div>
+
+          {locked && (
+            <div>
+              <label className="block text-xs font-medium text-charcoal-500 dark:text-charcoal-400 uppercase tracking-wide mb-1">
+                Justificativa da alteração <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={changeReason}
+                onChange={(e) => setChangeReason(e.target.value)}
+                rows={2} maxLength={500}
+                placeholder="Ex: ajuste de meta por sazonalidade / campanha"
+                className="input-field w-full resize-none" />
+            </div>
+          )}
+
           <p className="text-xs text-charcoal-400 dark:text-charcoal-500">
             Deixe um campo vazio para não definir aquela meta.
           </p>
@@ -422,7 +521,7 @@ function GoalModal({ year, month, current, onClose, onSaved }: {
 
         <div className="flex justify-end gap-3 mt-6">
           <button onClick={onClose} className="btn-secondary text-sm" disabled={saving}>Cancelar</button>
-          <button onClick={save} className="btn-primary text-sm" disabled={saving}>
+          <button onClick={save} className="btn-primary text-sm" disabled={saving || loadingGoal}>
             {saving ? 'Salvando...' : 'Salvar metas'}
           </button>
         </div>

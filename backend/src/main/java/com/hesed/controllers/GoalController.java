@@ -2,9 +2,11 @@ package com.hesed.controllers;
 
 import com.hesed.dto.GoalRequest;
 import com.hesed.dto.GoalResponse;
+import com.hesed.models.GoalChangeLog;
 import com.hesed.services.GoalService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -38,13 +40,20 @@ public class GoalController {
         return ResponseEntity.ok(goalService.findAll());
     }
 
-    /** Cria/atualiza a meta de um mês. */
+    /** Cria/atualiza a meta de um mês. Alteração de meta já salva exige justificativa. */
     @PutMapping
-    public ResponseEntity<?> upsert(@Valid @RequestBody GoalRequest request) {
+    public ResponseEntity<?> upsert(@Valid @RequestBody GoalRequest request, Authentication auth) {
         try {
-            return ResponseEntity.ok(goalService.upsert(request));
+            String changedBy = auth != null ? auth.getName() : null;
+            return ResponseEntity.ok(goalService.upsert(request, changedBy));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
+    }
+
+    /** Histórico de alterações (com justificativa) de uma meta específica. */
+    @GetMapping("/changes")
+    public ResponseEntity<List<GoalChangeLog>> changes(@RequestParam int year, @RequestParam int month) {
+        return ResponseEntity.ok(goalService.changeHistory(year, month));
     }
 }
