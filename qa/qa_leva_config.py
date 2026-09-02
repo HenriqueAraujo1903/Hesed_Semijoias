@@ -199,10 +199,10 @@ def suite_templates():
     R.check("T.tem_confirmado_cancelado",
             {"ORDER_CONFIRMED", "ORDER_CANCELLED"}.issubset(keys), "ambos os templates", keys)
 
-    # Guarda originais para restaurar
+    # Guarda originais para restaurar (body, active, imageUrl)
     if isinstance(b, list):
         for t in b:
-            TOUCHED_TEMPLATES.setdefault(t["templateKey"], (t["body"], t["active"]))
+            TOUCHED_TEMPLATES.setdefault(t["templateKey"], (t["body"], t["active"], t.get("imageUrl")))
 
     # RBAC
     st, _ = request("GET", "/api/admin/settings/messages", no_cookie=True)
@@ -222,6 +222,31 @@ def suite_templates():
     # PUT key inexistente -> 400
     st, _ = request("PUT", "/api/admin/settings/messages/NAO_EXISTE", body={"body": "x", "active": True})
     R.check("T.put.key_inexistente.400", st == 400, 400, st)
+
+    # Imagem opcional: salvar imageUrl
+    img = "https://hesedsemijoias.online/uploads/qa-cuidados.jpg"
+    st, b = request("PUT", "/api/admin/settings/messages/ORDER_CONFIRMED",
+                    body={"body": "Oi {cliente}!", "active": True, "imageUrl": img})
+    R.check("T.img.salva.200", st == 200, 200, st)
+    R.check("T.img.retorna_url", isinstance(b, dict) and b.get("imageUrl") == img, img,
+            b.get("imageUrl") if isinstance(b, dict) else b)
+    # GET reflete a imagem
+    st, lst = request("GET", "/api/admin/settings/messages")
+    t = next((x for x in lst if x["templateKey"] == "ORDER_CONFIRMED"), {}) if isinstance(lst, list) else {}
+    R.check("T.img.get_reflete", t.get("imageUrl") == img, img, t.get("imageUrl"))
+    # imageUrl em branco -> null (imagem removida)
+    st, b = request("PUT", "/api/admin/settings/messages/ORDER_CONFIRMED",
+                    body={"body": "Oi {cliente}!", "active": True, "imageUrl": "   "})
+    R.check("T.img.branco_vira_null", isinstance(b, dict) and b.get("imageUrl") in (None, ""), None,
+            b.get("imageUrl") if isinstance(b, dict) else b)
+    # imageUrl acima de 500 chars -> 400
+    st, _ = request("PUT", "/api/admin/settings/messages/ORDER_CONFIRMED",
+                    body={"body": "x", "active": True, "imageUrl": "h" * 600})
+    R.check("T.img.muito_longa.400", st == 400, 400, st)
+    # sem imageUrl no request -> continua válido (opcional)
+    st, _ = request("PUT", "/api/admin/settings/messages/ORDER_CONFIRMED",
+                    body={"body": "Oi {cliente}!", "active": True})
+    R.check("T.img.opcional.200", st == 200, 200, st)
 
     # Toggle inativo e reativar
     st, _ = request("PUT", "/api/admin/settings/messages/ORDER_CANCELLED",
@@ -356,9 +381,12 @@ def cleanup():
     for pr in list(CREATED_PROMO_IDS):
         request("DELETE", f"/api/admin/promotions/{pr}")
 
-    # Restaura templates alterados
-    for key, (body, active) in TOUCHED_TEMPLATES.items():
-        request("PUT", f"/api/admin/settings/messages/{key}", body={"body": body, "active": active})
+    # Restaura templates alterados (body, active, imageUrl)
+    for key, orig in TOUCHED_TEMPLATES.items():
+        body, active = orig[0], orig[1]
+        image_url = orig[2] if len(orig) > 2 else None
+        request("PUT", f"/api/admin/settings/messages/{key}",
+                body={"body": body, "active": active, "imageUrl": image_url})
 
     # SQL: remove usuários de teste, pedidos de teste e seus vínculos
     order_ids = "','".join(CREATED_ORDER_IDS)
