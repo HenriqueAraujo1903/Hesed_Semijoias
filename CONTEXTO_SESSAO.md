@@ -1,60 +1,61 @@
 # Contexto da Sessão — HESED Semijoias
 
 **Última atualização:** 02/09/2026
-**Status:** 🟢 Em produção e estável. Leva da VISÃO GERAL + METAS MENSAIS entregue em produção. Próximo: definir a próxima melhoria na `dev`.
+**Status:** 🟢 Em produção e estável. Nesta sessão foram entregues 3 levas em produção (leva WhatsApp/usuários/cancelamento/preço-promo/carrossel → imagem opcional nas mensagens → cadastro de clientes/aba Cadastros). Próximo grande passo aguarda o usuário obter o **WhatsApp Business** para o envio de mensagem em massa (promoção).
 
 ---
 
-## 🎯 Retomar amanhã
+## 🎯 Retomar na próxima sessão
 
 - Trabalhar na branch **`dev`** (working tree limpo).
-- As 3 branches (`dev`, `homolog`, `main`) e a produção estão TODAS no mesmo commit: **`ad15217`**.
+- As 3 branches (`dev`, `homolog`, `main`) e a produção estão TODAS no mesmo commit: **`f9f2af1`**.
 - Fluxo de sempre: `dev` → validar local → `dev → homolog` → QA → `homolog → main` (deploy prod, com backup antes).
+- **Padrão do usuário:** valida visualmente em dev antes de subir; aprova cada etapa; quer QA completo antes de produção.
+
+### Próxima feature planejada: MENSAGEM EM MASSA (broadcast de promoção)
+- **Bloqueada** até o usuário ter conta **WhatsApp Business / Meta Cloud API**. O `wa.me` (usado hoje) NÃO faz envio em massa (abriria 1 aba por cliente) — decidido esperar a API oficial.
+- Quando tiver a conta, o usuário precisa fornecer: Phone Number ID, WhatsApp Business Account ID, token de acesso (permanente) e templates aprovados pela Meta.
+- **A base já está pronta:** cadastro de clientes (entidade `Customer`) alimenta a lista de destinatários. Falta plugar a Cloud API e uma tela de disparo.
+- Decisão em aberto p/ quando retomar: cadastro de clientes vai alimentar só fluxos internos (é o atual) ou também capturar telefone no catálogo público. Hoje é **Opção 1** (catálogo público inalterado, não pede telefone).
 
 ### Subir ambiente local
-- Backend dev: `/opt/homebrew/opt/openjdk/bin/java -jar target/hesed-api-0.1.0.jar` (porta 8080, banco `hesed_db`). Admin: `admin@hesed.com` / `admin123`.
-- Frontend dev: `npm run dev` na pasta frontend (porta 5173).
-- Backend homolog: `... -jar target/hesed-api-0.1.0.jar --spring.profiles.active=homolog` (8081, banco `hesed_homolog`). Admin: `admin@homolog.com` / `homolog123`.
+- Backend dev: `export PATH=/opt/homebrew/opt/openjdk/bin:$PATH && SPRING_PROFILES_ACTIVE=dev java -jar target/hesed-api-0.1.0.jar` (porta 8080, banco `hesed_db`). Admin: `admin@hesed.com` / `admin123`.
+- Frontend dev: `npm run dev` na pasta frontend (porta 5173, proxy `/api` e `/uploads` → 8080).
+- Backend homolog: `export PATH=/opt/homebrew/opt/openjdk/bin:$PATH && COOKIE_SECURE=false java -jar target/hesed-api-0.1.0.jar --spring.profiles.active=homolog` (8081, banco `hesed_homolog`). Admin: `admin@homolog.com` / `homolog123`.
 - Frontend homolog: `VITE_PROXY_TARGET=http://localhost:8081 VITE_DEV_PORT=5174 npm run dev` (5174).
-- Java: `/opt/homebrew/opt/openjdk/bin/java`. Maven: `mvn`. ImageMagick disponível (`magick`).
+- Empacotar jar: `export PATH=/opt/homebrew/opt/openjdk/bin:$PATH && mvn -q package -DskipTests` (cwd backend). Rodar testes: `mvn test`.
+- Java em `/opt/homebrew/opt/openjdk/bin`. Maven `mvn`. ImageMagick disponível (`magick`).
 
 ---
 
-## 📦 O que foi feito nesta sessão (02/09) — leva VISÃO GERAL + METAS
+## 📦 O que foi feito nesta sessão (02/09) — 3 levas
 
-Objetivo: tornar a tela "Visão Geral" (antes um placeholder) funcional, como resumo executivo com atalhos, e permitir definir metas mensais configuráveis. Tudo testado (1294 casos em homolog) e já em PRODUÇÃO.
+### LEVA 1 — Usuários, Config/WhatsApp, Cancelamento, Preço promo, Carrossel (commits `863de74`→`ef23ef3`, já em produção)
+- **CRUD de usuários do sistema** (admin): email único, senha bcrypt, papéis, autoproteção (não rebaixar/excluir a si mesmo), resposta sem hash.
+- **Aba Configurações** (`SettingsPage`) com sub-abas Usuários e Mensagens.
+- **Mensagens automáticas WhatsApp** (`MessageTemplate`, tabela `message_templates`, seed `ORDER_CONFIRMED`/`ORDER_CANCELLED`): editáveis em Configurações → Mensagens. Placeholders `{cliente}` `{pedido}` `{total}` `{itens}`.
+- **Cancelamento ágil**: confirmar E cancelar passam pela mesma tela de edição do pedido; ambos exigem nome + telefone do cliente (usados no aviso WhatsApp).
+- **Preço promocional no catálogo**: `PublicProductResponse` expõe `effectivePrice`/`onSale`/`discountPercent`; catálogo e carrinho usam o preço com desconto (bate com o pedido).
+- **Carrossel sem esgotado**: `PromotionService.findActive()` filtra produto ESGOTADO no endpoint público `/api/promotions` (admin `findAll` inalterado).
 
-### Metas mensais (novo)
-- Entidade `MonthlyGoal` (tabela `monthly_goals`, unique `uk_goal_year_month` em `goal_year`+`goal_month`): meta de **receita** e **pedidos** por mês.
-- **Herança:** se um mês não tem meta própria, herda a última meta definida em mês anterior (`MonthlyGoalRepository.findEffective` ordena por `year*12+month`). A resposta marca `inherited=true` quando herdada e `locked=false` (mês sem meta própria).
-- **Trava + auditoria:** uma vez criada, a meta fica travada (`locked=true`). Alterá-la EXIGE justificativa (`changeReason`), senão retorna 400. Toda alteração real é gravada em `GoalChangeLog` (tabela `goal_change_logs`): valores antigo/novo de receita e pedidos, `reason`, `changedBy` (id do usuário) e timestamp.
-- Endpoints (`GoalController`, `/api/admin/goals`, ROLE_ADMIN):
-  - `GET /current` — meta efetiva do mês corrente (com herança)
-  - `GET ?year=&month=` — meta efetiva de um mês (com herança)
-  - `GET /history` — metas definidas (mais recente primeiro)
-  - `GET /changes?year=&month=` — histórico de alterações (auditoria) de um mês
-  - `PUT` — upsert; criação livre, alteração exige `changeReason`
-- `GoalService.upsert` usa `sameAmount()` (compara `BigDecimal` por VALOR com `compareTo`, ignorando escala) — evita log de auditoria espúrio ao re-salvar `2000` vs `2000.00`.
+### LEVA 2 — Imagem opcional nas mensagens (commit `c4635c9`/`e82dc8c`, em produção)
+- `MessageTemplate` ganhou `image_url` (TEXT nullable). Request/Response expõem `imageUrl` (opcional, máx 500). `MessageTemplateService.update` normaliza vazio→null; `render()` anexa o link da imagem ao final via `appendImage`.
+- Frontend `TemplateEditor` (em `SettingsPage`): upload/preview/remover imagem por template (reusa `POST /api/admin/products/upload`).
+- `whatsapp.ts` `buildOrderMessage(templateBody, order, imageUrl?)` anexa o link ao final do texto — **Opção A**: o `wa.me` só leva texto; o WhatsApp gera o **preview** do link (confirmado funcionando em produção). NÃO é anexo de mídia real (isso exigiria Cloud API).
 
-### Visão Geral / Overview (novo)
-- Endpoint agregador `GET /api/admin/overview` (`OverviewController`/`OverviewService`, ROLE_ADMIN) monta em UMA chamada: `month_kpis` (receita, pedidos, itens, ticket, margem, margem%), `goal` (meta resolvida), `progress` (revenuePercent/ordersPercent, `null` se sem meta), `orders` (pendente/confirmado/cancelado), `counts` (products/consignees), `alerts` (lowStock/warrantyExpired/warrantyExpiring) e `revenue6m` (série dos últimos 6 meses, sempre 6 pontos yyyy-MM em ordem crescente). Reaproveita `AnalyticsService`, `OrderService.countByStatus`, repos de produto/consignee/estoque.
-- Progresso vs meta calculado no servidor (fonte única da verdade).
+### LEVA 3 — Cadastro de Clientes + aba Cadastros (commits `c14af41`→`f9f2af1`, em produção)
+- Entidade **`Customer`** (tabela `customers`): name, phone, email (único, opcional), notes. Repo `findFiltered` (busca por nome OU telefone). `CustomerService` (CRUD, e-mail duplicado, normaliza e-mail para **lowercase** — bug de case-insensitive pego no QA). `CustomerController` sob `/api/admin/customers` (RBAC herdado de `/api/admin/**`).
+- **Validação de telefone mais robusta** que a do Consignee: regex `^\(?\d{2}\)?[\s-]?9?\d{4}[\s-]?\d{4}$` aceita celular formatado `(51) 98888-7777`, fixo, com/sem máscara (a regex antiga do Consignee rejeitava celular com traço).
+- **Pedido vinculado ao cliente**: `Order` ganhou `@ManyToOne Customer` (coluna `customer_id`, nullable), mantendo `customerName`/`customerPhone` como **snapshot**. `AdminOrderCreateRequest` e `OrderUpdateRequest` aceitam `customerId`; `OrderService.applyCustomer()` — se vem id, busca o cliente e preenche o snapshot (texto informado sobrescreve se preenchido); sem id, usa texto solto (fluxo antigo intacto). `OrderResponse` expõe `customerId`.
+- **Frontend**: `CustomersPage.tsx` (CRUD tabela+cards+modal, busca) + `CadastrosPage.tsx` com abas (Clientes/Fornecedores). Menu: item **Cadastros** (`RegistryIcon`) substituiu Fornecedores (que virou aba interna; `/admin/fornecedores` redireciona p/ `/admin/cadastros`). `OrderEditModal` ganhou seletor de cliente cadastrado que preenche nome+telefone e envia `customerId` (editar texto limpa o id).
+- **Catálogo público inalterado** (não pede cliente/telefone).
 
-### Frontend
-- `DashboardPage.tsx` reescrita: bloco de Metas com barras de progresso + botão engrenagem "Configurar" (modal com seletor de mês/ano, trava + campo de justificativa quando `locked`), KPIs do mês, card de pedidos pendentes (atalho), card de alertas de estoque/garantia (atalho `/admin/estoque`), atalhos/totais e mini-gráfico de receita 6 meses. Estados loading/erro.
-- Extração de duplicação: `components/KpiCard.tsx` (compartilhado) e `utils/format.ts` (`BRL`, `NUM`, `formatPeriodLabel`). `SalesDashboardPage` e `EngagementDashboardPage` passaram a importar esses compartilhados (removido código duplicado; só isso mudou nesses 2 arquivos, mais um ajuste cosmético `h-full` nas barras).
-
-### QA (1294 casos, 0 falhas em homolog)
-- `qa/qa_metas.py` (270, NOVO): RBAC de metas/overview, forma/tipos/coerência do overview (contagens e alertas batem com endpoints diretos, série de 6 meses), criação/trava/auditoria, herança (mês exato, meses seguintes, ano anterior, inserção posterior), validações (ano/mês/targets), progresso vs meta. Faz cleanup via psql (anos de teste 2093–2095 + mês vigente).
-- `qa/qa_homolog.py` (398), `qa/qa_estoque_dev.py` (262), `qa/qa_seguranca.py` (311) — regressão completa, 0 falhas.
-- 53 testes unitários JUnit (era 40; +12 `GoalServiceTest` +1 de regressão do bug de escala).
-- **ATENÇÃO ao rodar QA:** rate limit de login é por IP (20/min). Rodar as suítes ESPAÇADAS (~65s entre elas) senão o login inicial da próxima falha com 429.
-
-### Bug encontrado e corrigido durante o QA
-- Auditoria registrava alteração espúria ao re-salvar a mesma meta, porque `Objects.equals` em `BigDecimal` considera escala (`2000` ≠ `2000.00` vindo do banco com scale=2). Corrigido com `sameAmount()` (compareTo). Coberto por teste unitário + E2E.
-
-### Commits desta sessão (todos em produção)
-`1db3fee` (visão geral: resumo executivo + metas) → `9367936` (trava meta + auditoria com justificativa) → `ad15217` (fix auditoria por escala + qa_metas.py). Deploy prod feito de `ad15217` (VPS estava em `da798ef`, veio junto o `0643076` de docs).
+### QA desta sessão
+- **Suíte nova `qa/qa_leva_config.py`** (85 casos): usuários, mensagens (com imagem), telefone obrigatório confirmar/cancelar, preço promo no catálogo, carrossel sem esgotado, e **clientes** (CRUD, telefone válido/inválido, e-mail dup case-insensitive, busca, vínculo cliente-pedido, catálogo público inalterado). Faz cleanup próprio via API + psql (`QA_DB=hesed_homolog`).
+- Última bateria completa em homolog: **1.425 casos, 0 falhas** (unit 98 + qa_leva_config 85 + qa_homolog 399 + qa_estoque_dev 262 + qa_seguranca 311 + qa_metas 270).
+- **2 testes de regressão foram ajustados** (código de teste, não app) pela regra "telefone obrigatório confirmar E cancelar": `qa_homolog.py` (G8) e `qa_estoque_dev.py` (venda direta confirmada envia `customerPhone`).
+- **Bugs reais pegos pelo QA e corrigidos:** (1) e-mail de cliente duplicado case-insensitive não era bloqueado → `CustomerService.normalizeEmail` agora faz `.toLowerCase()`.
+- **ATENÇÃO ao rodar QA:** rate limit de login por IP (20/min). Rodar suítes ESPAÇADAS (~65s): `echo "cooldown"; sleep 65; QA_BASE=http://localhost:8081 python3 qa/qa_XXX.py`. `qa_metas.py`/`qa_homolog.py`/`qa_leva_config.py` já usam admin@homolog default; `qa_estoque_dev.py`/`qa_seguranca.py` precisam de `QA_ADMIN_EMAIL=admin@homolog.com QA_ADMIN_PASS=homolog123` explícitos.
 
 ---
 
@@ -62,25 +63,25 @@ Objetivo: tornar a tela "Visão Geral" (antes um placeholder) funcional, como re
 
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `ad15217` | No ar em https://hesedsemijoias.online |
-| `dev` | `ad15217` | Sincronizada (trabalhar aqui) |
-| `homolog` | `ad15217` | Sincronizada |
+| `main` (produção) | `f9f2af1` | No ar em https://hesedsemijoias.online |
+| `dev` | `f9f2af1` | Sincronizada (trabalhar aqui) |
+| `homolog` | `f9f2af1` | Sincronizada |
 
-Rollback do último deploy: `git checkout 0643076` (ou `da798ef`) + rebuild no VPS. Backup do banco pré-deploy: `/root/backups/hesed_db_predeploy_20260902_131219.sql.gz`.
-
-**Migração de schema deste deploy:** o `ddl-auto: update` (aditivo) criou as tabelas novas `monthly_goals` e `goal_change_logs` no banco de produção. Contagem de dados pré/pós-deploy idêntica (products=24, orders=11, users=3, consignees=0, promotions=0) — nada perdido.
+- **Backups de banco pré-deploy** (VPS `/root/backups/`): `hesed_db_pre_leva_20260902_154709.sql.gz` (leva 1), `hesed_db_pre_imagem_20260902_163745.sql.gz` (leva 2), `hesed_db_pre_cadastros_20260902_184346.sql.gz` (leva 3).
+- **Migração de schema (ddl-auto update, aditivo):** criadas ao longo da sessão as tabelas `message_templates`, `customers` e colunas `users.phone`, `message_templates.image_url`, `orders.customer_id`. Dados de produção preservados (products=24, users=3, customers=0).
+- Rollback de um deploy: no VPS `git checkout <commit_anterior>` + `docker compose up -d --build`; restaurar banco pelo dump se necessário.
 
 ---
 
 ## Infra de produção (VPS Hostinger)
 
-- **SSH:** `ssh root@103.199.184.97` (= `srv1939516.hstgr.cloud`, chave já autorizada).
+- **SSH:** `ssh root@103.199.184.97` (= `srv1939516.hstgr.cloud`, chave já autorizada a partir da máquina local).
 - Projeto: `/root/Hesed_Semijoias`. Docker Compose. Profile Spring: `prod`.
-- Containers: `hesed-postgres` (banco `hesed_db`, user `hesed`), `hesed-backend` (8080), `hesed-frontend`, `hesed-nginx` (80/443), `hesed-certbot`. `restart: unless-stopped`.
+- Containers: `hesed-postgres` (banco `hesed_db`, user `hesed`), `hesed-backend` (8080, healthy), `hesed-frontend`, `hesed-nginx` (80/443), `hesed-certbot`. `restart: unless-stopped`.
 - Domínio **hesedsemijoias.online** (HTTPS Let's Encrypt).
-- `.env` de prod: CORS_ALLOWED_ORIGINS, DB_NAME, DB_PASSWORD, DB_USERNAME, JWT_EXPIRATION_MS, JWT_SECRET, UPLOAD_BASE_URL. (COOKIE_SECURE não setado, mas o perfil prod default é true.)
-- **Backup automático:** `/root/backup-hesed.sh` via cron, a cada 3 dias 05:00 UTC, retenção 10 dias, em `/root/backups/`.
-- **Deploy:** backup pg_dump → merge `homolog→main` + push → no VPS `git pull origin main` → `docker compose up -d --build backend frontend` → `docker compose restart nginx` (obrigatório: re-resolve IPs) → smoke test HTTPS + comparar contagens de dados.
+- `.env` de prod inclui `UPLOAD_BASE_URL=https://hesedsemijoias.online/uploads` (por isso imagens/links saem com domínio público em prod; em dev/homolog saem como localhost).
+- **Deploy (procedimento usado nesta sessão):** backup `pg_dump` (dentro do container postgres) → `git checkout main && git merge --ff-only homolog && git push origin main` (local) → no VPS `git pull origin main` → `docker compose up -d --build` (rodar via processo em background; o warning de "foreground" é falso positivo pois usa `-d`) → aguardar backend healthy → smoke test HTTPS (site, catálogo, endpoint admin protegido = 403, schema novo) → parar processo.
+- **Cache/PWA:** o front é PWA com service worker (`registerType: autoUpdate`). Após deploy, usuário pode precisar de hard refresh / unregister do SW para ver a versão nova (aconteceu 1x nesta sessão com a Visão Geral).
 
 ### Logins de produção
 - Admin Henrique: `henriquecorreadearaujo@gmail.com` / `Pai912510!`
@@ -90,27 +91,28 @@ Rollback do último deploy: `git checkout 0643076` (ou `da798ef`) + rebuild no V
 
 ## Stack
 
-- Backend: Java 21 (roda em JDK 26 local) + Spring Boot 3.3.2 + PostgreSQL 16 + JWT (cookie HttpOnly)
-- Frontend: React 18 + TypeScript + Vite 5.4 + Tailwind + PWA
-- Infra: Docker + Nginx (CSP, server_tokens off, rate limit login) + Let's Encrypt
+- Backend: Java 21 (roda em JDK local) + Spring Boot 3.3.2 + PostgreSQL 16 + JWT (cookie HttpOnly). `ddl-auto: update`.
+- Frontend: React 18 + TypeScript + Vite 5.4 + Tailwind + PWA.
+- Infra: Docker + Nginx (CSP, server_tokens off, rate limit login 20/min por IP) + Let's Encrypt.
 
 ---
 
 ## Funcionalidades em produção
 
-- **Visão Geral (resumo executivo):** metas mensais (receita/pedidos) com herança e trava+auditoria, progresso vs meta, KPIs do mês, pedidos pendentes, alertas de estoque/garantia, atalhos e gráfico de receita 6 meses
-- Catálogo público (sacola, carrossel de promoções, telemetria, modal de fotos com galeria até 5)
-- Pedidos (registro via catálogo/WhatsApp, edição, confirmação, venda direta)
-- Dashboards (Vendas: KPIs/margem/funil/série; Engajamento)
-- Gestão: aba Estoque unificada (Produtos CRUD + Reposição + Garantia), Fornecedores, Promoções, Revendedoras
-- Estoque numérico com status derivado, baixa automática na venda, garantia por produto, 3 valores (fornecedor/custo/venda)
-- Segurança: auth por cookie HttpOnly, CSP, rate limit, uploads validados por magic bytes, catálogo sem vazar custo
+- **Cadastros:** aba Cadastros com CRUD de **Clientes** (novo) e **Fornecedores**. Pedidos podem vincular um cliente cadastrado (preenche nome+telefone; guarda snapshot).
+- **Configurações:** CRUD de usuários; mensagens automáticas WhatsApp (confirmado/cancelado) editáveis, com **imagem opcional** por template (link com preview no WhatsApp).
+- **Visão Geral (resumo executivo):** metas mensais (receita/pedidos) com herança e trava+auditoria, progresso vs meta, KPIs, pedidos pendentes, alertas de estoque/garantia, gráfico de receita 6 meses.
+- **Catálogo público:** sacola, carrossel de promoções (sem produtos esgotados), preço promocional (effectivePrice) exibido/cobrado, telemetria, modal de fotos (galeria até 5).
+- **Pedidos:** registro via catálogo/WhatsApp, edição, confirmação/cancelamento (ambos exigem nome+telefone), venda direta; aviso automático via WhatsApp com template + imagem opcional.
+- **Dashboards** (Vendas: KPIs/margem/funil/série; Engajamento). **Estoque** unificado (Produtos CRUD + Reposição + Garantia). **Promoções**, **Revendedoras**.
+- **Segurança:** auth por cookie HttpOnly, CSP, rate limit, uploads validados por magic bytes, catálogo sem vazar custo.
 
 ---
 
 ## Documentação do projeto
 
+- `CONTEXTO_PROJETO.md` — stack/arquitetura base
 - `DOCUMENTACAO.md` — documentação oficial
 - `DEPLOY.md` — guia de deploy
 - `FLUXO_TRABALHO.md` — fluxo dev/homolog/prod
-- `qa/qa_homolog.py`, `qa/qa_estoque_dev.py`, `qa/qa_seguranca.py`, `qa/qa_metas.py` — baterias de QA (1294 casos)
+- `qa/qa_homolog.py`, `qa/qa_estoque_dev.py`, `qa/qa_seguranca.py`, `qa/qa_metas.py`, `qa/qa_leva_config.py` — baterias de QA (1.425 casos)
