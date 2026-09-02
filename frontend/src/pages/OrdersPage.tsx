@@ -112,21 +112,21 @@ export default function OrdersPage() {
     openWhatsApp(order.customerPhone, msg);
   }
 
+  /**
+   * Resolver (confirmar/cancelar) SEMPRE passa pelo editor do pedido: lá a
+   * operadora revisa itens, garante nome+telefone e clica em "Salvar e
+   * confirmar" ou "Salvar e cancelar". Assim confirmar e cancelar têm o mesmo
+   * fluxo ágil (uma tela só). Reabrir (voltar a PENDENTE) é ação direta.
+   */
   async function changeStatus(order: Order, status: string) {
-    // Confirmar e cancelar exigem nome E telefone do cliente (necessários para o
-    // aviso automático). Se faltar, abre o editor para a operadora preencher.
-    const resolving = status === 'CONFIRMADO' || status === 'CANCELADO';
-    if (resolving && (!order.customerName || !order.customerPhone)) {
-      const verbo = status === 'CONFIRMADO' ? 'confirmar' : 'cancelar';
-      alert(`Informe nome e telefone do cliente antes de ${verbo}. Abrindo edição do pedido...`);
+    if (status === 'CONFIRMADO' || status === 'CANCELADO') {
       setEditTarget(order);
       return;
     }
+    // Reabrir: aplica direto.
     setActioningId(order.id);
     try {
       await api.patch(`/admin/orders/${order.id}/status`, { status });
-      // Dispara o aviso ANTES do reload (usa os dados atuais do pedido).
-      notifyCustomer(order, status);
       await load();
     } catch (e: any) {
       alert(e.response?.data?.error || 'Erro ao atualizar o pedido');
@@ -308,7 +308,7 @@ export default function OrdersPage() {
           products={products}
           onClose={() => { setEditTarget(null); setCreating(false); }}
           onSaved={() => { setEditTarget(null); setCreating(false); load(); }}
-          onConfirmed={(o) => notifyCustomer(o, 'CONFIRMADO')}
+          onResolved={(status, o) => notifyCustomer(o, status)}
         />
       )}
     </div>
@@ -324,9 +324,9 @@ interface EditItem {
   effectivePrice: number;
 }
 
-function OrderEditModal({ order, products, onClose, onSaved, onConfirmed }: {
+function OrderEditModal({ order, products, onClose, onSaved, onResolved }: {
   order: Order | null; products: Product[]; onClose: () => void; onSaved: () => void;
-  onConfirmed: (order: import('../utils/whatsapp').OrderLike) => void;
+  onResolved: (status: 'CONFIRMADO' | 'CANCELADO', order: import('../utils/whatsapp').OrderLike) => void;
 }) {
   const isCreate = order === null;
   const [items, setItems] = useState<EditItem[]>(
@@ -371,11 +371,17 @@ function OrderEditModal({ order, products, onClose, onSaved, onConfirmed }: {
     setAddProductId('');
   }
 
-  async function handleSave(confirmAfter: boolean) {
+  async function handleSave(resolve: 'CONFIRMADO' | 'CANCELADO' | null) {
     setError(null);
     if (items.length === 0) { setError('O pedido precisa ter ao menos um item.'); return; }
-    if (confirmAfter && !customerName.trim()) { setError('Informe o nome do cliente para confirmar a venda.'); return; }
-    if (confirmAfter && !customerPhone.trim()) { setError('Informe o telefone do cliente para confirmar a venda.'); return; }
+
+    // resolve = ação de resolução: CONFIRMADO, CANCELADO ou null (apenas salvar).
+    // Confirmar e cancelar exigem nome + telefone (usados no aviso via WhatsApp).
+    if (resolve) {
+      const verbo = resolve === 'CONFIRMADO' ? 'confirmar' : 'cancelar';
+      if (!customerName.trim()) { setError(`Informe o nome do cliente para ${verbo} o pedido.`); return; }
+      if (!customerPhone.trim()) { setError(`Informe o telefone do cliente para ${verbo} o pedido.`); return; }
+    }
 
     const payloadItems = items.map((i) => ({
       productId: i.productId,
@@ -387,13 +393,14 @@ function OrderEditModal({ order, products, onClose, onSaved, onConfirmed }: {
     try {
       let orderNumber = order?.orderNumber ?? '';
       if (isCreate) {
-        // Venda direta: cria já com o status desejado (confirm=true nasce CONFIRMADO)
+        // Venda direta: cria já com o status desejado (confirm=true nasce CONFIRMADO).
+        // Cancelar não faz sentido numa venda direta nova — só confirma ou fica pendente.
         const res = await api.post('/admin/orders', {
           items: payloadItems,
           customerName: customerName.trim() || null,
           customerPhone: customerPhone.trim() || null,
           notes: notes.trim() || null,
-          confirm: confirmAfter,
+          confirm: resolve === 'CONFIRMADO',
         });
         orderNumber = res.data?.orderNumber ?? orderNumber;
       } else {
@@ -403,13 +410,13 @@ function OrderEditModal({ order, products, onClose, onSaved, onConfirmed }: {
           customerPhone: customerPhone.trim() || null,
           notes: notes.trim() || null,
         });
-        if (confirmAfter) {
-          await api.patch(`/admin/orders/${order!.id}/status`, { status: 'CONFIRMADO' });
+        if (resolve) {
+          await api.patch(`/admin/orders/${order!.id}/status`, { status: resolve });
         }
       }
-      // Aviso automático ao confirmar pela tela de edição/venda direta.
-      if (confirmAfter) {
-        onConfirmed({
+      // Aviso automático ao resolver (confirmar/cancelar) pela tela de edição.
+      if (resolve) {
+        onResolved(resolve, {
           orderNumber,
           customerName: customerName.trim() || null,
           customerPhone: customerPhone.trim() || null,
@@ -530,12 +537,19 @@ function OrderEditModal({ order, products, onClose, onSaved, onConfirmed }: {
         </div>
 
         <div className="flex flex-wrap justify-end gap-2 border-t border-charcoal-100 dark:border-charcoal-700 px-6 py-4">
-          <button onClick={onClose} className="btn-ghost">Cancelar</button>
-          <button onClick={() => handleSave(false)} disabled={loading}
+          <button onClick={onClose} className="btn-ghost">Fechar</button>
+          <button onClick={() => handleSave(null)} disabled={loading}
             className="rounded-lg border border-charcoal-200 dark:border-charcoal-600 px-4 py-2 text-sm font-medium text-charcoal-600 dark:text-charcoal-300 hover:border-gold hover:text-gold transition-all disabled:opacity-50">
             {loading ? 'Salvando...' : isCreate ? 'Salvar como pendente' : 'Salvar'}
           </button>
-          <button onClick={() => handleSave(true)} disabled={loading}
+          {/* Cancelar pedido: só faz sentido para um pedido existente */}
+          {!isCreate && (
+            <button onClick={() => handleSave('CANCELADO')} disabled={loading}
+              className="rounded-lg border border-red-300 dark:border-red-800/50 px-4 py-2 text-sm font-medium text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50">
+              Salvar e cancelar pedido
+            </button>
+          )}
+          <button onClick={() => handleSave('CONFIRMADO')} disabled={loading}
             className="rounded-lg bg-emerald-500 hover:bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50">
             {isCreate ? 'Registrar venda' : 'Salvar e confirmar venda'}
           </button>
