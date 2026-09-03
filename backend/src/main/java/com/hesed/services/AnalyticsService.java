@@ -50,7 +50,8 @@ public class AnalyticsService {
     // ===========================================================================
     // Estoque (dashboard)
     // ===========================================================================
-    public StockAnalyticsResponse stock(String category, String status, LocalDateTime movementsFrom) {
+    public StockAnalyticsResponse stock(String category, String status,
+                                        LocalDateTime movementsFrom, LocalDateTime movementsTo) {
         String cat = (category == null || category.isBlank()) ? null : category;
         String st = (status == null || status.isBlank()) ? null : status.trim().toUpperCase();
 
@@ -105,7 +106,8 @@ public class AnalyticsService {
         // Movimentações recentes (últimas 20)
         List<StockAnalyticsResponse.Movement> movs = new java.util.ArrayList<>();
         LocalDateTime movFrom = movementsFrom != null ? movementsFrom : LocalDateTime.of(2000, 1, 1, 0, 0);
-        for (StockMovement m : stockMovementRepository.findRecentWithProduct(movFrom, PageRequest.of(0, 20))) {
+        LocalDateTime movTo = movementsTo != null ? movementsTo : LocalDateTime.now().plusYears(1);
+        for (StockMovement m : stockMovementRepository.findRecentWithProduct(movFrom, movTo, PageRequest.of(0, 20))) {
             StockAnalyticsResponse.Movement mv = new StockAnalyticsResponse.Movement();
             mv.setSku(m.getProduct() != null ? m.getProduct().getSku() : null);
             mv.setProductName(m.getProduct() != null ? m.getProduct().getName() : null);

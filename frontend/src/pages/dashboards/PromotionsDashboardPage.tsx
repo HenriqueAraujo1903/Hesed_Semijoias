@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import KpiCard from '../../components/KpiCard';
+import PeriodFilter from '../../components/PeriodFilter';
+import { resolvePreset, isInvalid, type Period, type PresetKey } from '../../utils/period';
 import { BRL, NUM } from '../../utils/format';
 
 // ─── Tipos do payload de /admin/analytics/promotions ────────────────────────
@@ -21,24 +23,12 @@ interface PromotionAnalytics {
   kpis: Kpis; split: Split; topPromoProducts: ProductRow[]; activePromotions: ActivePromotion[];
 }
 
-const RANGE_PRESETS: { key: string; label: string; days: number | null }[] = [
-  { key: '30d', label: 'Últimos 30 dias', days: 30 },
-  { key: '90d', label: 'Últimos 90 dias', days: 90 },
-  { key: '12m', label: 'Últimos 12 meses', days: 365 },
-  { key: 'all', label: 'Todo período', days: null },
-];
-
-function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
 export default function PromotionsDashboardPage() {
   const [data, setData] = useState<PromotionAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [rangePreset, setRangePreset] = useState('30d');
+  const [preset, setPreset] = useState<PresetKey>('30d');
+  const [period, setPeriod] = useState<Period>(resolvePreset('30d'));
   const [category, setCategory] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
 
@@ -51,12 +41,13 @@ export default function PromotionsDashboardPage() {
   }, []);
 
   const load = useCallback(async () => {
+    if (isInvalid(period)) return;
     setLoading(true);
     setError(null);
     try {
-      const preset = RANGE_PRESETS.find(r => r.key === rangePreset);
       const params: Record<string, string> = {};
-      if (preset?.days) params.from = isoDaysAgo(preset.days);
+      if (period.from) params.from = period.from;
+      if (period.to) params.to = period.to;
       if (category) params.category = category;
       const res = await api.get('/admin/analytics/promotions', { params });
       setData(res.data);
@@ -65,7 +56,7 @@ export default function PromotionsDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [rangePreset, category]);
+  }, [period, category]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -79,14 +70,16 @@ export default function PromotionsDashboardPage() {
         </p>
       </div>
 
-      {/* Filtros */}
+      {/* Período */}
+      <PeriodFilter
+        preset={preset}
+        period={period}
+        onPreset={(k) => { setPreset(k); setPeriod(resolvePreset(k)); }}
+        onCustom={(p) => { setPreset('custom'); setPeriod(p); }}
+      />
+
+      {/* Categoria */}
       <div className="card p-4 flex flex-wrap items-end gap-4">
-        <div>
-          <label className="block text-[10px] font-medium text-charcoal-400 uppercase tracking-wide mb-1">Período</label>
-          <select value={rangePreset} onChange={(e) => setRangePreset(e.target.value)} className="input-field py-1.5 text-sm">
-            {RANGE_PRESETS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
-          </select>
-        </div>
         <div>
           <label className="block text-[10px] font-medium text-charcoal-400 uppercase tracking-wide mb-1">Categoria</label>
           <select value={category} onChange={(e) => setCategory(e.target.value)} className="input-field py-1.5 text-sm">

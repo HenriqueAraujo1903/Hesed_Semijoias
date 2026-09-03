@@ -61,9 +61,9 @@ class AnalyticsServiceTest {
         StockMovement mov = StockMovement.builder()
                 .product(prod).type("SAIDA").delta(-2).resultingQuantity(1)
                 .reason("Venda pedido HSD-1").createdAt(LocalDateTime.now()).build();
-        when(stockMovementRepository.findRecentWithProduct(any(), any())).thenReturn(List.of(mov));
+        when(stockMovementRepository.findRecentWithProduct(any(), any(), any())).thenReturn(List.of(mov));
 
-        StockAnalyticsResponse r = service.stock(null, null, null);
+        StockAnalyticsResponse r = service.stock(null, null, null, null);
 
         assertThat(r.getKpis().getSkus()).isEqualTo(5);
         assertThat(r.getKpis().getUnits()).isEqualTo(42);
@@ -92,9 +92,9 @@ class AnalyticsServiceTest {
         when(productRepository.stockCountByStatus(any(), any())).thenReturn(List.of());
         when(productRepository.stockByCategory(any(), any())).thenReturn(List.of());
         when(productRepository.findCriticalStock(any(), any())).thenReturn(List.of());
-        when(stockMovementRepository.findRecentWithProduct(any(), any())).thenReturn(List.of());
+        when(stockMovementRepository.findRecentWithProduct(any(), any(), any())).thenReturn(List.of());
 
-        StockAnalyticsResponse r = service.stock(null, null, null);
+        StockAnalyticsResponse r = service.stock(null, null, null, null);
 
         assertThat(r.getKpis().getSkus()).isZero();
         assertThat(r.getKpis().getUnits()).isZero();
@@ -111,10 +111,10 @@ class AnalyticsServiceTest {
         when(productRepository.stockCountByStatus(any(), any())).thenReturn(List.of());
         when(productRepository.stockByCategory(any(), any())).thenReturn(List.of());
         when(productRepository.findCriticalStock(any(), any())).thenReturn(List.of());
-        when(stockMovementRepository.findRecentWithProduct(any(), any())).thenReturn(List.of());
+        when(stockMovementRepository.findRecentWithProduct(any(), any(), any())).thenReturn(List.of());
 
         LocalDateTime from = LocalDateTime.of(2026, 1, 1, 0, 0);
-        service.stock("Anel", "baixo", from);
+        service.stock("Anel", "baixo", from, null);
 
         org.mockito.ArgumentCaptor<String> cat = org.mockito.ArgumentCaptor.forClass(String.class);
         org.mockito.ArgumentCaptor<String> st = org.mockito.ArgumentCaptor.forClass(String.class);
@@ -123,7 +123,7 @@ class AnalyticsServiceTest {
         assertThat(st.getValue()).isEqualTo("BAIXO"); // normalizado para maiúsculo
 
         org.mockito.ArgumentCaptor<LocalDateTime> mf = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
-        org.mockito.Mockito.verify(stockMovementRepository).findRecentWithProduct(mf.capture(), any());
+        org.mockito.Mockito.verify(stockMovementRepository).findRecentWithProduct(mf.capture(), any(), any());
         assertThat(mf.getValue()).isEqualTo(from);
     }
 

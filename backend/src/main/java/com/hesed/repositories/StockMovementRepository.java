@@ -17,12 +17,14 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, UU
     List<StockMovement> findTop100ByOrderByCreatedAtDesc();
 
     /**
-     * Movimentações a partir de uma data (inclusiva), com o produto carregado
+     * Movimentações dentro de um intervalo (inclusivo), com o produto carregado
      * (evita LAZY/N+1 no dashboard). Ordena da mais recente para a mais antiga.
-     * O chamador normaliza `from` (usa uma data bem antiga quando "todo período")
+     * O chamador normaliza `from`/`to` (datas amplas quando "todo período")
      * para não depender de bind null — o PostgreSQL não infere tipo de null.
      */
     @Query("SELECT m FROM StockMovement m JOIN FETCH m.product " +
-           "WHERE m.createdAt >= :from ORDER BY m.createdAt DESC")
-    List<StockMovement> findRecentWithProduct(@Param("from") LocalDateTime from, Pageable pageable);
+           "WHERE m.createdAt >= :from AND m.createdAt <= :to ORDER BY m.createdAt DESC")
+    List<StockMovement> findRecentWithProduct(@Param("from") LocalDateTime from,
+                                              @Param("to") LocalDateTime to,
+                                              Pageable pageable);
 }

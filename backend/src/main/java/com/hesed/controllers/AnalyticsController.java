@@ -93,10 +93,12 @@ public class AnalyticsController {
     public ResponseEntity<StockAnalyticsResponse> stock(
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate movementsFrom) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate movementsFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate movementsTo) {
 
         String cat = (category != null && !category.isBlank()) ? category : null;
         LocalDateTime movFrom = movementsFrom != null ? movementsFrom.atStartOfDay() : null;
-        return ResponseEntity.ok(analyticsService.stock(cat, status, movFrom));
+        LocalDateTime movTo = movementsTo != null ? movementsTo.atTime(java.time.LocalTime.MAX) : null;
+        return ResponseEntity.ok(analyticsService.stock(cat, status, movFrom, movTo));
     }
 }

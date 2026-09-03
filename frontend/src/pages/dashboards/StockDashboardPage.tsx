@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import KpiCard from '../../components/KpiCard';
+import PeriodFilter from '../../components/PeriodFilter';
+import { resolvePreset, isInvalid, type Period, type PresetKey } from '../../utils/period';
 import { BRL, NUM } from '../../utils/format';
 
 // ─── Tipos do payload de /admin/analytics/stock ─────────────────────────────
@@ -16,19 +18,6 @@ interface StockAnalytics {
   kpis: Kpis; byCategory: CategorySlice[]; critical: CriticalItem[]; recentMovements: Movement[];
 }
 
-const MOV_RANGE_PRESETS: { key: string; label: string; days: number | null }[] = [
-  { key: '7d', label: 'Últimos 7 dias', days: 7 },
-  { key: '30d', label: 'Últimos 30 dias', days: 30 },
-  { key: '90d', label: 'Últimos 90 dias', days: 90 },
-  { key: 'all', label: 'Todo período', days: null },
-];
-
-function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
 export default function StockDashboardPage() {
   const [data, setData] = useState<StockAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,7 +26,8 @@ export default function StockDashboardPage() {
   // Filtros: categoria e situação afetam todo o painel; período afeta só as movimentações.
   const [category, setCategory] = useState('');
   const [status, setStatus] = useState('');
-  const [movRange, setMovRange] = useState('30d');
+  const [preset, setPreset] = useState<PresetKey>('30d');
+  const [period, setPeriod] = useState<Period>(resolvePreset('30d'));
   const [categories, setCategories] = useState<string[]>([]);
 
   // Carrega as categorias uma vez (do catálogo).
@@ -49,14 +39,15 @@ export default function StockDashboardPage() {
   }, []);
 
   const load = useCallback(async () => {
+    if (isInvalid(period)) return;
     setLoading(true);
     setError(null);
     try {
       const params: Record<string, string> = {};
       if (category) params.category = category;
       if (status) params.status = status;
-      const preset = MOV_RANGE_PRESETS.find(r => r.key === movRange);
-      if (preset?.days) params.movementsFrom = isoDaysAgo(preset.days);
+      if (period.from) params.movementsFrom = period.from;
+      if (period.to) params.movementsTo = period.to;
       const res = await api.get('/admin/analytics/stock', { params });
       setData(res.data);
     } catch (e: any) {
@@ -64,7 +55,7 @@ export default function StockDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [category, status, movRange]);
+  }, [category, status, period]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -78,7 +69,7 @@ export default function StockDashboardPage() {
         </p>
       </div>
 
-      {/* Filtros */}
+      {/* Categoria + Situação (afetam todo o painel) */}
       <div className="card p-4 flex flex-wrap items-end gap-4">
         <div>
           <label className="block text-[10px] font-medium text-charcoal-400 uppercase tracking-wide mb-1">Categoria</label>
@@ -96,16 +87,18 @@ export default function StockDashboardPage() {
             <option value="ESGOTADO">Esgotado</option>
           </select>
         </div>
-        <div>
-          <label className="block text-[10px] font-medium text-charcoal-400 uppercase tracking-wide mb-1">Movimentações</label>
-          <select value={movRange} onChange={(e) => setMovRange(e.target.value)} className="input-field py-1.5 text-sm">
-            {MOV_RANGE_PRESETS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
-          </select>
-        </div>
         <p className="text-[10px] text-charcoal-300 dark:text-charcoal-600 pb-1.5 ml-auto max-w-[220px]">
-          Categoria e situação afetam todo o painel. O período afeta apenas as movimentações.
+          Categoria e situação afetam todo o painel. O período (abaixo) afeta apenas as movimentações recentes.
         </p>
       </div>
+
+      {/* Período das movimentações */}
+      <PeriodFilter
+        preset={preset}
+        period={period}
+        onPreset={(k) => { setPreset(k); setPeriod(resolvePreset(k)); }}
+        onCustom={(p) => { setPreset('custom'); setPeriod(p); }}
+      />
 
       {loading ? (
         <div className="flex items-center justify-center py-24">

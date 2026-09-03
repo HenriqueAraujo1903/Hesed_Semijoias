@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import KpiCard from '../../components/KpiCard';
+import PeriodFilter from '../../components/PeriodFilter';
+import { resolvePreset, isInvalid, type Period, type PresetKey } from '../../utils/period';
 import { NUM } from '../../utils/format';
 
 interface Kpis {
@@ -18,32 +20,22 @@ interface Engagement {
   kpis: Kpis; timeSeries: DayPoint[]; topSelected: SelectedProduct[]; funnel: Funnel;
 }
 
-const RANGE_PRESETS = [
-  { key: '30d', label: 'Últimos 30 dias', days: 30 },
-  { key: '90d', label: 'Últimos 90 dias', days: 90 },
-  { key: 'all', label: 'Todo período', days: null as number | null },
-];
-
-function isoDaysAgo(days: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() - days);
-  return d.toISOString().slice(0, 10);
-}
-
 export default function EngagementDashboardPage() {
   const [data, setData] = useState<Engagement | null>(null);
   const [sold, setSold] = useState<{ sku: string; items: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [rangePreset, setRangePreset] = useState('30d');
+  const [preset, setPreset] = useState<PresetKey>('30d');
+  const [period, setPeriod] = useState<Period>(resolvePreset('30d'));
 
   const load = useCallback(async () => {
+    if (isInvalid(period)) return;
     setLoading(true);
     setError(null);
     try {
-      const preset = RANGE_PRESETS.find(r => r.key === rangePreset);
       const params: Record<string, string> = {};
-      if (preset?.days) params.from = isoDaysAgo(preset.days);
+      if (period.from) params.from = period.from;
+      if (period.to) params.to = period.to;
 
       const [engRes, salesRes] = await Promise.all([
         api.get('/admin/analytics/engagement', { params }),
@@ -56,7 +48,7 @@ export default function EngagementDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [rangePreset]);
+  }, [period]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -72,15 +64,13 @@ export default function EngagementDashboardPage() {
         </p>
       </div>
 
-      {/* Filtro de período */}
-      <div className="card p-4 flex items-end gap-4">
-        <div>
-          <label className="block text-[10px] font-medium text-charcoal-400 uppercase tracking-wide mb-1">Período</label>
-          <select value={rangePreset} onChange={(e) => setRangePreset(e.target.value)} className="input-field py-1.5 text-sm">
-            {RANGE_PRESETS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
-          </select>
-        </div>
-      </div>
+      {/* Período */}
+      <PeriodFilter
+        preset={preset}
+        period={period}
+        onPreset={(k) => { setPreset(k); setPeriod(resolvePreset(k)); }}
+        onCustom={(p) => { setPreset('custom'); setPeriod(p); }}
+      />
 
       {loading ? (
         <div className="flex items-center justify-center py-24">
