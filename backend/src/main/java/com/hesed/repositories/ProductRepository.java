@@ -55,13 +55,17 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     @Query("SELECT COUNT(p), COALESCE(SUM(p.stockQuantity),0), " +
            "COALESCE(SUM(p.costPrice * p.stockQuantity),0), " +
            "COALESCE(SUM(p.salePrice * p.stockQuantity),0) " +
-           "FROM Product p WHERE (p.onDemand IS NULL OR p.onDemand = false)")
-    List<Object[]> stockKpis();
+           "FROM Product p WHERE (p.onDemand IS NULL OR p.onDemand = false) " +
+           "AND (:category IS NULL OR p.category = :category) " +
+           "AND (:status IS NULL OR p.stockStatus = :status)")
+    List<Object[]> stockKpis(@Param("category") String category, @Param("status") String status);
 
     /** Contagem de produtos de estoque próprio por stockStatus (DISPONIVEL/BAIXO/ESGOTADO). */
     @Query("SELECT p.stockStatus, COUNT(p) FROM Product p " +
-           "WHERE (p.onDemand IS NULL OR p.onDemand = false) GROUP BY p.stockStatus")
-    List<Object[]> stockCountByStatus();
+           "WHERE (p.onDemand IS NULL OR p.onDemand = false) " +
+           "AND (:category IS NULL OR p.category = :category) " +
+           "AND (:status IS NULL OR p.stockStatus = :status) GROUP BY p.stockStatus")
+    List<Object[]> stockCountByStatus(@Param("category") String category, @Param("status") String status);
 
     /**
      * Distribuição por categoria (estoque próprio):
@@ -71,12 +75,19 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
            "COALESCE(SUM(p.costPrice * p.stockQuantity),0), " +
            "COALESCE(SUM(p.salePrice * p.stockQuantity),0) " +
            "FROM Product p WHERE (p.onDemand IS NULL OR p.onDemand = false) " +
+           "AND (:category IS NULL OR p.category = :category) " +
+           "AND (:status IS NULL OR p.stockStatus = :status) " +
            "GROUP BY p.category ORDER BY SUM(p.costPrice * p.stockQuantity) DESC")
-    List<Object[]> stockByCategory();
+    List<Object[]> stockByCategory(@Param("category") String category, @Param("status") String status);
 
-    /** Itens críticos: baixo ou esgotado (estoque próprio), mais críticos primeiro. */
+    /**
+     * Itens críticos: baixo ou esgotado (estoque próprio), mais críticos primeiro.
+     * Se status informado (BAIXO ou ESGOTADO), restringe a ele; senão traz ambos.
+     */
     @Query("SELECT p FROM Product p WHERE (p.onDemand IS NULL OR p.onDemand = false) " +
            "AND p.stockStatus IN ('BAIXO','ESGOTADO') " +
+           "AND (:category IS NULL OR p.category = :category) " +
+           "AND (:status IS NULL OR p.stockStatus = :status) " +
            "ORDER BY p.stockQuantity ASC, p.name ASC")
-    List<Product> findCriticalStock();
+    List<Product> findCriticalStock(@Param("category") String category, @Param("status") String status);
 }

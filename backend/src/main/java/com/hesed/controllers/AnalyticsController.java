@@ -72,7 +72,13 @@ public class AnalyticsController {
      * Considera apenas o estoque próprio (produtos sob encomenda ficam de fora).
      */
     @GetMapping("/stock")
-    public ResponseEntity<StockAnalyticsResponse> stock() {
-        return ResponseEntity.ok(analyticsService.stock());
+    public ResponseEntity<StockAnalyticsResponse> stock(
+            @RequestParam(required = false) String category,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate movementsFrom) {
+
+        String cat = (category != null && !category.isBlank()) ? category : null;
+        LocalDateTime movFrom = movementsFrom != null ? movementsFrom.atStartOfDay() : null;
+        return ResponseEntity.ok(analyticsService.stock(cat, status, movFrom));
     }
 }

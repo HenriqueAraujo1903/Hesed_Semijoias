@@ -43,21 +43,24 @@ public class AnalyticsService {
     // ===========================================================================
     // Estoque (dashboard)
     // ===========================================================================
-    public StockAnalyticsResponse stock() {
+    public StockAnalyticsResponse stock(String category, String status, LocalDateTime movementsFrom) {
+        String cat = (category == null || category.isBlank()) ? null : category;
+        String st = (status == null || status.isBlank()) ? null : status.trim().toUpperCase();
+
         StockAnalyticsResponse resp = new StockAnalyticsResponse();
 
         // KPIs
-        List<Object[]> kRows = productRepository.stockKpis();
+        List<Object[]> kRows = productRepository.stockKpis(cat, st);
         Object[] kv = kRows.isEmpty() ? new Object[]{0L, 0L, BigDecimal.ZERO, BigDecimal.ZERO} : kRows.get(0);
         StockAnalyticsResponse.Kpis kpis = new StockAnalyticsResponse.Kpis();
         kpis.setSkus(toLong(kv[0]));
         kpis.setUnits(toLong(kv[1]));
         kpis.setCostValue(scale(toBigDecimal(kv[2])));
         kpis.setSaleValue(scale(toBigDecimal(kv[3])));
-        for (Object[] r : productRepository.stockCountByStatus()) {
-            String status = (String) r[0];
+        for (Object[] r : productRepository.stockCountByStatus(cat, st)) {
+            String statusRow = (String) r[0];
             long count = toLong(r[1]);
-            switch (status == null ? "" : status) {
+            switch (statusRow == null ? "" : statusRow) {
                 case "DISPONIVEL" -> kpis.setAvailable(count);
                 case "BAIXO" -> kpis.setLow(count);
                 case "ESGOTADO" -> kpis.setOut(count);
@@ -68,7 +71,7 @@ public class AnalyticsService {
 
         // Distribuição por categoria
         List<StockAnalyticsResponse.CategorySlice> cats = new java.util.ArrayList<>();
-        for (Object[] r : productRepository.stockByCategory()) {
+        for (Object[] r : productRepository.stockByCategory(cat, st)) {
             StockAnalyticsResponse.CategorySlice c = new StockAnalyticsResponse.CategorySlice();
             c.setCategory((String) r[0]);
             c.setSkus(toLong(r[1]));
@@ -81,7 +84,7 @@ public class AnalyticsService {
 
         // Itens críticos (baixo/esgotado)
         List<StockAnalyticsResponse.CriticalItem> critical = new java.util.ArrayList<>();
-        for (Product p : productRepository.findCriticalStock()) {
+        for (Product p : productRepository.findCriticalStock(cat, st)) {
             StockAnalyticsResponse.CriticalItem ci = new StockAnalyticsResponse.CriticalItem();
             ci.setSku(p.getSku());
             ci.setName(p.getName());
@@ -94,7 +97,8 @@ public class AnalyticsService {
 
         // Movimentações recentes (últimas 20)
         List<StockAnalyticsResponse.Movement> movs = new java.util.ArrayList<>();
-        for (StockMovement m : stockMovementRepository.findRecentWithProduct(PageRequest.of(0, 20))) {
+        LocalDateTime movFrom = movementsFrom != null ? movementsFrom : LocalDateTime.of(2000, 1, 1, 0, 0);
+        for (StockMovement m : stockMovementRepository.findRecentWithProduct(movFrom, PageRequest.of(0, 20))) {
             StockAnalyticsResponse.Movement mv = new StockAnalyticsResponse.Movement();
             mv.setSku(m.getProduct() != null ? m.getProduct().getSku() : null);
             mv.setProductName(m.getProduct() != null ? m.getProduct().getName() : null);

@@ -16,23 +16,55 @@ interface StockAnalytics {
   kpis: Kpis; byCategory: CategorySlice[]; critical: CriticalItem[]; recentMovements: Movement[];
 }
 
+const MOV_RANGE_PRESETS: { key: string; label: string; days: number | null }[] = [
+  { key: '7d', label: 'Últimos 7 dias', days: 7 },
+  { key: '30d', label: 'Últimos 30 dias', days: 30 },
+  { key: '90d', label: 'Últimos 90 dias', days: 90 },
+  { key: 'all', label: 'Todo período', days: null },
+];
+
+function isoDaysAgo(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function StockDashboardPage() {
   const [data, setData] = useState<StockAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Filtros: categoria e situação afetam todo o painel; período afeta só as movimentações.
+  const [category, setCategory] = useState('');
+  const [status, setStatus] = useState('');
+  const [movRange, setMovRange] = useState('30d');
+  const [categories, setCategories] = useState<string[]>([]);
+
+  // Carrega as categorias uma vez (do catálogo).
+  useEffect(() => {
+    api.get('/products/catalog').then((res) => {
+      const cats = Array.from(new Set(res.data.map((p: any) => p.category))).sort() as string[];
+      setCategories(cats);
+    }).catch(() => {});
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.get('/admin/analytics/stock');
+      const params: Record<string, string> = {};
+      if (category) params.category = category;
+      if (status) params.status = status;
+      const preset = MOV_RANGE_PRESETS.find(r => r.key === movRange);
+      if (preset?.days) params.movementsFrom = isoDaysAgo(preset.days);
+      const res = await api.get('/admin/analytics/stock', { params });
       setData(res.data);
     } catch (e: any) {
       setError(e.response?.data?.error || 'Erro ao carregar os dados de estoque.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [category, status, movRange]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -46,6 +78,35 @@ export default function StockDashboardPage() {
         </p>
       </div>
 
+      {/* Filtros */}
+      <div className="card p-4 flex flex-wrap items-end gap-4">
+        <div>
+          <label className="block text-[10px] font-medium text-charcoal-400 uppercase tracking-wide mb-1">Categoria</label>
+          <select value={category} onChange={(e) => setCategory(e.target.value)} className="input-field py-1.5 text-sm">
+            <option value="">Todas</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium text-charcoal-400 uppercase tracking-wide mb-1">Situação</label>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-field py-1.5 text-sm">
+            <option value="">Todas</option>
+            <option value="DISPONIVEL">Disponível</option>
+            <option value="BAIXO">Baixo</option>
+            <option value="ESGOTADO">Esgotado</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium text-charcoal-400 uppercase tracking-wide mb-1">Movimentações</label>
+          <select value={movRange} onChange={(e) => setMovRange(e.target.value)} className="input-field py-1.5 text-sm">
+            {MOV_RANGE_PRESETS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
+          </select>
+        </div>
+        <p className="text-[10px] text-charcoal-300 dark:text-charcoal-600 pb-1.5 ml-auto max-w-[220px]">
+          Categoria e situação afetam todo o painel. O período afeta apenas as movimentações.
+        </p>
+      </div>
+
       {loading ? (
         <div className="flex items-center justify-center py-24">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-gold border-t-transparent" />
@@ -53,7 +114,7 @@ export default function StockDashboardPage() {
       ) : error ? (
         <div className="card p-8 text-center text-sm text-red-500">{error}</div>
       ) : !data || data.kpis.skus === 0 ? (
-        <EmptyState />
+        (category || status) ? <NoResults /> : <EmptyState />
       ) : (
         <>
           {/* KPIs */}
@@ -237,6 +298,15 @@ function formatDateTime(iso: string): string {
 // ─── Estados vazios ──────────────────────────────────────────────────────────
 function EmptyChart() {
   return <div className="py-8 text-center text-xs text-charcoal-300 dark:text-charcoal-600">Sem dados.</div>;
+}
+
+function NoResults() {
+  return (
+    <div className="card py-16 text-center">
+      <p className="text-sm text-charcoal-500 dark:text-charcoal-400">Nenhum produto para os filtros selecionados.</p>
+      <p className="mt-1 text-xs text-charcoal-400 dark:text-charcoal-500">Ajuste a categoria ou a situação para ver os dados.</p>
+    </div>
+  );
 }
 
 function EmptyState() {
