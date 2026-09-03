@@ -29,6 +29,8 @@ CREATED_ORDER_IDS = set()
 CREATED_PROMO_IDS = set()
 CREATED_CUSTOMER_IDS = set()
 CREATED_PRODUCT_IDS = set()
+CREATED_CONSIGNMENT_IDS = set()
+CREATED_CONSIGNEE_IDS = set()
 TOUCHED_TEMPLATES = {}  # key -> (body, active) original para restaurar
 
 
@@ -707,6 +709,324 @@ def suite_period_filter():
 
 
 # ===========================================================================
+# CG — Consignação (/api/admin/consignments) + invariantes de estoque
+# ===========================================================================
+def _db_stock(pid):
+    """Retorna (stock_quantity, reserved_quantity) do produto direto no banco."""
+    q = subprocess.run(["psql", "-d", DB, "-tAc",
+                        f"SELECT stock_quantity, reserved_quantity FROM products WHERE id='{pid}';"],
+                       capture_output=True, text=True)
+    out = q.stdout.strip()
+    if "|" not in out:
+        return (None, None)
+    a, b = out.split("|")
+    return (int(a.strip()), int(b.strip()))
+
+
+def _db_count(sql):
+    q = subprocess.run(["psql", "-d", DB, "-tAc", sql], capture_output=True, text=True)
+    try:
+        return int(q.stdout.strip())
+    except ValueError:
+        return -1
+
+
+def _create_consignee(name, rate):
+    st, b = request("POST", "/api/consignees",
+                    body={"name": name, "phone": "51988887777",
+                          "email": f"rev.{TEST_EMAIL_TAG}.{uniq()}@ex.com", "commissionRate": rate})
+    cid = b.get("id") if isinstance(b, dict) else None
+    if cid:
+        CREATED_CONSIGNEE_IDS.add(cid)
+    return st, cid
+
+
+def _create_product(name_suffix, stock, sale=100.0, cost=40.0):
+    sku = f"QA-CONS-{uniq()}"
+    st, b = request("POST", "/api/admin/products",
+                    body={"sku": sku, "name": f"Consig QA {name_suffix}", "category": "Anel",
+                          "costPrice": cost, "salePrice": sale, "stockQuantity": stock})
+    pid = b.get("id") if isinstance(b, dict) else None
+    if pid:
+        CREATED_PRODUCT_IDS.add(pid)
+    return pid
+
+
+def suite_consignacao():
+    print("== SUÍTE CG: Consignação (fluxo + invariantes de estoque) ==")
+
+    # --- RBAC sem sessão em todas as rotas ---
+    for method, path, body in [
+        ("GET", "/api/admin/consignments", None),
+        ("POST", "/api/admin/consignments", {"consigneeId": "x", "items": []}),
+        ("GET", f"/api/admin/consignments/{uniq()}", None),
+    ]:
+        st, _ = request(method, path, body=body, no_cookie=True)
+        R.check(f"CG.rbac.sem_sessao.{method}", st in (401, 403), "401/403", st)
+
+    # --- Setup: revendedora (comissão 30%) + produto (estoque 10) ---
+    st, consignee_id = _create_consignee("Revendedora QA", 0.30)
+    R.check("CG.consignee.criada.201", st == 201, 201, st)
+    pid = _create_product("Principal", stock=10, sale=100.0, cost=40.0)
+    R.check("CG.produto.criado", pid is not None, "produto criado", pid)
+    if not consignee_id or not pid:
+        return
+
+    s0, r0 = _db_stock(pid)
+    R.check("CG.setup.estoque_inicial", (s0, r0) == (10, 0), "(10,0)", (s0, r0))
+
+    # =====================================================================
+    # CENÁRIO 1: abrir lote com comissão override + preço editável
+    # =====================================================================
+    st, lote = request("POST", "/api/admin/consignments",
+                       body={"consigneeId": consignee_id, "commissionRate": 0.40,
+                             "notes": "QA cenário 1",
+                             "items": [{"productId": pid, "quantity": 6, "unitSalePrice": 150.0}]})
+    R.check("CG.abrir.201", st == 201, 201, st)
+    lote_id = lote.get("id") if isinstance(lote, dict) else None
+    if lote_id:
+        CREATED_CONSIGNMENT_IDS.add(lote_id)
+    R.check("CG.abrir.status_aberto", isinstance(lote, dict) and lote.get("status") == "ABERTO", "ABERTO",
+            lote.get("status") if isinstance(lote, dict) else lote)
+    R.check("CG.abrir.comissao_override", isinstance(lote, dict) and abs(float(lote.get("commissionRate", 0)) - 0.40) < 1e-6,
+            0.40, lote.get("commissionRate") if isinstance(lote, dict) else None)
+    it0 = lote["items"][0] if isinstance(lote, dict) and lote.get("items") else {}
+    R.check("CG.abrir.preco_editavel", abs(float(it0.get("unitSalePrice", 0)) - 150.0) < 1e-6, 150.0, it0.get("unitSalePrice"))
+    item_id = it0.get("id")
+
+    # Invariante: reserva moveu 6 do disponível p/ reservado (10 -> 4 disp / 6 res)
+    s1, r1 = _db_stock(pid)
+    R.check("CG.abrir.reserva_estoque", (s1, r1) == (4, 6), "(4,6)", (s1, r1))
+    # Invariante-chave: total físico (disp+res) preservado
+    R.check("CG.abrir.total_preservado", s1 + r1 == s0 + r0, s0 + r0, s1 + r1)
+    # Movimento RESERVA registrado
+    R.check("CG.abrir.movimento_reserva",
+            _db_count(f"SELECT count(*) FROM stock_movements WHERE product_id='{pid}' AND type='RESERVA'") >= 1,
+            ">=1", None)
+
+    # =====================================================================
+    # CENÁRIO 2: guardas de validação
+    # =====================================================================
+    # Reservar mais que o disponível (só há 4 livres) -> 400 e estoque intacto
+    st, _ = request("POST", "/api/admin/consignments",
+                   body={"consigneeId": consignee_id, "items": [{"productId": pid, "quantity": 99}]})
+    R.check("CG.abrir.excede_estoque.400", st == 400, 400, st)
+    s2, r2 = _db_stock(pid)
+    R.check("CG.abrir.excede_nao_altera_estoque", (s2, r2) == (4, 6), "(4,6)", (s2, r2))
+
+    # Revendedora inexistente -> 400
+    st, _ = request("POST", "/api/admin/consignments",
+                   body={"consigneeId": f"{uniq()}0000", "items": [{"productId": pid, "quantity": 1}]})
+    R.check("CG.abrir.revendedora_inexistente.400", st == 400, 400, st)
+
+    # Lote sem itens -> 400 (validação @NotEmpty)
+    st, _ = request("POST", "/api/admin/consignments",
+                   body={"consigneeId": consignee_id, "items": []})
+    R.check("CG.abrir.sem_itens.400", st == 400, 400, st)
+
+    # Acerto com vendido > levado -> 400
+    st, _ = request("PUT", f"/api/admin/consignments/{lote_id}/settle",
+                   body={"items": [{"itemId": item_id, "soldQuantity": 999}]})
+    R.check("CG.acerto.vendido_maior_levado.400", st == 400, 400, st)
+
+    # =====================================================================
+    # CENÁRIO 3: acerto parcial (salvar sem fechar) — não mexe no estoque
+    # =====================================================================
+    st, r = request("PUT", f"/api/admin/consignments/{lote_id}/settle",
+                   body={"items": [{"itemId": item_id, "soldQuantity": 4}]})
+    R.check("CG.acerto.salva.200", st == 200, 200, st)
+    R.check("CG.acerto.soldQuantity_salvo",
+            isinstance(r, dict) and r["items"][0].get("soldQuantity") == 4, 4,
+            r["items"][0].get("soldQuantity") if isinstance(r, dict) else None)
+    R.check("CG.acerto.ainda_aberto", isinstance(r, dict) and r.get("status") == "ABERTO", "ABERTO",
+            r.get("status") if isinstance(r, dict) else None)
+    s3, r3 = _db_stock(pid)
+    R.check("CG.acerto.nao_mexe_estoque", (s3, r3) == (4, 6), "(4,6)", (s3, r3))
+
+    # =====================================================================
+    # CENÁRIO 4: fechar — baixa vendidos, devolve o resto, apura comissão,
+    # gera venda CONSIGNADO integrada à receita
+    # =====================================================================
+    # baseline de receita antes de fechar
+    st, sales_before = request("GET", "/api/admin/analytics/sales?from=2000-01-01&to=2099-12-31")
+    rev_before = float(sales_before["kpis"]["revenue"]) if isinstance(sales_before, dict) else None
+    orders_before = int(sales_before["kpis"]["orders"]) if isinstance(sales_before, dict) else None
+
+    # fecha com 4 vendidos / 2 devolvidos (6 levados)
+    st, fechado = request("POST", f"/api/admin/consignments/{lote_id}/close",
+                         body={"items": [{"itemId": item_id, "soldQuantity": 4}]})
+    R.check("CG.fechar.200", st == 200, 200, st)
+    R.check("CG.fechar.status_fechado", isinstance(fechado, dict) and fechado.get("status") == "FECHADO", "FECHADO",
+            fechado.get("status") if isinstance(fechado, dict) else None)
+    # apuração: 4 * 150 = 600; comissão 40% = 240; líquido = 360
+    R.check("CG.fechar.totalSold", isinstance(fechado, dict) and abs(float(fechado.get("totalSold", 0)) - 600.0) < 0.01,
+            600.0, fechado.get("totalSold") if isinstance(fechado, dict) else None)
+    R.check("CG.fechar.comissao", isinstance(fechado, dict) and abs(float(fechado.get("commissionAmount", 0)) - 240.0) < 0.01,
+            240.0, fechado.get("commissionAmount") if isinstance(fechado, dict) else None)
+    R.check("CG.fechar.liquido", isinstance(fechado, dict) and abs(float(fechado.get("netAmount", 0)) - 360.0) < 0.01,
+            360.0, fechado.get("netAmount") if isinstance(fechado, dict) else None)
+    fi = fechado["items"][0] if isinstance(fechado, dict) and fechado.get("items") else {}
+    R.check("CG.fechar.returnedQuantity", fi.get("returnedQuantity") == 2, 2, fi.get("returnedQuantity"))
+
+    # Invariante de estoque após fechar:
+    #  - 4 vendidos saem da reserva de vez (não voltam ao disponível)
+    #  - 2 devolvidos voltam ao disponível
+    #  => disp = 4 + 2 = 6 ; reservado = 0
+    s4, r4 = _db_stock(pid)
+    R.check("CG.fechar.estoque_final", (s4, r4) == (6, 0), "(6,0)", (s4, r4))
+    # total físico caiu exatamente pelas 4 vendidas (sem baixa dupla)
+    R.check("CG.fechar.baixou_so_vendidos", (s0 + r0) - (s4 + r4) == 4, 4, (s0 + r0) - (s4 + r4))
+    # movimentos: SAIDA (consumo) e LIBERACAO (devolução) registrados
+    R.check("CG.fechar.movimento_saida",
+            _db_count(f"SELECT count(*) FROM stock_movements WHERE product_id='{pid}' AND type='SAIDA'") >= 1,
+            ">=1", None)
+    R.check("CG.fechar.movimento_liberacao",
+            _db_count(f"SELECT count(*) FROM stock_movements WHERE product_id='{pid}' AND type='LIBERACAO'") >= 1,
+            ">=1", None)
+
+    # Receita integrada: subiu 600 e +1 pedido; a venda tem canal CONSIGNADO
+    st, sales_after = request("GET", "/api/admin/analytics/sales?from=2000-01-01&to=2099-12-31")
+    if isinstance(sales_after, dict) and rev_before is not None:
+        R.check("CG.fechar.receita_subiu_600", abs(float(sales_after["kpis"]["revenue"]) - (rev_before + 600.0)) < 0.01,
+                rev_before + 600.0, sales_after["kpis"]["revenue"])
+        R.check("CG.fechar.pedidos_mais_1", int(sales_after["kpis"]["orders"]) == orders_before + 1,
+                orders_before + 1, sales_after["kpis"]["orders"])
+    # confirma no banco: existe pedido CONFIRMADO no canal CONSIGNADO com total 600
+    R.check("CG.fechar.venda_canal_consignado",
+            _db_count("SELECT count(*) FROM orders WHERE channel='CONSIGNADO' AND status='CONFIRMADO' "
+                      "AND total_amount=600.00") >= 1, ">=1", None)
+
+    # =====================================================================
+    # CENÁRIO 5: fechar de novo o mesmo lote -> 400 (idempotência por status)
+    # =====================================================================
+    st, _ = request("POST", f"/api/admin/consignments/{lote_id}/close", body={"items": []})
+    R.check("CG.refechar.400", st == 400, 400, st)
+    # acerto num lote fechado -> 400
+    st, _ = request("PUT", f"/api/admin/consignments/{lote_id}/settle",
+                   body={"items": [{"itemId": item_id, "soldQuantity": 1}]})
+    R.check("CG.acerto_fechado.400", st == 400, 400, st)
+
+    # =====================================================================
+    # CENÁRIO 6: cancelar um lote aberto devolve TODO o reservado
+    # =====================================================================
+    pid2 = _create_product("Cancelavel", stock=5, sale=80.0)
+    sc0, rc0 = _db_stock(pid2)
+    st, lote2 = request("POST", "/api/admin/consignments",
+                       body={"consigneeId": consignee_id, "items": [{"productId": pid2, "quantity": 3}]})
+    R.check("CG.cancelar.abrir.201", st == 201, 201, st)
+    lote2_id = lote2.get("id") if isinstance(lote2, dict) else None
+    if lote2_id:
+        CREATED_CONSIGNMENT_IDS.add(lote2_id)
+    # default de comissão veio da revendedora (0.30) já que não informamos
+    R.check("CG.cancelar.comissao_default_revendedora",
+            isinstance(lote2, dict) and abs(float(lote2.get("commissionRate", 0)) - 0.30) < 1e-6, 0.30,
+            lote2.get("commissionRate") if isinstance(lote2, dict) else None)
+    sc1, rc1 = _db_stock(pid2)
+    R.check("CG.cancelar.reservou", (sc1, rc1) == (2, 3), "(2,3)", (sc1, rc1))
+    st, canc = request("POST", f"/api/admin/consignments/{lote2_id}/cancel")
+    R.check("CG.cancelar.200", st == 200, 200, st)
+    R.check("CG.cancelar.status", isinstance(canc, dict) and canc.get("status") == "CANCELADO", "CANCELADO",
+            canc.get("status") if isinstance(canc, dict) else None)
+    sc2, rc2 = _db_stock(pid2)
+    R.check("CG.cancelar.estoque_restaurado", (sc2, rc2) == (sc0, rc0), (sc0, rc0), (sc2, rc2))
+    # cancelar um lote já cancelado -> 400
+    st, _ = request("POST", f"/api/admin/consignments/{lote2_id}/cancel")
+    R.check("CG.recancelar.400", st == 400, 400, st)
+
+    # =====================================================================
+    # CENÁRIO 7: lote 100% vendido não gera devolução e não sobra reserva;
+    # lote 100% devolvido não gera venda nem receita
+    # =====================================================================
+    # 7a: 100% vendido
+    pid3 = _create_product("TudoVendido", stock=4, sale=50.0)
+    st, l3 = request("POST", "/api/admin/consignments",
+                    body={"consigneeId": consignee_id, "commissionRate": 0.5,
+                          "items": [{"productId": pid3, "quantity": 4, "unitSalePrice": 50.0}]})
+    l3_id = l3.get("id") if isinstance(l3, dict) else None
+    l3_item = l3["items"][0]["id"] if isinstance(l3, dict) else None
+    if l3_id:
+        CREATED_CONSIGNMENT_IDS.add(l3_id)
+    st, l3f = request("POST", f"/api/admin/consignments/{l3_id}/close",
+                     body={"items": [{"itemId": l3_item, "soldQuantity": 4}]})
+    R.check("CG.tudo_vendido.fechar.200", st == 200, 200, st)
+    R.check("CG.tudo_vendido.sem_devolucao", isinstance(l3f, dict) and l3f["items"][0].get("returnedQuantity") == 0,
+            0, l3f["items"][0].get("returnedQuantity") if isinstance(l3f, dict) else None)
+    s3f, r3f = _db_stock(pid3)
+    R.check("CG.tudo_vendido.estoque_zerado", (s3f, r3f) == (0, 0), "(0,0)", (s3f, r3f))
+
+    # 7b: 100% devolvido (nada vendido) — sem venda, estoque volta inteiro
+    pid4 = _create_product("TudoDevolvido", stock=4, sale=50.0)
+    st, l4 = request("POST", "/api/admin/consignments",
+                    body={"consigneeId": consignee_id,
+                          "items": [{"productId": pid4, "quantity": 4}]})
+    l4_id = l4.get("id") if isinstance(l4, dict) else None
+    l4_item = l4["items"][0]["id"] if isinstance(l4, dict) else None
+    if l4_id:
+        CREATED_CONSIGNMENT_IDS.add(l4_id)
+    orders_pre = _db_count("SELECT count(*) FROM orders WHERE channel='CONSIGNADO'")
+    st, l4f = request("POST", f"/api/admin/consignments/{l4_id}/close",
+                     body={"items": [{"itemId": l4_item, "soldQuantity": 0}]})
+    R.check("CG.tudo_devolvido.fechar.200", st == 200, 200, st)
+    R.check("CG.tudo_devolvido.totalSold_zero",
+            isinstance(l4f, dict) and abs(float(l4f.get("totalSold", -1))) < 0.01, 0.0,
+            l4f.get("totalSold") if isinstance(l4f, dict) else None)
+    R.check("CG.tudo_devolvido.comissao_zero",
+            isinstance(l4f, dict) and abs(float(l4f.get("commissionAmount", -1))) < 0.01, 0.0,
+            l4f.get("commissionAmount") if isinstance(l4f, dict) else None)
+    s4f, r4f = _db_stock(pid4)
+    R.check("CG.tudo_devolvido.estoque_intacto", (s4f, r4f) == (4, 0), "(4,0)", (s4f, r4f))
+    orders_pos = _db_count("SELECT count(*) FROM orders WHERE channel='CONSIGNADO'")
+    R.check("CG.tudo_devolvido.sem_nova_venda", orders_pos == orders_pre, orders_pre, orders_pos)
+
+    # =====================================================================
+    # CENÁRIO 8: lote com múltiplos produtos + filtro por status na listagem
+    # =====================================================================
+    pidA = _create_product("MultiA", stock=5, sale=30.0)
+    pidB = _create_product("MultiB", stock=5, sale=70.0)
+    st, l5 = request("POST", "/api/admin/consignments",
+                    body={"consigneeId": consignee_id, "commissionRate": 0.2,
+                          "items": [{"productId": pidA, "quantity": 2, "unitSalePrice": 30.0},
+                                    {"productId": pidB, "quantity": 3, "unitSalePrice": 70.0}]})
+    R.check("CG.multi.abrir.201", st == 201, 201, st)
+    l5_id = l5.get("id") if isinstance(l5, dict) else None
+    if l5_id:
+        CREATED_CONSIGNMENT_IDS.add(l5_id)
+    R.check("CG.multi.dois_itens", isinstance(l5, dict) and len(l5.get("items", [])) == 2, 2,
+            len(l5.get("items", [])) if isinstance(l5, dict) else None)
+    # ambos reservados
+    R.check("CG.multi.reservou_A", _db_stock(pidA) == (3, 2), "(3,2)", _db_stock(pidA))
+    R.check("CG.multi.reservou_B", _db_stock(pidB) == (2, 3), "(2,3)", _db_stock(pidB))
+    # fecha: A vende 1 (dev.1), B vende 3 (dev.0) => total = 1*30 + 3*70 = 240; comissão 20% = 48
+    itemsA = {it["productId"]: it["id"] for it in l5["items"]}
+    st, l5f = request("POST", f"/api/admin/consignments/{l5_id}/close",
+                     body={"items": [{"itemId": itemsA[pidA], "soldQuantity": 1},
+                                     {"itemId": itemsA[pidB], "soldQuantity": 3}]})
+    R.check("CG.multi.fechar.200", st == 200, 200, st)
+    R.check("CG.multi.total", isinstance(l5f, dict) and abs(float(l5f.get("totalSold", 0)) - 240.0) < 0.01, 240.0,
+            l5f.get("totalSold") if isinstance(l5f, dict) else None)
+    R.check("CG.multi.comissao", isinstance(l5f, dict) and abs(float(l5f.get("commissionAmount", 0)) - 48.0) < 0.01, 48.0,
+            l5f.get("commissionAmount") if isinstance(l5f, dict) else None)
+    R.check("CG.multi.estoque_A", _db_stock(pidA) == (4, 0), "(4,0)", _db_stock(pidA))  # 3 + 1 dev
+    R.check("CG.multi.estoque_B", _db_stock(pidB) == (2, 0), "(2,0)", _db_stock(pidB))  # 2 + 0 dev
+
+    # Filtro por status na listagem
+    st, abertos = request("GET", "/api/admin/consignments?status=ABERTO")
+    if isinstance(abertos, list):
+        R.check("CG.lista.filtro_aberto", all(c.get("status") == "ABERTO" for c in abertos), "todos ABERTO", None)
+    st, fechados = request("GET", "/api/admin/consignments?status=FECHADO")
+    if isinstance(fechados, list):
+        R.check("CG.lista.filtro_fechado", all(c.get("status") == "FECHADO" for c in fechados)
+                and any(c.get("id") == lote_id for c in fechados), "todos FECHADO e contém o nosso", None)
+    # status lowercase normaliza
+    st, low = request("GET", "/api/admin/consignments?status=cancelado")
+    R.check("CG.lista.status_lowercase.200", st == 200, 200, st)
+
+    # detalhe de lote inexistente -> 400
+    st, _ = request("GET", f"/api/admin/consignments/{uniq()}0000")
+    R.check("CG.detalhe.inexistente.400", st in (400, 404), "400/404", st)
+
+
+# ===========================================================================
 # Cleanup
 # ===========================================================================
 def cleanup():
@@ -727,6 +1047,11 @@ def cleanup():
         request("PUT", f"/api/admin/settings/messages/{key}",
                 body={"body": body, "active": active, "imageUrl": image_url})
 
+    # Cancela lotes de consignação de teste que ficaram ABERTOS (libera reserva
+    # via serviço), pra não deixar estoque preso antes de remover via SQL.
+    for lid in list(CREATED_CONSIGNMENT_IDS):
+        request("POST", f"/api/admin/consignments/{lid}/cancel")
+
     # SQL: remove usuários de teste, pedidos de teste e seus vínculos, e clientes de teste.
     # Ordem importa: itens/movimentos -> pedidos -> clientes (FK customer_id nos pedidos).
     order_ids = "','".join(CREATED_ORDER_IDS)
@@ -735,12 +1060,32 @@ def cleanup():
         sql.append(f"DELETE FROM order_items WHERE order_id IN ('{order_ids}');")
         sql.append(f"DELETE FROM stock_movements WHERE order_id IN ('{order_ids}');")
         sql.append(f"DELETE FROM orders WHERE id IN ('{order_ids}');")
+    # Vendas CONSIGNADO geradas no fechamento dos lotes de teste (nome da revendedora QA).
+    sql.append("DELETE FROM order_items WHERE order_id IN "
+               "(SELECT id FROM orders WHERE channel='CONSIGNADO' AND customer_name LIKE '%Revendedora QA%');")
+    sql.append("DELETE FROM stock_movements WHERE order_id IN "
+               "(SELECT id FROM orders WHERE channel='CONSIGNADO' AND customer_name LIKE '%Revendedora QA%');")
+    sql.append("DELETE FROM orders WHERE channel='CONSIGNADO' AND customer_name LIKE '%Revendedora QA%';")
+    # Lotes de consignação de teste + itens.
+    if CREATED_CONSIGNMENT_IDS:
+        cons_ids = "','".join(CREATED_CONSIGNMENT_IDS)
+        sql.append(f"DELETE FROM consignment_items WHERE consignment_id IN ('{cons_ids}');")
+        sql.append(f"DELETE FROM consignments WHERE id IN ('{cons_ids}');")
+    # Movimentos de estoque de consignação nos produtos de teste (RESERVA/LIBERACAO/SAIDA).
+    if CREATED_PRODUCT_IDS:
+        prod_ids_cg = "','".join(CREATED_PRODUCT_IDS)
+        sql.append(f"DELETE FROM stock_movements WHERE product_id IN ('{prod_ids_cg}');")
     sql.append(f"DELETE FROM users WHERE email LIKE '%{TEST_EMAIL_TAG}%';")
     # Clientes de teste (por e-mail marcado ou por id criado)
     sql.append(f"DELETE FROM customers WHERE email LIKE '%{TEST_EMAIL_TAG}%';")
     if CREATED_CUSTOMER_IDS:
         cust_ids = "','".join(CREATED_CUSTOMER_IDS)
         sql.append(f"DELETE FROM customers WHERE id IN ('{cust_ids}');")
+    # Revendedoras de teste (por e-mail marcado ou id criado).
+    sql.append(f"DELETE FROM consignees WHERE email LIKE '%{TEST_EMAIL_TAG}%';")
+    if CREATED_CONSIGNEE_IDS:
+        consignee_ids = "','".join(CREATED_CONSIGNEE_IDS)
+        sql.append(f"DELETE FROM consignees WHERE id IN ('{consignee_ids}');")
     # Produtos de teste criados pela suíte (sob encomenda / normal): remove vínculos e o produto.
     if CREATED_PRODUCT_IDS:
         prod_ids = "','".join(CREATED_PRODUCT_IDS)
@@ -765,9 +1110,14 @@ def cleanup():
     R.check("CLEANUP.sem_clientes_teste", len(leaked_c) == 0, 0, len(leaked_c))
 
     leaked_prod = subprocess.run(["psql", "-d", DB, "-tAc",
-                                  "SELECT count(*) FROM products WHERE sku LIKE 'QA-OD-%' OR sku LIKE 'QA-NORM-%';"],
+                                  "SELECT count(*) FROM products WHERE sku LIKE 'QA-OD-%' OR sku LIKE 'QA-NORM-%' OR sku LIKE 'QA-CONS-%';"],
                                  capture_output=True, text=True)
     R.check("CLEANUP.sem_produtos_teste", leaked_prod.stdout.strip() == "0", "0", leaked_prod.stdout.strip())
+
+    leaked_cons = _db_count(f"SELECT count(*) FROM consignees WHERE email LIKE '%{TEST_EMAIL_TAG}%'")
+    R.check("CLEANUP.sem_revendedoras_teste", leaked_cons == 0, 0, leaked_cons)
+    leaked_lote = _db_count("SELECT count(*) FROM orders WHERE channel='CONSIGNADO' AND customer_name LIKE '%Revendedora QA%'")
+    R.check("CLEANUP.sem_vendas_consignado_teste", leaked_lote == 0, 0, leaked_lote)
 
 
 def main():
@@ -784,6 +1134,7 @@ def main():
         suite_stock_dashboard()
         suite_promotions_dashboard()
         suite_period_filter()
+        suite_consignacao()
     finally:
         cleanup()
     dt = time.time() - t0

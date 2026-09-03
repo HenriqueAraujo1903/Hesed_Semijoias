@@ -223,4 +223,39 @@ class StockServiceTest {
         assertThat(captor.getValue().getType()).isEqualTo("SAIDA");
         assertThat(captor.getValue().getDelta()).isEqualTo(-3);
     }
+
+    @Test
+    @DisplayName("reserve exatamente o disponível zera o disponível (limite aceito)")
+    void reserve_exactlyAvailable() {
+        when(productRepository.findById(product.getId())).thenReturn(java.util.Optional.of(product));
+        Product r = stockService.reserve(product.getId(), 10, "lote total");
+        assertThat(r.getStockQuantity()).isEqualTo(0);
+        assertThat(r.getReservedQuantity()).isEqualTo(10);
+        assertThat(r.getStockStatus()).isEqualTo("ESGOTADO"); // disponível 0
+        verify(movementRepository).save(any(StockMovement.class));
+    }
+
+    @Test
+    @DisplayName("reserve rejeita quantidade não positiva antes de tocar o repositório")
+    void reserve_rejectsNonPositive() {
+        assertThatThrownBy(() -> stockService.reserve(product.getId(), 0, "x"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("positiva");
+        verify(movementRepository, org.mockito.Mockito.never()).save(any(StockMovement.class));
+    }
+
+    @Test
+    @DisplayName("consumeReserved nunca deixa o reservado negativo (piso ao reservado atual)")
+    void consumeReserved_flooredAtReserved() {
+        product.setStockQuantity(2);
+        product.setReservedQuantity(3);
+        when(productRepository.findById(product.getId())).thenReturn(java.util.Optional.of(product));
+        // tenta consumir 5, mas só há 3 reservados → consome 3, não fica negativo
+        Product r = stockService.consumeReserved(product.getId(), 5, "venda", null);
+        assertThat(r.getReservedQuantity()).isEqualTo(0);
+        assertThat(r.getStockQuantity()).isEqualTo(2); // disponível intacto
+        ArgumentCaptor<StockMovement> captor = ArgumentCaptor.forClass(StockMovement.class);
+        verify(movementRepository).save(captor.capture());
+        assertThat(captor.getValue().getDelta()).isEqualTo(-3);
+    }
 }
