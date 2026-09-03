@@ -15,6 +15,7 @@ import subprocess
 import urllib.request
 import urllib.error
 import http.cookiejar
+from urllib.parse import quote
 
 BASE = os.environ.get("QA_BASE", "http://localhost:8081")
 ADMIN_EMAIL = os.environ.get("QA_ADMIN_EMAIL", "admin@homolog.com")
@@ -545,6 +546,75 @@ def suite_sob_encomenda():
 
 
 # ===========================================================================
+# SD — Dashboard de Estoque (/api/admin/analytics/stock)
+# ===========================================================================
+def suite_stock_dashboard():
+    print("== SUÍTE SD: Dashboard de Estoque ==")
+
+    # RBAC sem sessão
+    st, _ = request("GET", "/api/admin/analytics/stock", no_cookie=True)
+    R.check("SD.rbac.sem_sessao", st in (401, 403), "401/403", st)
+
+    # Baseline
+    st, d = request("GET", "/api/admin/analytics/stock")
+    R.check("SD.get.200", st == 200, 200, st)
+    if not isinstance(d, dict) or "kpis" not in d:
+        R.check("SD.payload", False, "payload com kpis", d)
+        return
+    k = d["kpis"]
+
+    # Coerência: soma das categorias == KPIs de skus/unidades/custo
+    sku_sum = sum(c["skus"] for c in d["byCategory"])
+    unit_sum = sum(c["units"] for c in d["byCategory"])
+    cost_sum = round(sum(float(c["costValue"]) for c in d["byCategory"]), 2)
+    R.check("SD.coerencia.skus", k["skus"] == sku_sum, k["skus"], sku_sum)
+    R.check("SD.coerencia.units", k["units"] == unit_sum, k["units"], unit_sum)
+    R.check("SD.coerencia.custo", abs(float(k["costValue"]) - cost_sum) < 0.01, k["costValue"], cost_sum)
+    R.check("SD.coerencia.status_soma", k["available"] + k["low"] + k["out"] == k["skus"],
+            k["skus"], k["available"] + k["low"] + k["out"])
+    # Críticos == baixo + esgotado
+    R.check("SD.criticos_conta", len(d["critical"]) == k["low"] + k["out"], k["low"] + k["out"], len(d["critical"]))
+
+    baseline_skus = k["skus"]
+
+    # Cria produto SOB ENCOMENDA e confirma que NÃO entra no dashboard
+    sku_od = f"QA-OD-SD-{uniq()}"
+    st, b = request("POST", "/api/admin/products",
+                    body={"sku": sku_od, "name": "OD Dash QA", "category": "Corrente",
+                          "costPrice": 50, "salePrice": 150, "stockQuantity": 0,
+                          "onDemand": True, "leadTimeDays": 7})
+    if isinstance(b, dict) and b.get("id"):
+        CREATED_PRODUCT_IDS.add(b["id"])
+    st, d2 = request("GET", "/api/admin/analytics/stock")
+    R.check("SD.onDemand_fora", isinstance(d2, dict) and d2["kpis"]["skus"] == baseline_skus,
+            baseline_skus, d2["kpis"]["skus"] if isinstance(d2, dict) else None)
+
+    # Filtro por categoria restringe o painel
+    if d["byCategory"]:
+        cat = d["byCategory"][0]["category"]
+        st, dc = request("GET", f"/api/admin/analytics/stock?category={quote(cat)}")
+        cats = {c["category"] for c in dc["byCategory"]} if isinstance(dc, dict) else set()
+        R.check("SD.filtro_categoria", cats <= {cat}, f"apenas {cat}", cats)
+
+    # Filtro por situação restringe os críticos
+    st, de = request("GET", "/api/admin/analytics/stock?status=ESGOTADO")
+    if isinstance(de, dict):
+        st_set = {c["stockStatus"] for c in de["critical"]}
+        R.check("SD.filtro_status", st_set <= {"ESGOTADO"}, "apenas ESGOTADO", st_set)
+        R.check("SD.filtro_status.disponivel_zero", de["kpis"]["available"] == 0, 0, de["kpis"]["available"])
+
+    # status lowercase normaliza
+    st, dl = request("GET", "/api/admin/analytics/stock?status=baixo")
+    R.check("SD.status_lowercase", isinstance(dl, dict) and dl.get("kpis") is not None, "kpis ok", None)
+
+    # movementsFrom no futuro zera as movimentações, mas mantém os KPIs
+    st, df = request("GET", "/api/admin/analytics/stock?movementsFrom=2099-01-01")
+    if isinstance(df, dict):
+        R.check("SD.movimentacoes_futuro_zero", len(df["recentMovements"]) == 0, 0, len(df["recentMovements"]))
+        R.check("SD.movimentacoes_nao_afeta_kpis", df["kpis"]["skus"] == baseline_skus, baseline_skus, df["kpis"]["skus"])
+
+
+# ===========================================================================
 # Cleanup
 # ===========================================================================
 def cleanup():
@@ -619,6 +689,7 @@ def main():
         suite_catalogo_promo()
         suite_clientes()
         suite_sob_encomenda()
+        suite_stock_dashboard()
     finally:
         cleanup()
     dt = time.time() - t0
