@@ -3,9 +3,15 @@ package com.hesed.services;
 import com.hesed.dto.EngagementAnalyticsResponse;
 import com.hesed.dto.SalesAnalyticsResponse;
 import com.hesed.dto.SalesAnalyticsResponse.*;
+import com.hesed.dto.StockAnalyticsResponse;
+import com.hesed.models.Product;
+import com.hesed.models.StockMovement;
 import com.hesed.repositories.CatalogEventRepository;
 import com.hesed.repositories.OrderItemRepository;
 import com.hesed.repositories.OrderRepository;
+import com.hesed.repositories.ProductRepository;
+import com.hesed.repositories.StockMovementRepository;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -19,13 +25,89 @@ public class AnalyticsService {
     private final OrderItemRepository orderItemRepository;
     private final OrderRepository orderRepository;
     private final CatalogEventRepository catalogEventRepository;
+    private final ProductRepository productRepository;
+    private final StockMovementRepository stockMovementRepository;
 
     public AnalyticsService(OrderItemRepository orderItemRepository,
                             OrderRepository orderRepository,
-                            CatalogEventRepository catalogEventRepository) {
+                            CatalogEventRepository catalogEventRepository,
+                            ProductRepository productRepository,
+                            StockMovementRepository stockMovementRepository) {
         this.orderItemRepository = orderItemRepository;
         this.orderRepository = orderRepository;
         this.catalogEventRepository = catalogEventRepository;
+        this.productRepository = productRepository;
+        this.stockMovementRepository = stockMovementRepository;
+    }
+
+    // ===========================================================================
+    // Estoque (dashboard)
+    // ===========================================================================
+    public StockAnalyticsResponse stock() {
+        StockAnalyticsResponse resp = new StockAnalyticsResponse();
+
+        // KPIs
+        List<Object[]> kRows = productRepository.stockKpis();
+        Object[] kv = kRows.isEmpty() ? new Object[]{0L, 0L, BigDecimal.ZERO, BigDecimal.ZERO} : kRows.get(0);
+        StockAnalyticsResponse.Kpis kpis = new StockAnalyticsResponse.Kpis();
+        kpis.setSkus(toLong(kv[0]));
+        kpis.setUnits(toLong(kv[1]));
+        kpis.setCostValue(scale(toBigDecimal(kv[2])));
+        kpis.setSaleValue(scale(toBigDecimal(kv[3])));
+        for (Object[] r : productRepository.stockCountByStatus()) {
+            String status = (String) r[0];
+            long count = toLong(r[1]);
+            switch (status == null ? "" : status) {
+                case "DISPONIVEL" -> kpis.setAvailable(count);
+                case "BAIXO" -> kpis.setLow(count);
+                case "ESGOTADO" -> kpis.setOut(count);
+                default -> { /* status inesperado: ignora na contagem */ }
+            }
+        }
+        resp.setKpis(kpis);
+
+        // Distribuição por categoria
+        List<StockAnalyticsResponse.CategorySlice> cats = new java.util.ArrayList<>();
+        for (Object[] r : productRepository.stockByCategory()) {
+            StockAnalyticsResponse.CategorySlice c = new StockAnalyticsResponse.CategorySlice();
+            c.setCategory((String) r[0]);
+            c.setSkus(toLong(r[1]));
+            c.setUnits(toLong(r[2]));
+            c.setCostValue(scale(toBigDecimal(r[3])));
+            c.setSaleValue(scale(toBigDecimal(r[4])));
+            cats.add(c);
+        }
+        resp.setByCategory(cats);
+
+        // Itens críticos (baixo/esgotado)
+        List<StockAnalyticsResponse.CriticalItem> critical = new java.util.ArrayList<>();
+        for (Product p : productRepository.findCriticalStock()) {
+            StockAnalyticsResponse.CriticalItem ci = new StockAnalyticsResponse.CriticalItem();
+            ci.setSku(p.getSku());
+            ci.setName(p.getName());
+            ci.setCategory(p.getCategory());
+            ci.setStockQuantity(p.getStockQuantity() != null ? p.getStockQuantity() : 0);
+            ci.setStockStatus(p.getStockStatus());
+            critical.add(ci);
+        }
+        resp.setCritical(critical);
+
+        // Movimentações recentes (últimas 20)
+        List<StockAnalyticsResponse.Movement> movs = new java.util.ArrayList<>();
+        for (StockMovement m : stockMovementRepository.findRecentWithProduct(PageRequest.of(0, 20))) {
+            StockAnalyticsResponse.Movement mv = new StockAnalyticsResponse.Movement();
+            mv.setSku(m.getProduct() != null ? m.getProduct().getSku() : null);
+            mv.setProductName(m.getProduct() != null ? m.getProduct().getName() : null);
+            mv.setType(m.getType());
+            mv.setDelta(m.getDelta() != null ? m.getDelta() : 0);
+            mv.setResultingQuantity(m.getResultingQuantity() != null ? m.getResultingQuantity() : 0);
+            mv.setReason(m.getReason());
+            mv.setAt(m.getCreatedAt());
+            movs.add(mv);
+        }
+        resp.setRecentMovements(movs);
+
+        return resp;
     }
 
     public SalesAnalyticsResponse sales(String status,

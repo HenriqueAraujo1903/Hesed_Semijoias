@@ -43,4 +43,40 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
     // Produtos com data de compra definida (para cálculo de garantia).
     @Query("SELECT p FROM Product p WHERE p.purchaseDate IS NOT NULL ORDER BY p.purchaseDate ASC")
     List<Product> findWithPurchaseDate();
+
+    // ---- Analytics de estoque (dashboard) ----
+    // Considera apenas produtos de estoque próprio (exclui sob encomenda).
+
+    /**
+     * KPIs agregados do estoque próprio (exclui onDemand):
+     * [0] total de SKUs, [1] soma de unidades, [2] valor a custo (custo*qtd),
+     * [3] valor potencial de venda (venda*qtd).
+     */
+    @Query("SELECT COUNT(p), COALESCE(SUM(p.stockQuantity),0), " +
+           "COALESCE(SUM(p.costPrice * p.stockQuantity),0), " +
+           "COALESCE(SUM(p.salePrice * p.stockQuantity),0) " +
+           "FROM Product p WHERE (p.onDemand IS NULL OR p.onDemand = false)")
+    List<Object[]> stockKpis();
+
+    /** Contagem de produtos de estoque próprio por stockStatus (DISPONIVEL/BAIXO/ESGOTADO). */
+    @Query("SELECT p.stockStatus, COUNT(p) FROM Product p " +
+           "WHERE (p.onDemand IS NULL OR p.onDemand = false) GROUP BY p.stockStatus")
+    List<Object[]> stockCountByStatus();
+
+    /**
+     * Distribuição por categoria (estoque próprio):
+     * [0] categoria, [1] nº de SKUs, [2] unidades, [3] valor a custo, [4] valor de venda.
+     */
+    @Query("SELECT p.category, COUNT(p), COALESCE(SUM(p.stockQuantity),0), " +
+           "COALESCE(SUM(p.costPrice * p.stockQuantity),0), " +
+           "COALESCE(SUM(p.salePrice * p.stockQuantity),0) " +
+           "FROM Product p WHERE (p.onDemand IS NULL OR p.onDemand = false) " +
+           "GROUP BY p.category ORDER BY SUM(p.costPrice * p.stockQuantity) DESC")
+    List<Object[]> stockByCategory();
+
+    /** Itens críticos: baixo ou esgotado (estoque próprio), mais críticos primeiro. */
+    @Query("SELECT p FROM Product p WHERE (p.onDemand IS NULL OR p.onDemand = false) " +
+           "AND p.stockStatus IN ('BAIXO','ESGOTADO') " +
+           "ORDER BY p.stockQuantity ASC, p.name ASC")
+    List<Product> findCriticalStock();
 }

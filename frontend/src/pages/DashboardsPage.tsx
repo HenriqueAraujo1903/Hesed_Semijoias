@@ -42,7 +42,7 @@ const DASHBOARDS: DashboardItem[] = [
     to: '/dashboards/estoque',
     accent: 'emerald',
     icon: BoxIcon,
-    available: false,
+    available: true,
   },
   {
     key: 'revendedoras',

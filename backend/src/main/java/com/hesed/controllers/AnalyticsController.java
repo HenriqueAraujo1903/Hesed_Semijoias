@@ -2,6 +2,7 @@ package com.hesed.controllers;
 
 import com.hesed.dto.EngagementAnalyticsResponse;
 import com.hesed.dto.SalesAnalyticsResponse;
+import com.hesed.dto.StockAnalyticsResponse;
 import com.hesed.services.AnalyticsService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -63,5 +64,15 @@ public class AnalyticsController {
         LocalDateTime toDt = to != null ? to.atTime(LocalTime.MAX) : null;
 
         return ResponseEntity.ok(analyticsService.engagement(fromDt, toDt));
+    }
+
+    /**
+     * Dashboard de estoque: KPIs (SKUs, unidades, valor a custo/venda, baixo/esgotado),
+     * distribuição por categoria, itens críticos e movimentações recentes.
+     * Considera apenas o estoque próprio (produtos sob encomenda ficam de fora).
+     */
+    @GetMapping("/stock")
+    public ResponseEntity<StockAnalyticsResponse> stock() {
+        return ResponseEntity.ok(analyticsService.stock());
     }
 }
