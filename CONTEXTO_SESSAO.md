@@ -1,16 +1,20 @@
 # Contexto da Sessão — HESED Semijoias
 
 **Última atualização:** 03/09/2026
-**Status:** 🟢 Em produção e estável. Nesta sessão foram entregues em produção: leva WhatsApp/usuários/cancelamento/preço-promo/carrossel → imagem opcional nas mensagens → cadastro de clientes/aba Cadastros → fix do PWA (fotos quebradas por service worker) → produto sob encomenda (onDemand). Próximo grande passo aguarda o usuário obter o **WhatsApp Business** para o envio de mensagem em massa (promoção).
+**Status:** 🟢 Em produção e estável. Última entrega em produção: **Consignação Fase 1** (lotes consignados com reserva de estoque, acerto por quantidade, fechamento com baixa/devolução + venda canal CONSIGNADO na receita + comissão por lote). Sessões anteriores entregaram: dashboards (Vendas/Engajamento/Estoque/Promoções) + filtro de período compartilhado; e a leva WhatsApp/usuários/clientes/onDemand. Próximo passo da consignação: **Fase 2 (dashboard Revendedoras)**. Continua pendente (bloqueada) a **mensagem em massa** aguardando o usuário obter o WhatsApp Business.
 
 ---
 
 ## 🎯 Retomar na próxima sessão
 
 - Trabalhar na branch **`dev`** (working tree limpo).
-- As 3 branches (`dev`, `homolog`, `main`) e a produção estão TODAS no mesmo commit: **`4c6fa5f`**.
+- As 3 branches (`dev`, `homolog`, `main`) e a produção estão TODAS no mesmo commit: **`3c951e6`**.
 - Fluxo de sempre: `dev` → validar local → `dev → homolog` → QA → `homolog → main` (deploy prod, com backup antes).
 - **Padrão do usuário:** valida visualmente em dev antes de subir; aprova cada etapa; quer QA completo antes de produção.
+
+### Próxima feature planejada: CONSIGNAÇÃO FASE 2 — Dashboard de Revendedoras
+- A Fase 1 (fluxo + tela de gestão) já está em produção. A Fase 2 é o **dashboard de Revendedoras**: desempenho por revendedora (quanto levou, vendeu, devolveu, comissão apurada, líquido), ranking, período. Agora há dados reais para alimentar (entidades `Consignment`/`ConsignmentItem` com apurados no fechamento).
+- Decisão de receita já tomada na Fase 1: **Opção A** — venda consignada entra na receita geral com **canal CONSIGNADO** explícito (origem visível em controles/dashboards). Não é faturamento separado.
 
 ### Próxima feature planejada: MENSAGEM EM MASSA (broadcast de promoção)
 - **Bloqueada** até o usuário ter conta **WhatsApp Business / Meta Cloud API**. O `wa.me` (usado hoje) NÃO faz envio em massa (abriria 1 aba por cliente) — decidido esperar a API oficial.
@@ -64,9 +68,33 @@ Produto anunciado no catálogo SEM estoque próprio (venda sob encomenda; compra
 - **Frontend catálogo:** selo dourado "Sob encomenda" + "Entrega em até X dias úteis" no card e no modal; produto onDemand sempre comprável.
 - **Frontend admin (AdminProductsPage):** checkbox "Produto sob encomenda" + campo "Prazo de entrega (dias úteis)"; ao marcar, os campos de quantidade/estoque somem; aviso de que o custo é estimado.
 
+---
+
+## 📦 CONSIGNAÇÃO FASE 1 (03/09, commits `570c5e6`→`3c951e6`, em produção)
+
+Fluxo de lotes consignados com revendedoras. Abrir lote reserva estoque; acerto por quantidade vendida; fechar baixa os vendidos, devolve o resto, gera venda na receita (canal CONSIGNADO) e apura comissão por lote. Fase 2 (dashboard Revendedoras) fica para depois.
+
+**Decisões do usuário:** (1) estoque fica **reservado** ao abrir (estado "reservado consignado", extensível a outras reservas no futuro — NÃO baixa direto como venda); (2) comissão **configurável por lote na tela**, com default vindo da revendedora; (3) receita **Opção A** integrada com origem CONSIGNADO explícita; (4) **quantidade por produto** no item (não é 1 peça = 1 linha); acerto por quantidade (vendido; o resto é devolvido); comissão sobre o preço de venda, com `unitSalePrice` editável por lote.
+
+### Backend
+- **`Product.reservedQuantity`** (col `reserved_quantity`, default 0): estoque reservado, fora da loja mas ainda "nosso" — não conta como disponível nem esgotado. `stockStatus` segue derivado só do `stockQuantity` (disponível). Exposto em `ProductResponse` (`reservedQuantity`).
+- **`StockService`**: `reserve(productId, qty, reason)` move disponível→reservado (movimento **RESERVA**, delta negativo no disponível; rejeita reservar mais que o disponível); `releaseReservation` move reservado→disponível (movimento **LIBERACAO**, piso no reservado); `consumeReserved` baixa do reservado de vez sem voltar ao disponível (movimento **SAIDA**, venda consignada efetivada). Helper `recordMovement`.
+- **`Consignment`**: `commissionRate` (snapshot 0..1 por lote) + apurados no fechamento `totalSold`/`commissionAmount`/`netAmount`. **`ConsignmentItem`**: `quantity` (levado), `soldQuantity`, `returnedQuantity`, `unitSalePrice`, snapshot `productSku`/`productName`.
+- **`ConsignmentService`** `open`/`settle`/`close`/`cancel`/`findAll`/`findById`. `open` valida revendedora, define comissão (request ou da revendedora), monta itens e reserva estoque. `settle` salva quantidades vendidas sem fechar (valida vendido ≤ levado). `close` consome vendidos (`consumeReserved`), libera devolvidos (`releaseReservation`), gera venda CONSIGNADO e apura comissão = totalSold × commissionRate; só fecha ABERTO (idempotente). `cancel` libera todo o reservado.
+- **`OrderService.createConsignmentSale(consigneeName, List<ConsignmentSaleItem(productId,quantity,unitPrice)>, now)`**: cria `Order` CONFIRMADO **canal CONSIGNADO** SEM tocar estoque (o estoque já saiu da reserva via `consumeReserved` — evita dupla baixa). Record interno `ConsignmentSaleItem`.
+- **`ConsignmentController`** `/api/admin/consignments`: GET (list `?status`), GET/{id}, POST (open), PUT/{id}/settle, POST/{id}/close, POST/{id}/cancel. RBAC herdado de `/api/admin/**`. DTOs `ConsignmentRequest`/`ConsignmentSettleRequest`/`ConsignmentResponse`. Repo `findFiltered(status)`/`findByIdWithItems(id)` (JOIN FETCH itens+produto+consignee).
+
+### Frontend
+- **`ConsignmentsPage.tsx`** (rota `/consignacoes`, ROLE_ADMIN; menu **Consignações** com `HandshakeIcon`): lista com filtro por status (Todos/Abertos/Fechados/Cancelados); **abrir lote** (revendedora, comissão editável com default da revendedora, e **busca de produto por nome/SKU** com lista de resultados mostrando estoque disponível — substituiu o `<select>` que estourava com nomes longos; qtd + preço de venda editável por item); **acerto/fechar** (quantidade vendida por item, resumo ao vivo vendido/devolvido/comissão/líquido); cancelar.
+- **Fix de layout:** selects/colunas com `min-w-0` + `truncate` e `overflow-x-hidden` no modal — nomes longos não quebram mais a tela.
+
+### QA da Consignação
+- **`StockServiceTest`** ganhou reserva/liberação/consumo + casos de borda (reservar exatamente o disponível, rejeitar qtd não positiva, `consumeReserved` com piso no reservado). Novo **`ConsignmentServiceTest`** (open reserva + comissão do request/revendedora, settle valida vendido>levado, close apura comissão/gera venda CONSIGNADO/devolve, sem vendas não gera venda, refechar 400, cancel libera). Como StockService/OrderService não são mockáveis (bug Byte Buddy/JDK), os testes usam instâncias REAIS com repos mockados e asseguram o efeito (estado do produto, Order capturado). **Total unit: 122, 0 falhas.**
+- **Suíte E2E `qa_leva_config` → CG (Consignação)**, 8 cenários com invariantes de estoque validadas via SQL: reserva preserva total físico (disp+reservado); guardas (excede estoque, revendedora/lote inválido, vendido>levado); acerto parcial não mexe no estoque; fechar baixa só os vendidos (sem dupla baixa) + devolve o resto + receita CONSIGNADO +N + comissão por lote + movimentos SAIDA/LIBERACAO; refechar/recancelar/acertar-fechado 400; cancelar restaura estoque; 100% vendido / 100% devolvido; multi-produto; filtros de status. Cleanup de lotes/revendedoras/vendas CONSIGNADO de teste + leak checks.
+
 ### QA desta sessão
 - **Suíte nova `qa/qa_leva_config.py`** (85 casos): usuários, mensagens (com imagem), telefone obrigatório confirmar/cancelar, preço promo no catálogo, carrossel sem esgotado, e **clientes** (CRUD, telefone válido/inválido, e-mail dup case-insensitive, busca, vínculo cliente-pedido, catálogo público inalterado). Faz cleanup próprio via API + psql (`QA_DB=hesed_homolog`).
-- Última bateria completa em homolog: **1.446 casos, 0 falhas** (unit 103 + qa_leva_config 101 + qa_homolog 399 + qa_estoque_dev 262 + qa_seguranca 311 + qa_metas 270). A `qa_leva_config` cobre também **sob encomenda** (16 casos: onDemand qty0→DISPONIVEL/comprável, venda não baixa estoque nem gera movimento, fora do lowStock, normal ainda ESGOTADO, RBAC).
+- Última bateria completa em homolog (03/09, pós-Consignação): **1.566 casos, 0 falhas** (unit 122 + qa_leva_config 202 + qa_homolog 399 + qa_estoque_dev 262 + qa_seguranca 311 + qa_metas 270). A `qa_leva_config` cobre também **sob encomenda** e a nova suíte **CG de Consignação** (fluxo + invariantes de estoque via SQL).
 - **QA de infra/PWA** (classe do bug de fotos): validado com o build servido (`npx vite preview`, SW ativo) — `sw.js` com skipWaiting/clientsClaim/cleanupOutdatedCaches/NetworkFirst; `/uploads` e `/api` fora do precache (só assets do app); assets versionados batem com o index.html; upload real 200 image/png; magic-bytes rejeita não-imagem (400). Vale repetir esse check a cada mexida em PWA/upload/nginx.
 - **2 testes de regressão foram ajustados** (código de teste, não app) pela regra "telefone obrigatório confirmar E cancelar": `qa_homolog.py` (G8) e `qa_estoque_dev.py` (venda direta confirmada envia `customerPhone`).
 - **Bugs reais pegos pelo QA e corrigidos:** (1) e-mail de cliente duplicado case-insensitive não era bloqueado → `CustomerService.normalizeEmail` agora faz `.toLowerCase()`.
@@ -78,12 +106,12 @@ Produto anunciado no catálogo SEM estoque próprio (venda sob encomenda; compra
 
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `4c6fa5f` | No ar em https://hesedsemijoias.online |
-| `dev` | `4c6fa5f` | Sincronizada (trabalhar aqui) |
-| `homolog` | `4c6fa5f` | Sincronizada |
+| `main` (produção) | `3c951e6` | No ar em https://hesedsemijoias.online |
+| `dev` | `3c951e6` | Sincronizada (trabalhar aqui) |
+| `homolog` | `3c951e6` | Sincronizada |
 
-- **Backups de banco pré-deploy** (VPS `/root/backups/`): `hesed_db_pre_leva_...` (leva 1), `hesed_db_pre_imagem_...` (leva 2), `hesed_db_pre_cadastros_...` (leva 3), `hesed_db_pre_pwafix_...` (leva 4), `hesed_db_pre_sobencomenda_20260903_000955.sql.gz` (leva 5).
-- **Migração de schema (ddl-auto update, aditivo):** criadas ao longo da sessão as tabelas `message_templates`, `customers` e colunas `users.phone`, `message_templates.image_url`, `orders.customer_id`, `products.on_demand`, `products.lead_time_days`. Dados de produção preservados (products=24, users=3, customers=0).
+- **Backups de banco pré-deploy** (VPS `/root/backups/`): mais recentes `hesed_db_pre_periodfilter_20260903_191655.sql.gz` (dashboards/filtro de período) e `hesed_db_pre_consignacao_20260903_210055.sql.gz` (Consignação Fase 1). Anteriores: leva/imagem/cadastros/pwafix/sobencomenda.
+- **Migração de schema (ddl-auto update, aditivo):** a Consignação adicionou `products.reserved_quantity` (default 0) e as colunas em `consignments` (`commission_rate`, `total_sold`, `commission_amount`, `net_amount`) e `consignment_items` (`quantity`, `sold_quantity`, `returned_quantity`, `unit_sale_price`, `product_sku`, `product_name`). Tabelas `consignments`/`consignment_items` já existiam (entidades antigas) e passaram a ser usadas. Schema de prod confirmado pós-deploy: 24 produtos com `reserved_quantity`, tabelas de consignação vazias. Sessões anteriores criaram `message_templates`, `customers` e colunas `users.phone`, `message_templates.image_url`, `orders.customer_id`, `products.on_demand`, `products.lead_time_days`.
 - Rollback de um deploy: no VPS `git checkout <commit_anterior>` + `docker compose up -d --build`; restaurar banco pelo dump se necessário.
 
 ---
@@ -120,7 +148,8 @@ Produto anunciado no catálogo SEM estoque próprio (venda sob encomenda; compra
 - **Visão Geral (resumo executivo):** metas mensais (receita/pedidos) com herança e trava+auditoria, progresso vs meta, KPIs, pedidos pendentes, alertas de estoque/garantia, gráfico de receita 6 meses.
 - **Catálogo público:** sacola, carrossel de promoções (sem produtos esgotados), preço promocional (effectivePrice) exibido/cobrado, telemetria, modal de fotos (galeria até 5).
 - **Pedidos:** registro via catálogo/WhatsApp, edição, confirmação/cancelamento (ambos exigem nome+telefone), venda direta; aviso automático via WhatsApp com template + imagem opcional.
-- **Dashboards** (Vendas: KPIs/margem/funil/série; Engajamento). **Estoque** unificado (Produtos CRUD + Reposição + Garantia). **Promoções**, **Revendedoras**.
+- **Dashboards** (Vendas/Engajamento/Estoque/Promoções, todos com filtro de período compartilhado: atalhos + intervalo customizado). **Estoque** unificado (Produtos CRUD + Reposição + Garantia). **Promoções**, **Revendedoras**.
+- **Consignações (Fase 1):** lotes com revendedoras — abrir reserva estoque, acerto por quantidade vendida, fechar baixa vendidos + devolve o resto ao estoque + gera venda na receita (canal CONSIGNADO) + apura comissão por lote. Comissão editável por lote. (Fase 2 = dashboard Revendedoras, pendente.)
 - **Segurança:** auth por cookie HttpOnly, CSP, rate limit, uploads validados por magic bytes, catálogo sem vazar custo.
 
 ---
@@ -131,4 +160,4 @@ Produto anunciado no catálogo SEM estoque próprio (venda sob encomenda; compra
 - `DOCUMENTACAO.md` — documentação oficial
 - `DEPLOY.md` — guia de deploy
 - `FLUXO_TRABALHO.md` — fluxo dev/homolog/prod
-- `qa/qa_homolog.py`, `qa/qa_estoque_dev.py`, `qa/qa_seguranca.py`, `qa/qa_metas.py`, `qa/qa_leva_config.py` — baterias de QA (1.446 casos)
+- `qa/qa_homolog.py`, `qa/qa_estoque_dev.py`, `qa/qa_seguranca.py`, `qa/qa_metas.py`, `qa/qa_leva_config.py` — baterias de QA (1.566 casos)
