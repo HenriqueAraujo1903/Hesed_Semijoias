@@ -73,10 +73,19 @@ public class Product {
     @Builder.Default
     private String stockStatus = "DISPONIVEL";
 
-    /** Quantidade em estoque (peças disponíveis). Fonte da verdade do estoque. */
+    /** Quantidade em estoque (peças disponíveis para venda). Fonte da verdade do estoque. */
     @Column(name = "stock_quantity", nullable = false, columnDefinition = "integer default 0")
     @Builder.Default
     private Integer stockQuantity = 0;
+
+    /**
+     * Quantidade reservada (ex.: consignada com revendedoras). Fisicamente fora
+     * da loja, mas ainda "nossa": não conta como disponível nem como esgotado.
+     * Preparado para outros tipos de reserva no futuro.
+     */
+    @Column(name = "reserved_quantity", nullable = false, columnDefinition = "integer default 0")
+    @Builder.Default
+    private Integer reservedQuantity = 0;
 
     /** Limiar para considerar o estoque "baixo" (default 3). */
     @Column(name = "low_stock_threshold", nullable = false, columnDefinition = "integer default 3")

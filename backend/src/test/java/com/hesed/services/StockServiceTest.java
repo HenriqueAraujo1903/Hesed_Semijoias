@@ -166,4 +166,61 @@ class StockServiceTest {
         assertThat(onDemand.getStockQuantity()).isEqualTo(0);
         verify(movementRepository, org.mockito.Mockito.never()).save(any(StockMovement.class));
     }
+
+    // ===== Reserva (consignação) =====
+
+    @Test
+    @DisplayName("reserve move disponível -> reservado e registra movimento RESERVA")
+    void reserve_movesAvailableToReserved() {
+        when(productRepository.findById(product.getId())).thenReturn(java.util.Optional.of(product));
+        Product r = stockService.reserve(product.getId(), 4, "lote X");
+        assertThat(r.getStockQuantity()).isEqualTo(6);
+        assertThat(r.getReservedQuantity()).isEqualTo(4);
+        ArgumentCaptor<StockMovement> captor = ArgumentCaptor.forClass(StockMovement.class);
+        verify(movementRepository).save(captor.capture());
+        assertThat(captor.getValue().getType()).isEqualTo("RESERVA");
+        assertThat(captor.getValue().getDelta()).isEqualTo(-4);
+    }
+
+    @Test
+    @DisplayName("reserve rejeita quantidade maior que o disponível")
+    void reserve_rejectsMoreThanAvailable() {
+        when(productRepository.findById(product.getId())).thenReturn(java.util.Optional.of(product));
+        assertThatThrownBy(() -> stockService.reserve(product.getId(), 20, "lote X"))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("insuficiente");
+        assertThat(product.getReservedQuantity()).isEqualTo(0);
+        verify(movementRepository, org.mockito.Mockito.never()).save(any(StockMovement.class));
+    }
+
+    @Test
+    @DisplayName("releaseReservation devolve reservado -> disponível (piso: não libera mais que reservado)")
+    void releaseReservation_movesReservedToAvailable() {
+        product.setStockQuantity(6);
+        product.setReservedQuantity(4);
+        when(productRepository.findById(product.getId())).thenReturn(java.util.Optional.of(product));
+        // pede liberar 10, mas só há 4 reservados → libera 4
+        Product r = stockService.releaseReservation(product.getId(), 10, "devolução");
+        assertThat(r.getReservedQuantity()).isEqualTo(0);
+        assertThat(r.getStockQuantity()).isEqualTo(10);
+        ArgumentCaptor<StockMovement> captor = ArgumentCaptor.forClass(StockMovement.class);
+        verify(movementRepository).save(captor.capture());
+        assertThat(captor.getValue().getType()).isEqualTo("LIBERACAO");
+        assertThat(captor.getValue().getDelta()).isEqualTo(4);
+    }
+
+    @Test
+    @DisplayName("consumeReserved baixa do reservado sem voltar ao disponível (movimento SAIDA)")
+    void consumeReserved_removesFromReserved() {
+        product.setStockQuantity(6);
+        product.setReservedQuantity(4);
+        when(productRepository.findById(product.getId())).thenReturn(java.util.Optional.of(product));
+        Product r = stockService.consumeReserved(product.getId(), 3, "venda consignada", null);
+        assertThat(r.getReservedQuantity()).isEqualTo(1);
+        assertThat(r.getStockQuantity()).isEqualTo(6); // disponível inalterado
+        ArgumentCaptor<StockMovement> captor = ArgumentCaptor.forClass(StockMovement.class);
+        verify(movementRepository).save(captor.capture());
+        assertThat(captor.getValue().getType()).isEqualTo("SAIDA");
+        assertThat(captor.getValue().getDelta()).isEqualTo(-3);
+    }
 }

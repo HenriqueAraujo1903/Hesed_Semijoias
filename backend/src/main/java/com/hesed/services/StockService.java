@@ -111,4 +111,82 @@ public class StockService {
                     "Estorno pedido " + order.getOrderNumber(), order.getId());
         }
     }
+
+    // ===========================================================================
+    // Reserva (consignação): move entre "disponível" (stockQuantity) e
+    // "reservado" (reservedQuantity). A reserva NÃO é venda — a peça continua
+    // nossa, só está fisicamente fora (com a revendedora).
+    // ===========================================================================
+
+    /**
+     * Reserva `qty` unidades: disponível → reservado. Não pode reservar mais do
+     * que há disponível. Registra movimento RESERVA (delta negativo no disponível).
+     */
+    @Transactional
+    public Product reserve(UUID productId, int qty, String reason) {
+        if (qty <= 0) throw new RuntimeException("A quantidade a reservar deve ser positiva.");
+        Product p = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Produto não encontrado."));
+        int available = p.getStockQuantity() != null ? p.getStockQuantity() : 0;
+        if (qty > available) {
+            throw new RuntimeException("Estoque insuficiente para reservar " + qty
+                    + " de " + p.getName() + " (disponível: " + available + ").");
+        }
+        int reserved = p.getReservedQuantity() != null ? p.getReservedQuantity() : 0;
+        p.setStockQuantity(available - qty);
+        p.setReservedQuantity(reserved + qty);
+        p.setStockStatus(ProductService.deriveStockStatus(p.getStockQuantity(), p.getLowStockThreshold()));
+        Product saved = productRepository.save(p);
+        recordMovement(saved, "RESERVA", -qty, saved.getStockQuantity(), reason);
+        return saved;
+    }
+
+    /**
+     * Libera `qty` unidades reservadas de volta ao disponível: reservado → disponível.
+     * Usado quando a peça consignada é devolvida. Registra movimento LIBERACAO.
+     */
+    @Transactional
+    public Product releaseReservation(UUID productId, int qty, String reason) {
+        if (qty <= 0) return productRepository.findById(productId).orElse(null);
+        Product p = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Produto não encontrado."));
+        int reserved = p.getReservedQuantity() != null ? p.getReservedQuantity() : 0;
+        int toRelease = Math.min(qty, reserved); // não libera mais do que está reservado
+        int available = p.getStockQuantity() != null ? p.getStockQuantity() : 0;
+        p.setReservedQuantity(reserved - toRelease);
+        p.setStockQuantity(available + toRelease);
+        p.setStockStatus(ProductService.deriveStockStatus(p.getStockQuantity(), p.getLowStockThreshold()));
+        Product saved = productRepository.save(p);
+        recordMovement(saved, "LIBERACAO", toRelease, saved.getStockQuantity(), reason);
+        return saved;
+    }
+
+    /**
+     * Consome `qty` unidades reservadas (venda consignada efetivada): sai da
+     * reserva de vez — não volta ao disponível. Registra movimento SAIDA.
+     */
+    @Transactional
+    public Product consumeReserved(UUID productId, int qty, String reason, UUID orderId) {
+        if (qty <= 0) return productRepository.findById(productId).orElse(null);
+        Product p = productRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Produto não encontrado."));
+        int reserved = p.getReservedQuantity() != null ? p.getReservedQuantity() : 0;
+        int toConsume = Math.min(qty, reserved);
+        p.setReservedQuantity(reserved - toConsume);
+        Product saved = productRepository.save(p);
+        StockMovement mov = StockMovement.builder()
+                .product(saved).type("SAIDA").delta(-toConsume)
+                .resultingQuantity(saved.getStockQuantity() != null ? saved.getStockQuantity() : 0)
+                .reason(reason).orderId(orderId).build();
+        movementRepository.save(mov);
+        return saved;
+    }
+
+    /** Registra um StockMovement sem alterar quantidade (o chamador já ajustou). */
+    private void recordMovement(Product product, String type, int delta, int resulting, String reason) {
+        StockMovement mov = StockMovement.builder()
+                .product(product).type(type).delta(delta)
+                .resultingQuantity(resulting).reason(reason).build();
+        movementRepository.save(mov);
+    }
 }

@@ -283,6 +283,47 @@ public class OrderService {
                 .build();
     }
 
+    /**
+     * Cria um pedido de VENDA CONSIGNADA já CONFIRMADO (canal CONSIGNADO), para
+     * entrar na receita geral. NÃO consome estoque aqui: o estoque consignado já
+     * foi baixado da reserva pelo fluxo de consignação (StockService.consumeReserved).
+     * Cada item traz produto, quantidade e preço de venda do lote.
+     */
+    @Transactional
+    public Order createConsignmentSale(String consigneeName, List<ConsignmentSaleItem> items, LocalDateTime now) {
+        Order order = Order.builder()
+                .orderNumber(generateUniqueOrderNumber())
+                .status("CONFIRMADO")
+                .channel("CONSIGNADO")
+                .orderedAt(now)
+                .resolvedAt(now)
+                .customerName(consigneeName)
+                .build();
+
+        for (ConsignmentSaleItem si : items) {
+            Product product = productRepository.findById(si.productId())
+                    .orElseThrow(() -> new RuntimeException("Produto não encontrado: " + si.productId()));
+            OrderItem oi = OrderItem.builder()
+                    .order(order)
+                    .product(product)
+                    .productSku(product.getSku())
+                    .productName(product.getName())
+                    .productCategory(product.getCategory())
+                    .unitPrice(product.getSalePrice())
+                    .effectivePrice(si.unitPrice())
+                    .costPrice(product.getCostPrice())
+                    .quantity(si.quantity())
+                    .wasPromotion(false)
+                    .build();
+            order.getItems().add(oi);
+        }
+        recalcTotal(order);
+        return orderRepository.save(order);
+    }
+
+    /** Item de uma venda consignada (produto + quantidade vendida + preço de venda). */
+    public record ConsignmentSaleItem(UUID productId, int quantity, BigDecimal unitPrice) {}
+
     /** Total = soma de (effectivePrice * quantity) de cada item. */
     private void recalcTotal(Order order) {
         BigDecimal total = BigDecimal.ZERO;

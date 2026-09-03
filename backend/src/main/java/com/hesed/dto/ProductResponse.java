@@ -24,6 +24,7 @@ public class ProductResponse {
     private String status;
     private String stockStatus;
     private Integer stockQuantity;
+    private Integer reservedQuantity;
     private Integer lowStockThreshold;
     private UUID supplierId;
     private String supplierName;
@@ -51,6 +52,7 @@ public class ProductResponse {
         r.setStatus(p.getStatus());
         r.setStockStatus(p.getStockStatus());
         r.setStockQuantity(p.getStockQuantity());
+        r.setReservedQuantity(p.getReservedQuantity());
         r.setLowStockThreshold(p.getLowStockThreshold());
         if (p.getSupplier() != null) {
             r.setSupplierId(p.getSupplier().getId());

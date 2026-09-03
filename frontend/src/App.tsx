@@ -12,6 +12,7 @@ import PromotionsDashboardPage from './pages/dashboards/PromotionsDashboardPage'
 import OrdersPage from './pages/OrdersPage';
 import AdminPromotionsPage from './pages/AdminPromotionsPage';
 import ConsigneesPage from './pages/ConsigneesPage';
+import ConsignmentsPage from './pages/ConsignmentsPage';
 import SuppliersPage from './pages/SuppliersPage';
 import CadastrosPage from './pages/CadastrosPage';
 import StockPage from './pages/StockPage';
@@ -59,6 +60,9 @@ export default function App() {
           <ProtectedRoute requiredRole="ROLE_ADMIN"><OrdersPage /></ProtectedRoute>
         } />
         <Route path="/revendedoras" element={<ConsigneesPage />} />
+        <Route path="/consignacoes" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><ConsignmentsPage /></ProtectedRoute>
+        } />
         {/* Rotas antigas de produtos consolidadas na aba Estoque */}
         <Route path="/produtos" element={<Navigate to="/admin/estoque" replace />} />
         <Route path="/admin/produtos" element={<Navigate to="/admin/estoque" replace />} />

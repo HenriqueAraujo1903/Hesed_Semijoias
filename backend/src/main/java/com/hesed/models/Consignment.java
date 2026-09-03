@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -25,9 +26,27 @@ public class Consignment {
     @JoinColumn(name = "consignee_id", nullable = false)
     private Consignee consignee;
 
+    /** ABERTO (peças com a revendedora) | FECHADO (acertado). */
     @Column(nullable = false, length = 50)
     @Builder.Default
     private String status = "ABERTO";
+
+    /** Comissão do lote (0..1). Snapshot editável por lote; default vem da revendedora. */
+    @Column(name = "commission_rate", precision = 5, scale = 4)
+    private BigDecimal commissionRate;
+
+    // ── Apurados no fechamento ──
+    /** Receita total das peças vendidas (soma unitSalePrice * soldQuantity). */
+    @Column(name = "total_sold", precision = 10, scale = 2)
+    private BigDecimal totalSold;
+
+    /** Comissão apurada = totalSold * commissionRate. */
+    @Column(name = "commission_amount", precision = 10, scale = 2)
+    private BigDecimal commissionAmount;
+
+    /** Líquido da loja = totalSold - commissionAmount. */
+    @Column(name = "net_amount", precision = 10, scale = 2)
+    private BigDecimal netAmount;
 
     @Column(name = "opened_at")
     @Builder.Default

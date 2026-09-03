@@ -5,6 +5,7 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -28,8 +29,31 @@ public class ConsignmentItem {
     @JoinColumn(name = "product_id", nullable = false)
     private Product product;
 
-    @Column(length = 50)
-    private String outcome; // DEVOLVIDO | VENDIDO | null
+    /** Snapshot do produto (preserva o histórico mesmo se o produto mudar/for excluído). */
+    @Column(name = "product_sku", length = 50)
+    private String productSku;
+
+    @Column(name = "product_name", length = 120)
+    private String productName;
+
+    /** Quantidade levada no lote (consignada). */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer quantity = 1;
+
+    /** Quantidade vendida (definida no acerto). O restante é devolvido. */
+    @Column(name = "sold_quantity", nullable = false)
+    @Builder.Default
+    private Integer soldQuantity = 0;
+
+    /** Quantidade devolvida (apurada no fechamento = quantity - soldQuantity). */
+    @Column(name = "returned_quantity", nullable = false)
+    @Builder.Default
+    private Integer returnedQuantity = 0;
+
+    /** Preço de venda unitário no lote (sugerido do salePrice, editável por lote). */
+    @Column(name = "unit_sale_price", precision = 10, scale = 2)
+    private BigDecimal unitSalePrice;
 
     @Column(name = "returned_at")
     private LocalDateTime returnedAt;
