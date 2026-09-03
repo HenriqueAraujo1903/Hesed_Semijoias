@@ -668,6 +668,45 @@ def suite_promotions_dashboard():
 
 
 # ===========================================================================
+# PF — Filtro de período (intervalo from+to nos dashboards)
+# ===========================================================================
+def suite_period_filter():
+    print("== SUÍTE PF: Filtro de período (from+to) ==")
+
+    # Sales: intervalo amplo tem dados; intervalo futuro zera
+    st, amplo = request("GET", "/api/admin/analytics/sales?from=2000-01-01&to=2030-12-31&granularity=month")
+    R.check("PF.sales.amplo.200", st == 200, 200, st)
+    rev_amplo = float(amplo["kpis"]["revenue"]) if isinstance(amplo, dict) else -1
+    st, fut = request("GET", "/api/admin/analytics/sales?from=2099-01-01&to=2099-12-31")
+    R.check("PF.sales.futuro_zera", isinstance(fut, dict) and float(fut["kpis"]["revenue"]) == 0,
+            0, fut["kpis"]["revenue"] if isinstance(fut, dict) else None)
+    # janela até ontem não pode ser maior que o todo período (sanidade)
+    R.check("PF.sales.amplo_tem_ou_zero", rev_amplo >= 0, ">=0", rev_amplo)
+
+    # Stock: movementsFrom+movementsTo — intervalo amplo vs futuro
+    st, sAmplo = request("GET", "/api/admin/analytics/stock?movementsFrom=2000-01-01&movementsTo=2030-12-31")
+    st, sFut = request("GET", "/api/admin/analytics/stock?movementsFrom=2099-01-01&movementsTo=2099-12-31")
+    if isinstance(sAmplo, dict) and isinstance(sFut, dict):
+        R.check("PF.stock.futuro_zera_movs", len(sFut["recentMovements"]) == 0, 0, len(sFut["recentMovements"]))
+        R.check("PF.stock.kpis_inalterado", sFut["kpis"]["skus"] == sAmplo["kpis"]["skus"],
+                sAmplo["kpis"]["skus"], sFut["kpis"]["skus"])
+        R.check("PF.stock.amplo_movs_maior_igual", len(sAmplo["recentMovements"]) >= len(sFut["recentMovements"]),
+                ">=", None)
+
+    # Promotions: from+to — futuro zera vendas mas mantém ativas
+    st, pAmplo = request("GET", "/api/admin/analytics/promotions?from=2000-01-01&to=2030-12-31")
+    st, pFut = request("GET", "/api/admin/analytics/promotions?from=2099-01-01&to=2099-12-31")
+    if isinstance(pAmplo, dict) and isinstance(pFut, dict):
+        R.check("PF.promo.futuro_zera_receita", float(pFut["kpis"]["promoRevenue"]) == 0, 0, pFut["kpis"]["promoRevenue"])
+        R.check("PF.promo.futuro_mantem_ativas", pFut["kpis"]["activeCount"] == pAmplo["kpis"]["activeCount"],
+                pAmplo["kpis"]["activeCount"], pFut["kpis"]["activeCount"])
+
+    # Intervalo de um único dia (from==to) é aceito (não quebra)
+    st, umDia = request("GET", "/api/admin/analytics/sales?from=2000-06-15&to=2000-06-15")
+    R.check("PF.sales.um_dia.200", st == 200, 200, st)
+
+
+# ===========================================================================
 # Cleanup
 # ===========================================================================
 def cleanup():
@@ -744,6 +783,7 @@ def main():
         suite_sob_encomenda()
         suite_stock_dashboard()
         suite_promotions_dashboard()
+        suite_period_filter()
     finally:
         cleanup()
     dt = time.time() - t0
