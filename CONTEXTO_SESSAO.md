@@ -1,20 +1,16 @@
 # Contexto da Sessão — HESED Semijoias
 
 **Última atualização:** 03/09/2026
-**Status:** 🟢 Em produção e estável. Última entrega em produção: **Consignação Fase 1** (lotes consignados com reserva de estoque, acerto por quantidade, fechamento com baixa/devolução + venda canal CONSIGNADO na receita + comissão por lote). Sessões anteriores entregaram: dashboards (Vendas/Engajamento/Estoque/Promoções) + filtro de período compartilhado; e a leva WhatsApp/usuários/clientes/onDemand. Próximo passo da consignação: **Fase 2 (dashboard Revendedoras)**. Continua pendente (bloqueada) a **mensagem em massa** aguardando o usuário obter o WhatsApp Business.
+**Status:** 🟢 Em produção e estável. Última entrega em produção: **Consignação Fase 2 — Dashboard de Revendedoras** (KPIs de desempenho, ranking por revendedora, consignações em aberto). Antes dela: **Consignação Fase 1** (lotes consignados com reserva de estoque, acerto por quantidade, fechamento com baixa/devolução + venda canal CONSIGNADO na receita + comissão por lote). Sessões anteriores: dashboards (Vendas/Engajamento/Estoque/Promoções) + filtro de período compartilhado; leva WhatsApp/usuários/clientes/onDemand. **Consignação concluída (Fases 1 e 2).** Continua pendente (bloqueada) a **mensagem em massa** aguardando o usuário obter o WhatsApp Business.
 
 ---
 
 ## 🎯 Retomar na próxima sessão
 
 - Trabalhar na branch **`dev`** (working tree limpo).
-- As 3 branches (`dev`, `homolog`, `main`) e a produção estão TODAS no mesmo commit: **`3c951e6`**.
+- As 3 branches (`dev`, `homolog`, `main`) e a produção estão TODAS no mesmo commit: **`92e70a4`**.
 - Fluxo de sempre: `dev` → validar local → `dev → homolog` → QA → `homolog → main` (deploy prod, com backup antes).
 - **Padrão do usuário:** valida visualmente em dev antes de subir; aprova cada etapa; quer QA completo antes de produção.
-
-### Próxima feature planejada: CONSIGNAÇÃO FASE 2 — Dashboard de Revendedoras
-- A Fase 1 (fluxo + tela de gestão) já está em produção. A Fase 2 é o **dashboard de Revendedoras**: desempenho por revendedora (quanto levou, vendeu, devolveu, comissão apurada, líquido), ranking, período. Agora há dados reais para alimentar (entidades `Consignment`/`ConsignmentItem` com apurados no fechamento).
-- Decisão de receita já tomada na Fase 1: **Opção A** — venda consignada entra na receita geral com **canal CONSIGNADO** explícito (origem visível em controles/dashboards). Não é faturamento separado.
 
 ### Próxima feature planejada: MENSAGEM EM MASSA (broadcast de promoção)
 - **Bloqueada** até o usuário ter conta **WhatsApp Business / Meta Cloud API**. O `wa.me` (usado hoje) NÃO faz envio em massa (abriria 1 aba por cliente) — decidido esperar a API oficial.
@@ -92,9 +88,28 @@ Fluxo de lotes consignados com revendedoras. Abrir lote reserva estoque; acerto 
 - **`StockServiceTest`** ganhou reserva/liberação/consumo + casos de borda (reservar exatamente o disponível, rejeitar qtd não positiva, `consumeReserved` com piso no reservado). Novo **`ConsignmentServiceTest`** (open reserva + comissão do request/revendedora, settle valida vendido>levado, close apura comissão/gera venda CONSIGNADO/devolve, sem vendas não gera venda, refechar 400, cancel libera). Como StockService/OrderService não são mockáveis (bug Byte Buddy/JDK), os testes usam instâncias REAIS com repos mockados e asseguram o efeito (estado do produto, Order capturado). **Total unit: 122, 0 falhas.**
 - **Suíte E2E `qa_leva_config` → CG (Consignação)**, 8 cenários com invariantes de estoque validadas via SQL: reserva preserva total físico (disp+reservado); guardas (excede estoque, revendedora/lote inválido, vendido>levado); acerto parcial não mexe no estoque; fechar baixa só os vendidos (sem dupla baixa) + devolve o resto + receita CONSIGNADO +N + comissão por lote + movimentos SAIDA/LIBERACAO; refechar/recancelar/acertar-fechado 400; cancelar restaura estoque; 100% vendido / 100% devolvido; multi-produto; filtros de status. Cleanup de lotes/revendedoras/vendas CONSIGNADO de teste + leak checks.
 
+---
+
+## 📦 CONSIGNAÇÃO FASE 2 — Dashboard de Revendedoras (03/09, commit `92e70a4`, em produção)
+
+Dashboard analítico da consignação em `/dashboards/revendedoras`. **Decisões do usuário:** (1) KPIs financeiros/ranking consideram os lotes **FECHADOS** cujo fechamento (`closedAt`) caiu no período; (2) a lista de consignações em aberto é sempre "agora" (independe do período); (3) lotes abertos NÃO entram nos KPIs financeiros (só na tabela de abertos, com valor potencial).
+
+### Backend
+- **`ConsignmentRepository`** ganhou agregações: `closedKpis(from,to)` [totalSold, commission, net, count], `closedItemPieces(from,to)` [consignadas, vendidas, devolvidas], `countByStatus(status)`, `rankingByConsignee(from,to)` (GROUP BY consignee, ORDER BY totalSold desc), `rankingPiecesByConsignee(from,to)`, `openConsignments()` [id, nome, openedAt, peças, valorPotencial].
+- **`ResellersAnalyticsResponse`** (DTO): `Kpis` (totalSold, commissionAmount, netAmount, sellThroughRate, piecesConsigned/Sold/Returned, openCount, closedCount), `List<ResellerRow>` ranking, `List<OpenRow>` openConsignments.
+- **`AnalyticsService.resellers(from,to)`**: normaliza datas null (2000-01-01 / now+1y); sell-through = vendidas/consignadas (via helper `rate`, protegido contra div/0); junta financeiro + peças por revendedora no ranking. **`AnalyticsService` passou a ter 7 dependências** (adicionado `ConsignmentRepository`) — o `AnalyticsServiceTest` precisou do `@Mock` correspondente.
+- **`AnalyticsController`** `GET /api/admin/analytics/resellers` (from/to LocalDate → atStartOfDay/atTime MAX, null ao service).
+
+### Frontend
+- **`ResellersDashboardPage.tsx`** (rota `/dashboards/revendedoras`, ROLE_ADMIN): KPIs (total vendido, comissão paga, líquido, taxa de venda) + peças (consignadas/vendidas/devolvidas) + consignações abertas; tabela de **ranking** de revendedoras (lotes, peças, taxa, comissão, vendido) e tabela de **consignações em aberto** (peças, valor potencial). Usa o `PeriodFilter` compartilhado e `BRL`/`NUM`. Card **Revendedoras** ativado (`available:true`) no hub `DashboardsPage`.
+
+### QA da Fase 2
+- **`AnalyticsServiceTest`** +2 testes de `resellers` (KPIs/somas, sell-through 60%, ranking Maria 80% / Ana 40%, openConsignments; e caso vazio sem divisão por zero). **Total unit: 124, 0 falhas.**
+- **Suíte E2E `qa_leva_config` → RD (Resellers Dashboard)**: cria revendedora+produto dedicados, fecha lote com números conhecidos, valida a linha do ranking (vendido/comissão/líquido/lotes/peças/sell-through), ordenação desc, consignação aberta com valor potencial, coerência dos KPIs globais (net = total − comissão), e que **período futuro zera fechados/ranking mantendo os abertos**. Cleanup reusa o da suíte CG (lotes/revendedoras/vendas de teste).
+
 ### QA desta sessão
 - **Suíte nova `qa/qa_leva_config.py`** (85 casos): usuários, mensagens (com imagem), telefone obrigatório confirmar/cancelar, preço promo no catálogo, carrossel sem esgotado, e **clientes** (CRUD, telefone válido/inválido, e-mail dup case-insensitive, busca, vínculo cliente-pedido, catálogo público inalterado). Faz cleanup próprio via API + psql (`QA_DB=hesed_homolog`).
-- Última bateria completa em homolog (03/09, pós-Consignação): **1.566 casos, 0 falhas** (unit 122 + qa_leva_config 202 + qa_homolog 399 + qa_estoque_dev 262 + qa_seguranca 311 + qa_metas 270). A `qa_leva_config` cobre também **sob encomenda** e a nova suíte **CG de Consignação** (fluxo + invariantes de estoque via SQL).
+- Última bateria completa em homolog (03/09, pós-Consignação Fase 2): **1.592 casos, 0 falhas** (unit 124 + qa_leva_config 226 + qa_homolog 399 + qa_estoque_dev 262 + qa_seguranca 311 + qa_metas 270). A `qa_leva_config` cobre também **sob encomenda**, a suíte **CG de Consignação** (fluxo + invariantes de estoque via SQL) e a suíte **RD do dashboard de Revendedoras**.
 - **QA de infra/PWA** (classe do bug de fotos): validado com o build servido (`npx vite preview`, SW ativo) — `sw.js` com skipWaiting/clientsClaim/cleanupOutdatedCaches/NetworkFirst; `/uploads` e `/api` fora do precache (só assets do app); assets versionados batem com o index.html; upload real 200 image/png; magic-bytes rejeita não-imagem (400). Vale repetir esse check a cada mexida em PWA/upload/nginx.
 - **2 testes de regressão foram ajustados** (código de teste, não app) pela regra "telefone obrigatório confirmar E cancelar": `qa_homolog.py` (G8) e `qa_estoque_dev.py` (venda direta confirmada envia `customerPhone`).
 - **Bugs reais pegos pelo QA e corrigidos:** (1) e-mail de cliente duplicado case-insensitive não era bloqueado → `CustomerService.normalizeEmail` agora faz `.toLowerCase()`.
@@ -106,12 +121,12 @@ Fluxo de lotes consignados com revendedoras. Abrir lote reserva estoque; acerto 
 
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `3c951e6` | No ar em https://hesedsemijoias.online |
-| `dev` | `3c951e6` | Sincronizada (trabalhar aqui) |
-| `homolog` | `3c951e6` | Sincronizada |
+| `main` (produção) | `92e70a4` | No ar em https://hesedsemijoias.online |
+| `dev` | `92e70a4` | Sincronizada (trabalhar aqui) |
+| `homolog` | `92e70a4` | Sincronizada |
 
-- **Backups de banco pré-deploy** (VPS `/root/backups/`): mais recentes `hesed_db_pre_periodfilter_20260903_191655.sql.gz` (dashboards/filtro de período) e `hesed_db_pre_consignacao_20260903_210055.sql.gz` (Consignação Fase 1). Anteriores: leva/imagem/cadastros/pwafix/sobencomenda.
-- **Migração de schema (ddl-auto update, aditivo):** a Consignação adicionou `products.reserved_quantity` (default 0) e as colunas em `consignments` (`commission_rate`, `total_sold`, `commission_amount`, `net_amount`) e `consignment_items` (`quantity`, `sold_quantity`, `returned_quantity`, `unit_sale_price`, `product_sku`, `product_name`). Tabelas `consignments`/`consignment_items` já existiam (entidades antigas) e passaram a ser usadas. Schema de prod confirmado pós-deploy: 24 produtos com `reserved_quantity`, tabelas de consignação vazias. Sessões anteriores criaram `message_templates`, `customers` e colunas `users.phone`, `message_templates.image_url`, `orders.customer_id`, `products.on_demand`, `products.lead_time_days`.
+- **Backups de banco pré-deploy** (VPS `/root/backups/`): mais recentes `hesed_db_pre_consignacao_20260903_210055.sql.gz` (Consignação Fase 1) e `hesed_db_pre_dashrevendedoras_20260903_220256.sql.gz` (Fase 2 / dashboard Revendedoras). Anteriores: periodfilter/leva/imagem/cadastros/pwafix/sobencomenda.
+- **Migração de schema (ddl-auto update, aditivo):** a **Fase 2 NÃO alterou schema** (só leitura/agregação sobre as tabelas existentes). A Fase 1 havia adicionado `products.reserved_quantity` (default 0) e as colunas em `consignments` (`commission_rate`, `total_sold`, `commission_amount`, `net_amount`) e `consignment_items` (`quantity`, `sold_quantity`, `returned_quantity`, `unit_sale_price`, `product_sku`, `product_name`). Tabelas `consignments`/`consignment_items` já existiam (entidades antigas) e passaram a ser usadas. Sessões anteriores criaram `message_templates`, `customers` e colunas `users.phone`, `message_templates.image_url`, `orders.customer_id`, `products.on_demand`, `products.lead_time_days`.
 - Rollback de um deploy: no VPS `git checkout <commit_anterior>` + `docker compose up -d --build`; restaurar banco pelo dump se necessário.
 
 ---
@@ -148,8 +163,9 @@ Fluxo de lotes consignados com revendedoras. Abrir lote reserva estoque; acerto 
 - **Visão Geral (resumo executivo):** metas mensais (receita/pedidos) com herança e trava+auditoria, progresso vs meta, KPIs, pedidos pendentes, alertas de estoque/garantia, gráfico de receita 6 meses.
 - **Catálogo público:** sacola, carrossel de promoções (sem produtos esgotados), preço promocional (effectivePrice) exibido/cobrado, telemetria, modal de fotos (galeria até 5).
 - **Pedidos:** registro via catálogo/WhatsApp, edição, confirmação/cancelamento (ambos exigem nome+telefone), venda direta; aviso automático via WhatsApp com template + imagem opcional.
-- **Dashboards** (Vendas/Engajamento/Estoque/Promoções, todos com filtro de período compartilhado: atalhos + intervalo customizado). **Estoque** unificado (Produtos CRUD + Reposição + Garantia). **Promoções**, **Revendedoras**.
-- **Consignações (Fase 1):** lotes com revendedoras — abrir reserva estoque, acerto por quantidade vendida, fechar baixa vendidos + devolve o resto ao estoque + gera venda na receita (canal CONSIGNADO) + apura comissão por lote. Comissão editável por lote. (Fase 2 = dashboard Revendedoras, pendente.)
+- **Dashboards** (Vendas/Engajamento/Estoque/Promoções/**Revendedoras**, todos com filtro de período compartilhado: atalhos + intervalo customizado). **Estoque** unificado (Produtos CRUD + Reposição + Garantia).
+- **Consignações (Fase 1):** lotes com revendedoras — abrir reserva estoque, acerto por quantidade vendida, fechar baixa vendidos + devolve o resto ao estoque + gera venda na receita (canal CONSIGNADO) + apura comissão por lote. Comissão editável por lote.
+- **Dashboard de Revendedoras (Fase 2):** desempenho da consignação — total vendido, comissão paga, líquido, taxa de venda, peças consignadas/vendidas/devolvidas, ranking por revendedora e consignações em aberto. KPIs consideram lotes fechados no período; abertos são "agora".
 - **Segurança:** auth por cookie HttpOnly, CSP, rate limit, uploads validados por magic bytes, catálogo sem vazar custo.
 
 ---
@@ -160,4 +176,4 @@ Fluxo de lotes consignados com revendedoras. Abrir lote reserva estoque; acerto 
 - `DOCUMENTACAO.md` — documentação oficial
 - `DEPLOY.md` — guia de deploy
 - `FLUXO_TRABALHO.md` — fluxo dev/homolog/prod
-- `qa/qa_homolog.py`, `qa/qa_estoque_dev.py`, `qa/qa_seguranca.py`, `qa/qa_metas.py`, `qa/qa_leva_config.py` — baterias de QA (1.566 casos)
+- `qa/qa_homolog.py`, `qa/qa_estoque_dev.py`, `qa/qa_seguranca.py`, `qa/qa_metas.py`, `qa/qa_leva_config.py` — baterias de QA (1.592 casos)
