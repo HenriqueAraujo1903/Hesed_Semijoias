@@ -213,7 +213,7 @@ function OpenConsignmentModal({ onClose, onSaved }: { onClose: () => void; onSav
   const [commission, setCommission] = useState(''); // percent string
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<DraftItem[]>([]);
-  const [productToAdd, setProductToAdd] = useState('');
+  const [productSearch, setProductSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -237,11 +237,8 @@ function OpenConsignmentModal({ onClose, onSaved }: { onClose: () => void; onSav
     if (c && commission === '') setCommission((c.commissionRate * 100).toString());
   }
 
-  function addProduct() {
-    if (!productToAdd) return;
-    if (items.some((i) => i.productId === productToAdd)) { setProductToAdd(''); return; }
-    const p = products.find((x) => x.id === productToAdd);
-    if (!p) return;
+  function addProduct(p: ProductOption) {
+    if (items.some((i) => i.productId === p.id)) return;
     setItems([...items, {
       productId: p.id,
       productLabel: `${p.name} (${p.sku})`,
@@ -249,7 +246,7 @@ function OpenConsignmentModal({ onClose, onSaved }: { onClose: () => void; onSav
       unitSalePrice: p.salePrice.toString(),
       maxAvailable: p.stockQuantity,
     }]);
-    setProductToAdd('');
+    setProductSearch('');
   }
 
   function updateItem(idx: number, patch: Partial<DraftItem>) {
@@ -260,10 +257,20 @@ function OpenConsignmentModal({ onClose, onSaved }: { onClose: () => void; onSav
     setItems(items.filter((_, i) => i !== idx));
   }
 
+  // Produtos ainda não adicionados ao lote.
   const availableProducts = useMemo(
     () => products.filter((p) => !items.some((i) => i.productId === p.id)),
     [products, items]
   );
+
+  // Resultado da busca (por nome ou SKU). Só mostra a lista quando há termo.
+  const searchResults = useMemo(() => {
+    const term = productSearch.trim().toLowerCase();
+    if (!term) return [];
+    return availableProducts
+      .filter((p) => p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term))
+      .slice(0, 8);
+  }, [productSearch, availableProducts]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -304,17 +311,17 @@ function OpenConsignmentModal({ onClose, onSaved }: { onClose: () => void; onSav
           <button onClick={onClose} className="text-stone-400 hover:text-stone-600">✕</button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5 overflow-y-auto">
+        <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5 overflow-y-auto overflow-x-hidden">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-stone-600 mb-1">Revendedora *</label>
               <select required value={consigneeId} onChange={(e) => handleConsignee(e.target.value)}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none">
+                className="w-full truncate rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none">
                 <option value="">Selecione...</option>
                 {consignees.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs font-medium text-stone-600 mb-1">Comissão do lote (%)</label>
               <input type="number" step="0.5" min="0" max="100" value={commission}
                 onChange={(e) => setCommission(e.target.value)} placeholder="Padrão da revendedora"
@@ -324,50 +331,66 @@ function OpenConsignmentModal({ onClose, onSaved }: { onClose: () => void; onSav
 
           <div>
             <label className="block text-xs font-medium text-stone-600 mb-1">Adicionar produto</label>
-            <div className="flex gap-2">
-              <select value={productToAdd} onChange={(e) => setProductToAdd(e.target.value)}
-                className="flex-1 rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none">
-                <option value="">Selecione um produto...</option>
-                {availableProducts.map((p) => (
-                  <option key={p.id} value={p.id} disabled={p.stockQuantity < 1}>
-                    {p.name} ({p.sku}) · {p.stockQuantity} disp.
-                  </option>
-                ))}
-              </select>
-              <button type="button" onClick={addProduct}
-                className="rounded-lg bg-stone-100 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-200">
-                Adicionar
-              </button>
+            <div className="relative">
+              <input type="text" value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                placeholder="Buscar por nome ou SKU..."
+                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+
+              {productSearch.trim() !== '' && (
+                <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-stone-200 bg-white shadow-lg">
+                  {searchResults.length === 0 ? (
+                    <p className="px-3 py-2.5 text-sm text-stone-400">Nenhum produto encontrado.</p>
+                  ) : (
+                    <ul className="max-h-60 overflow-y-auto divide-y divide-stone-50">
+                      {searchResults.map((p) => {
+                        const out = p.stockQuantity < 1;
+                        return (
+                          <li key={p.id}>
+                            <button type="button" disabled={out}
+                              onClick={() => addProduct(p)}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50">
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm text-stone-700">{p.name}</span>
+                                <span className="block text-[10px] text-stone-400">{p.sku}</span>
+                              </span>
+                              <span className={`shrink-0 text-xs font-medium ${out ? 'text-red-400' : 'text-stone-500'}`}>
+                                {out ? 'Esgotado' : `${p.stockQuantity} disp.`}
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
           {items.length > 0 && (
             <div className="rounded-lg border border-stone-200 divide-y divide-stone-100">
-              <div className="hidden sm:grid grid-cols-12 gap-2 bg-stone-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
-                <span className="col-span-5">Produto</span>
-                <span className="col-span-2">Qtd</span>
-                <span className="col-span-3">Preço venda (R$)</span>
-                <span className="col-span-2"></span>
-              </div>
               {items.map((it, idx) => (
-                <div key={it.productId} className="grid grid-cols-12 gap-2 px-3 py-2 items-center">
-                  <div className="col-span-12 sm:col-span-5 text-sm text-stone-700 truncate">
-                    {it.productLabel}
-                    <span className="ml-1 text-[10px] text-stone-400">({it.maxAvailable} disp.)</span>
+                <div key={it.productId} className="flex flex-wrap items-end gap-3 px-3 py-3">
+                  {/* Nome ocupa a largura toda e trunca sem empurrar as colunas numéricas */}
+                  <div className="w-full min-w-0">
+                    <p className="truncate text-sm font-medium text-stone-700" title={it.productLabel}>{it.productLabel}</p>
+                    <p className="text-[10px] text-stone-400">{it.maxAvailable} disponível(is)</p>
                   </div>
-                  <div className="col-span-5 sm:col-span-2">
+                  <div className="w-20 shrink-0">
+                    <label className="block text-[10px] uppercase tracking-wide text-stone-400 mb-0.5">Qtd</label>
                     <input type="number" min="1" max={it.maxAvailable} value={it.quantity}
                       onChange={(e) => updateItem(idx, { quantity: e.target.value })}
                       className="w-full rounded-lg border border-stone-200 px-2 py-1.5 text-sm focus:border-gold focus:outline-none" />
                   </div>
-                  <div className="col-span-5 sm:col-span-3">
+                  <div className="w-32 shrink-0">
+                    <label className="block text-[10px] uppercase tracking-wide text-stone-400 mb-0.5">Preço venda (R$)</label>
                     <input type="number" step="0.01" min="0" value={it.unitSalePrice}
                       onChange={(e) => updateItem(idx, { unitSalePrice: e.target.value })}
                       className="w-full rounded-lg border border-stone-200 px-2 py-1.5 text-sm focus:border-gold focus:outline-none" />
                   </div>
-                  <div className="col-span-2 sm:col-span-2 text-right">
-                    <button type="button" onClick={() => removeItem(idx)} className="text-xs text-red-500 hover:underline">Remover</button>
-                  </div>
+                  <button type="button" onClick={() => removeItem(idx)}
+                    className="ml-auto shrink-0 pb-1.5 text-xs text-red-500 hover:underline">Remover</button>
                 </div>
               ))}
             </div>
@@ -505,30 +528,31 @@ function ConsignmentDetailModal({ consignmentId, onClose, onChanged }: {
         ) : (
           <div className="space-y-4 px-6 py-5 overflow-y-auto">
             <div className="rounded-lg border border-stone-200 divide-y divide-stone-100">
-              <div className="grid grid-cols-12 gap-2 bg-stone-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
-                <span className="col-span-5">Produto</span>
-                <span className="col-span-2 text-center">Levado</span>
-                <span className="col-span-3 text-center">Vendido</span>
-                <span className="col-span-2 text-right">Preço</span>
+              <div className="flex items-center gap-3 bg-stone-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                <span className="flex-1 min-w-0">Produto</span>
+                <span className="w-14 text-center shrink-0">Levado</span>
+                <span className="w-20 text-center shrink-0">Vendido</span>
+                <span className="w-24 text-right shrink-0">Preço</span>
               </div>
               {c.items.map((it) => (
-                <div key={it.id} className="grid grid-cols-12 gap-2 px-3 py-2 items-center text-sm">
-                  <div className="col-span-5 text-stone-700 truncate">
-                    {it.productName}<span className="block text-[10px] text-stone-400">{it.productSku}</span>
+                <div key={it.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-stone-700" title={it.productName}>{it.productName}</p>
+                    <span className="block text-[10px] text-stone-400">{it.productSku}</span>
                   </div>
-                  <div className="col-span-2 text-center text-stone-600">{it.quantity}</div>
-                  <div className="col-span-3 text-center">
+                  <div className="w-14 text-center text-stone-600 shrink-0">{it.quantity}</div>
+                  <div className="w-20 text-center shrink-0">
                     {isOpen ? (
                       <input type="number" min="0" max={it.quantity} value={sold[it.id] ?? '0'}
                         onChange={(e) => setSold({ ...sold, [it.id]: e.target.value })}
                         className="w-16 rounded-lg border border-stone-200 px-2 py-1 text-sm text-center focus:border-gold focus:outline-none" />
                     ) : (
                       <span className="text-stone-700">{it.soldQuantity}
-                        <span className="text-[10px] text-stone-400"> · dev. {it.returnedQuantity}</span>
+                        <span className="block text-[10px] text-stone-400">dev. {it.returnedQuantity}</span>
                       </span>
                     )}
                   </div>
-                  <div className="col-span-2 text-right text-stone-600">{BRL.format(it.unitSalePrice)}</div>
+                  <div className="w-24 text-right text-stone-600 shrink-0">{BRL.format(it.unitSalePrice)}</div>
                 </div>
               ))}
             </div>
