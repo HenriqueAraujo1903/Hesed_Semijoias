@@ -124,10 +124,12 @@ public class AnalyticsService {
     // ===========================================================================
     // Promoções (dashboard)
     // ===========================================================================
-    public PromotionAnalyticsResponse promotions(LocalDateTime from, LocalDateTime to) {
+    public PromotionAnalyticsResponse promotions(LocalDateTime from, LocalDateTime to, String category) {
         LocalDateTime fromDt = from != null ? from : LocalDateTime.of(2000, 1, 1, 0, 0);
         LocalDateTime toDt = to != null ? to : LocalDateTime.now().plusYears(1);
         String status = "CONFIRMADO";
+        boolean allCategories = (category == null || category.isBlank());
+        String cat = allCategories ? "" : category;
 
         PromotionAnalyticsResponse resp = new PromotionAnalyticsResponse();
 
@@ -135,7 +137,7 @@ public class AnalyticsService {
         PromotionAnalyticsResponse.Split split = new PromotionAnalyticsResponse.Split();
         split.setPromoRevenue(BigDecimal.ZERO);
         split.setRegularRevenue(BigDecimal.ZERO);
-        for (Object[] r : orderItemRepository.byPromotion(status, fromDt, toDt, true, "")) {
+        for (Object[] r : orderItemRepository.byPromotion(status, fromDt, toDt, allCategories, cat)) {
             boolean wasPromo = Boolean.TRUE.equals(r[0]);
             BigDecimal receita = scale(toBigDecimal(r[1]));
             long itens = toLong(r[2]);
@@ -149,9 +151,8 @@ public class AnalyticsService {
         }
         resp.setSplit(split);
 
-        // KPIs
+        // KPIs (activeCount é definido mais abaixo, após aplicar o filtro de categoria às ativas)
         PromotionAnalyticsResponse.Kpis kpis = new PromotionAnalyticsResponse.Kpis();
-        kpis.setActiveCount(promotionRepository.findActivePromotions(LocalDateTime.now()).size());
         kpis.setTotalCount(promotionRepository.count());
         kpis.setPromoRevenue(split.getPromoRevenue());
         kpis.setPromoItems(split.getPromoItems());
@@ -159,12 +160,12 @@ public class AnalyticsService {
         kpis.setPromoShare(totalRevenue.signum() == 0 ? BigDecimal.ZERO
                 : split.getPromoRevenue().multiply(BigDecimal.valueOf(100))
                     .divide(totalRevenue, 2, RoundingMode.HALF_UP));
-        kpis.setDiscountGranted(scale(orderItemRepository.discountGranted(status, fromDt, toDt)));
+        kpis.setDiscountGranted(scale(orderItemRepository.discountGranted(status, fromDt, toDt, allCategories, cat)));
         resp.setKpis(kpis);
 
         // Top produtos vendidos em promoção (reusa topProducts com promoOnly=true)
         List<PromotionAnalyticsResponse.ProductRow> top = new java.util.ArrayList<>();
-        for (Object[] r : orderItemRepository.topProducts(status, fromDt, toDt, true, "", true)) {
+        for (Object[] r : orderItemRepository.topProducts(status, fromDt, toDt, allCategories, cat, true)) {
             PromotionAnalyticsResponse.ProductRow p = new PromotionAnalyticsResponse.ProductRow();
             p.setSku((String) r[0]);
             p.setName((String) r[1]);
@@ -175,10 +176,17 @@ public class AnalyticsService {
         }
         resp.setTopPromoProducts(top);
 
-        // Promoções ativas agora (sempre "agora", independe do período)
+        // Promoções ativas agora (sempre "agora", independe do período; filtra por categoria se houver)
         List<PromotionResponse> active = promotionRepository.findActivePromotions(LocalDateTime.now())
-                .stream().map(PromotionResponse::from).toList();
+                .stream()
+                .filter(p -> allCategories
+                        || (p.getProduct() != null && cat.equals(p.getProduct().getCategory())))
+                .map(PromotionResponse::from)
+                .toList();
         resp.setActivePromotions(active);
+
+        // activeCount reflete o mesmo filtro de categoria aplicado à lista
+        kpis.setActiveCount(active.size());
 
         return resp;
     }

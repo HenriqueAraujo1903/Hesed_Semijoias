@@ -80,11 +80,13 @@ public class AnalyticsController {
     @GetMapping("/promotions")
     public ResponseEntity<com.hesed.dto.PromotionAnalyticsResponse> promotions(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) String category) {
 
         LocalDateTime fromDt = from != null ? from.atStartOfDay() : null;
         LocalDateTime toDt = to != null ? to.atTime(LocalTime.MAX) : null;
-        return ResponseEntity.ok(analyticsService.promotions(fromDt, toDt));
+        String cat = (category != null && !category.isBlank()) ? category : null;
+        return ResponseEntity.ok(analyticsService.promotions(fromDt, toDt, cat));
     }
 
     @GetMapping("/stock")

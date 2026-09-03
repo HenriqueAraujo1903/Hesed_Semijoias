@@ -135,7 +135,7 @@ class AnalyticsServiceTest {
                 .thenReturn(List.of(
                         new Object[]{Boolean.TRUE, new BigDecimal("300.00"), 5L},
                         new Object[]{Boolean.FALSE, new BigDecimal("700.00"), 10L}));
-        when(orderItemRepository.discountGranted(any(), any(), any())).thenReturn(new BigDecimal("120.00"));
+        when(orderItemRepository.discountGranted(any(), any(), any(), org.mockito.ArgumentMatchers.eq(true), any())).thenReturn(new BigDecimal("120.00"));
         when(orderItemRepository.topProducts(any(), any(), any(), org.mockito.ArgumentMatchers.eq(true), any(),
                 org.mockito.ArgumentMatchers.eq(true)))
                 .thenReturn(List.<Object[]>of(new Object[]{"A1", "Anel Promo", "Anel", new BigDecimal("300.00"), 5L}));
@@ -150,7 +150,7 @@ class AnalyticsServiceTest {
         when(promotionRepository.findActivePromotions(any())).thenReturn(List.of(promo));
         when(promotionRepository.count()).thenReturn(3L);
 
-        var r = service.promotions(null, null);
+        var r = service.promotions(null, null, null);
 
         assertThat(r.getKpis().getActiveCount()).isEqualTo(1);
         assertThat(r.getKpis().getTotalCount()).isEqualTo(3);
@@ -171,13 +171,13 @@ class AnalyticsServiceTest {
     void promotions_empty() {
         when(orderItemRepository.byPromotion(any(), any(), any(), org.mockito.ArgumentMatchers.eq(true), any()))
                 .thenReturn(List.of());
-        when(orderItemRepository.discountGranted(any(), any(), any())).thenReturn(BigDecimal.ZERO);
+        when(orderItemRepository.discountGranted(any(), any(), any(), org.mockito.ArgumentMatchers.eq(true), any())).thenReturn(BigDecimal.ZERO);
         when(orderItemRepository.topProducts(any(), any(), any(), org.mockito.ArgumentMatchers.eq(true), any(),
                 org.mockito.ArgumentMatchers.eq(true))).thenReturn(List.of());
         when(promotionRepository.findActivePromotions(any())).thenReturn(List.of());
         when(promotionRepository.count()).thenReturn(0L);
 
-        var r = service.promotions(null, null);
+        var r = service.promotions(null, null, null);
 
         assertThat(r.getKpis().getPromoShare()).isEqualByComparingTo("0");
         assertThat(r.getKpis().getActiveCount()).isZero();

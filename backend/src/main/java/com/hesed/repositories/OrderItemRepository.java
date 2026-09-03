@@ -117,10 +117,13 @@ public interface OrderItemRepository extends JpaRepository<OrderItem, UUID> {
     @Query("SELECT COALESCE(SUM((oi.unitPrice - oi.effectivePrice) * oi.quantity),0) " +
            "FROM OrderItem oi JOIN oi.order o " +
            "WHERE o.status = :status AND o.orderedAt >= :from AND o.orderedAt <= :to " +
+           "AND (:allCategories = true OR oi.productCategory = :category) " +
            "AND oi.wasPromotion = true")
     java.math.BigDecimal discountGranted(@Param("status") String status,
                                          @Param("from") LocalDateTime from,
-                                         @Param("to") LocalDateTime to);
+                                         @Param("to") LocalDateTime to,
+                                         @Param("allCategories") boolean allCategories,
+                                         @Param("category") String category);
 
     // ---- KPIs agregados ----
     // Retorna: [receita, custo, qtde itens, nº pedidos distintos]

@@ -39,6 +39,16 @@ export default function PromotionsDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rangePreset, setRangePreset] = useState('30d');
+  const [category, setCategory] = useState('');
+  const [categories, setCategories] = useState<string[]>([]);
+
+  // Carrega as categorias uma vez (do catálogo).
+  useEffect(() => {
+    api.get('/products/catalog').then((res) => {
+      const cats = Array.from(new Set(res.data.map((p: any) => p.category))).sort() as string[];
+      setCategories(cats);
+    }).catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -47,6 +57,7 @@ export default function PromotionsDashboardPage() {
       const preset = RANGE_PRESETS.find(r => r.key === rangePreset);
       const params: Record<string, string> = {};
       if (preset?.days) params.from = isoDaysAgo(preset.days);
+      if (category) params.category = category;
       const res = await api.get('/admin/analytics/promotions', { params });
       setData(res.data);
     } catch (e: any) {
@@ -54,7 +65,7 @@ export default function PromotionsDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [rangePreset]);
+  }, [rangePreset, category]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -68,16 +79,23 @@ export default function PromotionsDashboardPage() {
         </p>
       </div>
 
-      {/* Filtro de período */}
-      <div className="card p-4 flex items-end gap-4">
+      {/* Filtros */}
+      <div className="card p-4 flex flex-wrap items-end gap-4">
         <div>
           <label className="block text-[10px] font-medium text-charcoal-400 uppercase tracking-wide mb-1">Período</label>
           <select value={rangePreset} onChange={(e) => setRangePreset(e.target.value)} className="input-field py-1.5 text-sm">
             {RANGE_PRESETS.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
           </select>
         </div>
+        <div>
+          <label className="block text-[10px] font-medium text-charcoal-400 uppercase tracking-wide mb-1">Categoria</label>
+          <select value={category} onChange={(e) => setCategory(e.target.value)} className="input-field py-1.5 text-sm">
+            <option value="">Todas</option>
+            {categories.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
         <p className="text-[10px] text-charcoal-300 dark:text-charcoal-600 pb-1.5 ml-auto max-w-[240px]">
-          O período afeta os números de venda. A lista de promoções ativas é sempre a de agora.
+          O período afeta os números de venda. As promoções ativas são as vigentes agora (filtradas pela categoria, se houver).
         </p>
       </div>
 
