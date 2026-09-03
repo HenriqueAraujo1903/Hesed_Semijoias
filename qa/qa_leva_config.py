@@ -615,6 +615,59 @@ def suite_stock_dashboard():
 
 
 # ===========================================================================
+# PD — Dashboard de Promoções (/api/admin/analytics/promotions)
+# ===========================================================================
+def suite_promotions_dashboard():
+    print("== SUÍTE PD: Dashboard de Promoções ==")
+
+    # RBAC sem sessão
+    st, _ = request("GET", "/api/admin/analytics/promotions", no_cookie=True)
+    R.check("PD.rbac.sem_sessao", st in (401, 403), "401/403", st)
+
+    # Baseline (todo período)
+    st, d = request("GET", "/api/admin/analytics/promotions?from=2000-01-01")
+    R.check("PD.get.200", st == 200, 200, st)
+    if not isinstance(d, dict) or "kpis" not in d:
+        R.check("PD.payload", False, "payload com kpis", d)
+        return
+    k = d["kpis"]
+    s = d["split"]
+
+    # Coerência: KPIs de promoção == split
+    R.check("PD.kpi_split_receita", abs(float(k["promoRevenue"]) - float(s["promoRevenue"])) < 0.01,
+            s["promoRevenue"], k["promoRevenue"])
+    R.check("PD.kpi_split_itens", k["promoItems"] == s["promoItems"], s["promoItems"], k["promoItems"])
+
+    # Participação % = promoRev / (promoRev + regular)
+    total = float(s["promoRevenue"]) + float(s["regularRevenue"])
+    esperado = round(float(s["promoRevenue"]) * 100 / total, 2) if total else 0
+    R.check("PD.participacao", abs(float(k["promoShare"]) - esperado) < 0.01, esperado, k["promoShare"])
+
+    # activeCount == tamanho da lista de ativas
+    R.check("PD.ativas_conta", k["activeCount"] == len(d["activePromotions"]),
+            len(d["activePromotions"]), k["activeCount"])
+
+    # Desconto concedido >= 0
+    R.check("PD.desconto_nao_negativo", float(k["discountGranted"]) >= 0, ">=0", k["discountGranted"])
+
+    # Filtro por categoria: se houver top produtos, filtra por uma categoria deles
+    if d["topPromoProducts"]:
+        cat = d["topPromoProducts"][0]["category"]
+        st, dc = request("GET", f"/api/admin/analytics/promotions?from=2000-01-01&category={quote(cat)}")
+        if isinstance(dc, dict):
+            cats = {p["category"] for p in dc["topPromoProducts"]}
+            R.check("PD.filtro_categoria", cats <= {cat}, f"apenas {cat}", cats)
+
+    # Período futuro: zera vendas, mas mantém as ativas (vigência é "agora")
+    st, df = request("GET", "/api/admin/analytics/promotions?from=2099-01-01")
+    if isinstance(df, dict):
+        R.check("PD.futuro_zera_receita", float(df["kpis"]["promoRevenue"]) == 0, 0, df["kpis"]["promoRevenue"])
+        R.check("PD.futuro_share_zero", float(df["kpis"]["promoShare"]) == 0, 0, df["kpis"]["promoShare"])
+        R.check("PD.futuro_mantem_ativas", df["kpis"]["activeCount"] == k["activeCount"],
+                k["activeCount"], df["kpis"]["activeCount"])
+
+
+# ===========================================================================
 # Cleanup
 # ===========================================================================
 def cleanup():
@@ -690,6 +743,7 @@ def main():
         suite_clientes()
         suite_sob_encomenda()
         suite_stock_dashboard()
+        suite_promotions_dashboard()
     finally:
         cleanup()
     dt = time.time() - t0
