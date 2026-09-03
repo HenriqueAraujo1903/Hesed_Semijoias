@@ -1,14 +1,14 @@
 # Contexto da Sessão — HESED Semijoias
 
-**Última atualização:** 02/09/2026
-**Status:** 🟢 Em produção e estável. Nesta sessão foram entregues 3 levas em produção (leva WhatsApp/usuários/cancelamento/preço-promo/carrossel → imagem opcional nas mensagens → cadastro de clientes/aba Cadastros). Próximo grande passo aguarda o usuário obter o **WhatsApp Business** para o envio de mensagem em massa (promoção).
+**Última atualização:** 03/09/2026
+**Status:** 🟢 Em produção e estável. Nesta sessão foram entregues em produção: leva WhatsApp/usuários/cancelamento/preço-promo/carrossel → imagem opcional nas mensagens → cadastro de clientes/aba Cadastros → fix do PWA (fotos quebradas por service worker) → produto sob encomenda (onDemand). Próximo grande passo aguarda o usuário obter o **WhatsApp Business** para o envio de mensagem em massa (promoção).
 
 ---
 
 ## 🎯 Retomar na próxima sessão
 
 - Trabalhar na branch **`dev`** (working tree limpo).
-- As 3 branches (`dev`, `homolog`, `main`) e a produção estão TODAS no mesmo commit: **`f9f2af1`**.
+- As 3 branches (`dev`, `homolog`, `main`) e a produção estão TODAS no mesmo commit: **`4c6fa5f`**.
 - Fluxo de sempre: `dev` → validar local → `dev → homolog` → QA → `homolog → main` (deploy prod, com backup antes).
 - **Padrão do usuário:** valida visualmente em dev antes de subir; aprova cada etapa; quer QA completo antes de produção.
 
@@ -50,9 +50,24 @@
 - **Frontend**: `CustomersPage.tsx` (CRUD tabela+cards+modal, busca) + `CadastrosPage.tsx` com abas (Clientes/Fornecedores). Menu: item **Cadastros** (`RegistryIcon`) substituiu Fornecedores (que virou aba interna; `/admin/fornecedores` redireciona p/ `/admin/cadastros`). `OrderEditModal` ganhou seletor de cliente cadastrado que preenche nome+telefone e envia `customerId` (editar texto limpa o id).
 - **Catálogo público inalterado** (não pede cliente/telefone).
 
+### LEVA 4 — Fix do PWA / fotos quebradas (commit `c18bdf5`, em produção)
+- **Sintoma:** no painel admin logado, TODAS as fotos apareciam quebradas; em guia anônima funcionavam. Servidor/dados sempre corretos (imagens 200 via HTTPS).
+- **Causa raiz:** o service worker do PWA servia precache antigo — `png` estava no `globPatterns` e o SW não assumia o controle nem se atualizava (`registerType: autoUpdate` sem `skipWaiting`/`clientsClaim`).
+- **Correção** (`frontend/vite.config.ts` workbox): `skipWaiting: true`, `clientsClaim: true`, `cleanupOutdatedCaches: true`; removido `png` do `globPatterns` (fotos de `/uploads` não entram no precache); `runtimeCaching` NetworkFirst para `/uploads` (imagens sempre da rede); `navigateFallbackDenylist` mantém `/api` e `/uploads` fora do fallback.
+- **Efeito:** dali em diante o SW novo se instala sozinho a cada deploy — não precisa mais de unregister manual. (Na transição desta correção, quem tinha o SW velho precisou de um unregister único: F12 → Application → Service Workers → Unregister + Clear site data + hard refresh.)
+
+### LEVA 5 — Produto sob encomenda / onDemand (commits `1d7b3ab`→`4c6fa5f`, em produção)
+Produto anunciado no catálogo SEM estoque próprio (venda sob encomenda; compra-se do fornecedor quando alguém pede). Decisões do usuário: custo estimado no cadastro (Opção 1), selo no catálogo, e prazo "entrega em até X dias úteis".
+- **Backend:** `Product` ganhou `onDemand` (bool, col `on_demand`, default false) e `leadTimeDays` (Integer, col `lead_time_days`). ProductRequest/ProductResponse/PublicProductResponse expõem os campos.
+- **Regra de estoque:** se `onDemand`, `ProductService.applyStockAndWarranty` força `stockStatus=DISPONIVEL` (nunca ESGOTADO por qty 0). `StockService.consumeForOrder`/`restockForOrder` PULAM itens onDemand (não baixa/estorna, sem StockMovement). `ProductRepository.findLowStock` exclui onDemand (`WHERE onDemand IS NULL OR onDemand=false`) — fora do alerta de reposição.
+- **Financeiro:** venda de onDemand conta na receita normalmente; margem usa o `costPrice` estimado do snapshot (`buildSnapshotItem`).
+- **Frontend catálogo:** selo dourado "Sob encomenda" + "Entrega em até X dias úteis" no card e no modal; produto onDemand sempre comprável.
+- **Frontend admin (AdminProductsPage):** checkbox "Produto sob encomenda" + campo "Prazo de entrega (dias úteis)"; ao marcar, os campos de quantidade/estoque somem; aviso de que o custo é estimado.
+
 ### QA desta sessão
 - **Suíte nova `qa/qa_leva_config.py`** (85 casos): usuários, mensagens (com imagem), telefone obrigatório confirmar/cancelar, preço promo no catálogo, carrossel sem esgotado, e **clientes** (CRUD, telefone válido/inválido, e-mail dup case-insensitive, busca, vínculo cliente-pedido, catálogo público inalterado). Faz cleanup próprio via API + psql (`QA_DB=hesed_homolog`).
-- Última bateria completa em homolog: **1.425 casos, 0 falhas** (unit 98 + qa_leva_config 85 + qa_homolog 399 + qa_estoque_dev 262 + qa_seguranca 311 + qa_metas 270).
+- Última bateria completa em homolog: **1.446 casos, 0 falhas** (unit 103 + qa_leva_config 101 + qa_homolog 399 + qa_estoque_dev 262 + qa_seguranca 311 + qa_metas 270). A `qa_leva_config` cobre também **sob encomenda** (16 casos: onDemand qty0→DISPONIVEL/comprável, venda não baixa estoque nem gera movimento, fora do lowStock, normal ainda ESGOTADO, RBAC).
+- **QA de infra/PWA** (classe do bug de fotos): validado com o build servido (`npx vite preview`, SW ativo) — `sw.js` com skipWaiting/clientsClaim/cleanupOutdatedCaches/NetworkFirst; `/uploads` e `/api` fora do precache (só assets do app); assets versionados batem com o index.html; upload real 200 image/png; magic-bytes rejeita não-imagem (400). Vale repetir esse check a cada mexida em PWA/upload/nginx.
 - **2 testes de regressão foram ajustados** (código de teste, não app) pela regra "telefone obrigatório confirmar E cancelar": `qa_homolog.py` (G8) e `qa_estoque_dev.py` (venda direta confirmada envia `customerPhone`).
 - **Bugs reais pegos pelo QA e corrigidos:** (1) e-mail de cliente duplicado case-insensitive não era bloqueado → `CustomerService.normalizeEmail` agora faz `.toLowerCase()`.
 - **ATENÇÃO ao rodar QA:** rate limit de login por IP (20/min). Rodar suítes ESPAÇADAS (~65s): `echo "cooldown"; sleep 65; QA_BASE=http://localhost:8081 python3 qa/qa_XXX.py`. `qa_metas.py`/`qa_homolog.py`/`qa_leva_config.py` já usam admin@homolog default; `qa_estoque_dev.py`/`qa_seguranca.py` precisam de `QA_ADMIN_EMAIL=admin@homolog.com QA_ADMIN_PASS=homolog123` explícitos.
@@ -63,12 +78,12 @@
 
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `f9f2af1` | No ar em https://hesedsemijoias.online |
-| `dev` | `f9f2af1` | Sincronizada (trabalhar aqui) |
-| `homolog` | `f9f2af1` | Sincronizada |
+| `main` (produção) | `4c6fa5f` | No ar em https://hesedsemijoias.online |
+| `dev` | `4c6fa5f` | Sincronizada (trabalhar aqui) |
+| `homolog` | `4c6fa5f` | Sincronizada |
 
-- **Backups de banco pré-deploy** (VPS `/root/backups/`): `hesed_db_pre_leva_20260902_154709.sql.gz` (leva 1), `hesed_db_pre_imagem_20260902_163745.sql.gz` (leva 2), `hesed_db_pre_cadastros_20260902_184346.sql.gz` (leva 3).
-- **Migração de schema (ddl-auto update, aditivo):** criadas ao longo da sessão as tabelas `message_templates`, `customers` e colunas `users.phone`, `message_templates.image_url`, `orders.customer_id`. Dados de produção preservados (products=24, users=3, customers=0).
+- **Backups de banco pré-deploy** (VPS `/root/backups/`): `hesed_db_pre_leva_...` (leva 1), `hesed_db_pre_imagem_...` (leva 2), `hesed_db_pre_cadastros_...` (leva 3), `hesed_db_pre_pwafix_...` (leva 4), `hesed_db_pre_sobencomenda_20260903_000955.sql.gz` (leva 5).
+- **Migração de schema (ddl-auto update, aditivo):** criadas ao longo da sessão as tabelas `message_templates`, `customers` e colunas `users.phone`, `message_templates.image_url`, `orders.customer_id`, `products.on_demand`, `products.lead_time_days`. Dados de produção preservados (products=24, users=3, customers=0).
 - Rollback de um deploy: no VPS `git checkout <commit_anterior>` + `docker compose up -d --build`; restaurar banco pelo dump se necessário.
 
 ---
@@ -100,6 +115,7 @@
 ## Funcionalidades em produção
 
 - **Cadastros:** aba Cadastros com CRUD de **Clientes** (novo) e **Fornecedores**. Pedidos podem vincular um cliente cadastrado (preenche nome+telefone; guarda snapshot).
+- **Produto sob encomenda:** flag por produto — comprável no catálogo (selo "Sob encomenda" + prazo em dias úteis) sem consumir estoque nem entrar em alertas de reposição; conta na receita.
 - **Configurações:** CRUD de usuários; mensagens automáticas WhatsApp (confirmado/cancelado) editáveis, com **imagem opcional** por template (link com preview no WhatsApp).
 - **Visão Geral (resumo executivo):** metas mensais (receita/pedidos) com herança e trava+auditoria, progresso vs meta, KPIs, pedidos pendentes, alertas de estoque/garantia, gráfico de receita 6 meses.
 - **Catálogo público:** sacola, carrossel de promoções (sem produtos esgotados), preço promocional (effectivePrice) exibido/cobrado, telemetria, modal de fotos (galeria até 5).
@@ -115,4 +131,4 @@
 - `DOCUMENTACAO.md` — documentação oficial
 - `DEPLOY.md` — guia de deploy
 - `FLUXO_TRABALHO.md` — fluxo dev/homolog/prod
-- `qa/qa_homolog.py`, `qa/qa_estoque_dev.py`, `qa/qa_seguranca.py`, `qa/qa_metas.py`, `qa/qa_leva_config.py` — baterias de QA (1.425 casos)
+- `qa/qa_homolog.py`, `qa/qa_estoque_dev.py`, `qa/qa_seguranca.py`, `qa/qa_metas.py`, `qa/qa_leva_config.py` — baterias de QA (1.446 casos)
