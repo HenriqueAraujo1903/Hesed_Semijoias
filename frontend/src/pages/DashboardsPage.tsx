@@ -51,7 +51,7 @@ const DASHBOARDS: DashboardItem[] = [
     to: '/dashboards/revendedoras',
     accent: 'blue',
     icon: PeopleIcon,
-    available: false,
+    available: true,
   },
   {
     key: 'promocoes',

@@ -9,6 +9,7 @@ import SalesDashboardPage from './pages/dashboards/SalesDashboardPage';
 import EngagementDashboardPage from './pages/dashboards/EngagementDashboardPage';
 import StockDashboardPage from './pages/dashboards/StockDashboardPage';
 import PromotionsDashboardPage from './pages/dashboards/PromotionsDashboardPage';
+import ResellersDashboardPage from './pages/dashboards/ResellersDashboardPage';
 import OrdersPage from './pages/OrdersPage';
 import AdminPromotionsPage from './pages/AdminPromotionsPage';
 import ConsigneesPage from './pages/ConsigneesPage';
@@ -55,6 +56,9 @@ export default function App() {
         } />
         <Route path="/dashboards/promocoes" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><PromotionsDashboardPage /></ProtectedRoute>
+        } />
+        <Route path="/dashboards/revendedoras" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><ResellersDashboardPage /></ProtectedRoute>
         } />
         <Route path="/pedidos" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><OrdersPage /></ProtectedRoute>

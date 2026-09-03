@@ -89,6 +89,20 @@ public class AnalyticsController {
         return ResponseEntity.ok(analyticsService.promotions(fromDt, toDt, cat));
     }
 
+    /**
+     * Dashboard de Revendedoras (consignação): KPIs financeiros e ranking dos
+     * lotes fechados no período, mais a lista de consignações em aberto agora.
+     */
+    @GetMapping("/resellers")
+    public ResponseEntity<com.hesed.dto.ResellersAnalyticsResponse> resellers(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+
+        LocalDateTime fromDt = from != null ? from.atStartOfDay() : null;
+        LocalDateTime toDt = to != null ? to.atTime(LocalTime.MAX) : null;
+        return ResponseEntity.ok(analyticsService.resellers(fromDt, toDt));
+    }
+
     @GetMapping("/stock")
     public ResponseEntity<StockAnalyticsResponse> stock(
             @RequestParam(required = false) String category,

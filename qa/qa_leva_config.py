@@ -1027,6 +1027,104 @@ def suite_consignacao():
 
 
 # ===========================================================================
+# RD — Dashboard de Revendedoras (/api/admin/analytics/resellers)
+# ===========================================================================
+def suite_resellers_dashboard():
+    print("== SUÍTE RD: Dashboard de Revendedoras ==")
+
+    # RBAC sem sessão
+    st, _ = request("GET", "/api/admin/analytics/resellers", no_cookie=True)
+    R.check("RD.rbac.sem_sessao", st in (401, 403), "401/403", st)
+
+    # Setup isolado: revendedora dedicada + produto. Nome único p/ achar no ranking.
+    rev_name = f"RD Dash {uniq()}"
+    st, b = request("POST", "/api/consignees",
+                    body={"name": rev_name, "phone": "51988887777",
+                          "email": f"rev.{TEST_EMAIL_TAG}.{uniq()}@ex.com", "commissionRate": 0.30})
+    consignee_id = b.get("id") if isinstance(b, dict) else None
+    if consignee_id:
+        CREATED_CONSIGNEE_IDS.add(consignee_id)
+    R.check("RD.consignee.201", st == 201, 201, st)
+    pid = _create_product("Dash", stock=20, sale=100.0)
+    if not consignee_id or not pid:
+        R.check("RD.setup", False, "setup ok", None)
+        return
+
+    # Lote A: 10 levados, fecha com 6 vendidos @100 -> total 600, comissão 180, líquido 420
+    st, la = request("POST", "/api/admin/consignments",
+                    body={"consigneeId": consignee_id, "commissionRate": 0.30,
+                          "items": [{"productId": pid, "quantity": 10, "unitSalePrice": 100.0}]})
+    la_id = la.get("id") if isinstance(la, dict) else None
+    la_item = la["items"][0]["id"] if isinstance(la, dict) else None
+    if la_id:
+        CREATED_CONSIGNMENT_IDS.add(la_id)
+    st, _ = request("POST", f"/api/admin/consignments/{la_id}/close",
+                   body={"items": [{"itemId": la_item, "soldQuantity": 6}]})
+    R.check("RD.loteA.fechar.200", st == 200, 200, st)
+
+    # Lote B (aberto): 5 peças @100 -> valor potencial 500
+    st, lb = request("POST", "/api/admin/consignments",
+                    body={"consigneeId": consignee_id, "items": [{"productId": pid, "quantity": 5, "unitSalePrice": 100.0}]})
+    lb_id = lb.get("id") if isinstance(lb, dict) else None
+    if lb_id:
+        CREATED_CONSIGNMENT_IDS.add(lb_id)
+
+    # --- Consulta o dashboard (período amplo) ---
+    st, d = request("GET", "/api/admin/analytics/resellers?from=2000-01-01&to=2099-12-31")
+    R.check("RD.get.200", st == 200, 200, st)
+    if not isinstance(d, dict) or "kpis" not in d:
+        R.check("RD.payload", False, "payload com kpis", d)
+        return
+
+    # Linha do ranking desta revendedora (isola dos demais dados do ambiente)
+    row = next((r for r in d["ranking"] if r["name"] == rev_name), None)
+    R.check("RD.ranking.tem_revendedora", row is not None, rev_name, None)
+    if row:
+        R.check("RD.ranking.totalSold", abs(float(row["totalSold"]) - 600.0) < 0.01, 600.0, row["totalSold"])
+        R.check("RD.ranking.comissao", abs(float(row["commissionAmount"]) - 180.0) < 0.01, 180.0, row["commissionAmount"])
+        R.check("RD.ranking.liquido", abs(float(row["netAmount"]) - 420.0) < 0.01, 420.0, row["netAmount"])
+        R.check("RD.ranking.lotes", row["batches"] == 1, 1, row["batches"])
+        R.check("RD.ranking.pecas", row["piecesSold"] == 6 and row["piecesConsigned"] == 10,
+                "6/10", f"{row['piecesSold']}/{row['piecesConsigned']}")
+        # sell-through desta revendedora = 6/10 = 60%
+        R.check("RD.ranking.sellThrough", abs(float(row["sellThroughRate"]) - 60.0) < 0.01, 60.0, row["sellThroughRate"])
+
+    # Ranking ordenado por totalSold desc (coerência global)
+    tot = [float(r["totalSold"]) for r in d["ranking"]]
+    R.check("RD.ranking.ordenado_desc", tot == sorted(tot, reverse=True), "desc", tot)
+
+    # Lote aberto aparece com valor potencial 500 e 5 peças
+    open_row = next((o for o in d["openConsignments"] if o["id"] == lb_id), None)
+    R.check("RD.abertos.tem_loteB", open_row is not None, lb_id, None)
+    if open_row:
+        R.check("RD.abertos.pecas", open_row["pieces"] == 5, 5, open_row["pieces"])
+        R.check("RD.abertos.valor_potencial", abs(float(open_row["potentialValue"]) - 500.0) < 0.01,
+                500.0, open_row["potentialValue"])
+
+    # KPIs globais coerentes: sell-through = vendidas/consignadas; net = total - comissão
+    k = d["kpis"]
+    if k["piecesConsigned"] > 0:
+        esperado_st = round(k["piecesSold"] * 100 / k["piecesConsigned"], 2)
+        R.check("RD.kpi.sellThrough_coerente", abs(float(k["sellThroughRate"]) - esperado_st) < 0.01,
+                esperado_st, k["sellThroughRate"])
+    R.check("RD.kpi.net_coerente",
+            abs((float(k["totalSold"]) - float(k["commissionAmount"])) - float(k["netAmount"])) < 0.01,
+            float(k["totalSold"]) - float(k["commissionAmount"]), k["netAmount"])
+    R.check("RD.kpi.openCount_positivo", k["openCount"] >= 1, ">=1", k["openCount"])
+    R.check("RD.kpi.closedCount_positivo", k["closedCount"] >= 1, ">=1", k["closedCount"])
+
+    # --- Período futuro: zera fechados/ranking, mantém abertos (são "agora") ---
+    st, df = request("GET", "/api/admin/analytics/resellers?from=2099-01-01&to=2099-12-31")
+    if isinstance(df, dict):
+        R.check("RD.futuro.totalSold_zero", abs(float(df["kpis"]["totalSold"])) < 0.01, 0.0, df["kpis"]["totalSold"])
+        R.check("RD.futuro.closedCount_zero", df["kpis"]["closedCount"] == 0, 0, df["kpis"]["closedCount"])
+        R.check("RD.futuro.sellThrough_zero", abs(float(df["kpis"]["sellThroughRate"])) < 0.01, 0.0, df["kpis"]["sellThroughRate"])
+        R.check("RD.futuro.ranking_vazio", len(df["ranking"]) == 0, 0, len(df["ranking"]))
+        R.check("RD.futuro.mantem_abertos", df["kpis"]["openCount"] == d["kpis"]["openCount"],
+                d["kpis"]["openCount"], df["kpis"]["openCount"])
+
+
+# ===========================================================================
 # Cleanup
 # ===========================================================================
 def cleanup():
@@ -1135,6 +1233,7 @@ def main():
         suite_promotions_dashboard()
         suite_period_filter()
         suite_consignacao()
+        suite_resellers_dashboard()
     finally:
         cleanup()
     dt = time.time() - t0

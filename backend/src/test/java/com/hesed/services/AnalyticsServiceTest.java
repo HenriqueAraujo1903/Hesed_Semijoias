@@ -32,6 +32,7 @@ class AnalyticsServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private StockMovementRepository stockMovementRepository;
     @Mock private com.hesed.repositories.PromotionRepository promotionRepository;
+    @Mock private com.hesed.repositories.ConsignmentRepository consignmentRepository;
 
     @InjectMocks private AnalyticsService service;
 
@@ -183,5 +184,79 @@ class AnalyticsServiceTest {
         assertThat(r.getKpis().getActiveCount()).isZero();
         assertThat(r.getTopPromoProducts()).isEmpty();
         assertThat(r.getActivePromotions()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("resellers: KPIs (somas, sell-through), ranking mapeado e consignações abertas")
+    void resellers_buildsPayload() {
+        // KPIs financeiros dos fechados: vendido 600, comissão 240, líquido 360, 2 lotes
+        when(consignmentRepository.closedKpis(any(), any())).thenReturn(List.<Object[]>of(
+                new Object[]{new BigDecimal("600.00"), new BigDecimal("240.00"), new BigDecimal("360.00"), 2L}));
+        // Peças: 10 consignadas, 6 vendidas, 4 devolvidas -> sell-through 60%
+        when(consignmentRepository.closedItemPieces(any(), any())).thenReturn(List.<Object[]>of(
+                new Object[]{10L, 6L, 4L}));
+        when(consignmentRepository.countByStatus("ABERTO")).thenReturn(3L);
+        // Ranking: Maria 400/160/240 (1 lote), Ana 200/80/120 (1 lote)
+        when(consignmentRepository.rankingByConsignee(any(), any())).thenReturn(List.of(
+                new Object[]{"Maria", new BigDecimal("400.00"), new BigDecimal("160.00"), new BigDecimal("240.00"), 1L},
+                new Object[]{"Ana", new BigDecimal("200.00"), new BigDecimal("80.00"), new BigDecimal("120.00"), 1L}));
+        // Peças por revendedora: Maria 5 consignadas / 4 vendidas (80%), Ana 5 / 2 (40%)
+        when(consignmentRepository.rankingPiecesByConsignee(any(), any())).thenReturn(List.of(
+                new Object[]{"Maria", 5L, 4L},
+                new Object[]{"Ana", 5L, 2L}));
+        // Um lote aberto agora
+        java.util.UUID openId = java.util.UUID.randomUUID();
+        LocalDateTime openedAt = LocalDateTime.of(2026, 8, 1, 10, 0);
+        when(consignmentRepository.openConsignments()).thenReturn(List.<Object[]>of(
+                new Object[]{openId, "Carla", openedAt, 8L, new BigDecimal("1200.00")}));
+
+        var r = service.resellers(null, null);
+
+        // KPIs
+        assertThat(r.getKpis().getTotalSold()).isEqualByComparingTo("600.00");
+        assertThat(r.getKpis().getCommissionAmount()).isEqualByComparingTo("240.00");
+        assertThat(r.getKpis().getNetAmount()).isEqualByComparingTo("360.00");
+        assertThat(r.getKpis().getClosedCount()).isEqualTo(2);
+        assertThat(r.getKpis().getOpenCount()).isEqualTo(3);
+        assertThat(r.getKpis().getPiecesConsigned()).isEqualTo(10);
+        assertThat(r.getKpis().getPiecesSold()).isEqualTo(6);
+        assertThat(r.getKpis().getPiecesReturned()).isEqualTo(4);
+        assertThat(r.getKpis().getSellThroughRate()).isEqualByComparingTo("60.00"); // 6/10
+
+        // Ranking (ordem vinda do repositório: Maria primeiro)
+        assertThat(r.getRanking()).hasSize(2);
+        assertThat(r.getRanking().get(0).getName()).isEqualTo("Maria");
+        assertThat(r.getRanking().get(0).getTotalSold()).isEqualByComparingTo("400.00");
+        assertThat(r.getRanking().get(0).getBatches()).isEqualTo(1);
+        assertThat(r.getRanking().get(0).getPiecesConsigned()).isEqualTo(5);
+        assertThat(r.getRanking().get(0).getPiecesSold()).isEqualTo(4);
+        assertThat(r.getRanking().get(0).getSellThroughRate()).isEqualByComparingTo("80.00"); // 4/5
+        assertThat(r.getRanking().get(1).getName()).isEqualTo("Ana");
+        assertThat(r.getRanking().get(1).getSellThroughRate()).isEqualByComparingTo("40.00"); // 2/5
+
+        // Consignações abertas
+        assertThat(r.getOpenConsignments()).hasSize(1);
+        assertThat(r.getOpenConsignments().get(0).getConsigneeName()).isEqualTo("Carla");
+        assertThat(r.getOpenConsignments().get(0).getPieces()).isEqualTo(8);
+        assertThat(r.getOpenConsignments().get(0).getPotentialValue()).isEqualByComparingTo("1200.00");
+    }
+
+    @Test
+    @DisplayName("resellers: sem fechados → KPIs zerados, ranking vazio; sell-through 0 sem divisão por zero")
+    void resellers_empty() {
+        when(consignmentRepository.closedKpis(any(), any())).thenReturn(List.of());
+        when(consignmentRepository.closedItemPieces(any(), any())).thenReturn(List.of());
+        when(consignmentRepository.countByStatus("ABERTO")).thenReturn(0L);
+        when(consignmentRepository.rankingByConsignee(any(), any())).thenReturn(List.of());
+        when(consignmentRepository.rankingPiecesByConsignee(any(), any())).thenReturn(List.of());
+        when(consignmentRepository.openConsignments()).thenReturn(List.of());
+
+        var r = service.resellers(null, null);
+
+        assertThat(r.getKpis().getTotalSold()).isEqualByComparingTo("0");
+        assertThat(r.getKpis().getSellThroughRate()).isEqualByComparingTo("0");
+        assertThat(r.getKpis().getClosedCount()).isZero();
+        assertThat(r.getRanking()).isEmpty();
+        assertThat(r.getOpenConsignments()).isEmpty();
     }
 }

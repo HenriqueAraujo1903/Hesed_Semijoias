@@ -7,9 +7,11 @@ import com.hesed.dto.StockAnalyticsResponse;
 import com.hesed.models.Product;
 import com.hesed.models.StockMovement;
 import com.hesed.dto.PromotionAnalyticsResponse;
+import com.hesed.dto.ResellersAnalyticsResponse;
 import com.hesed.dto.PromotionResponse;
 import com.hesed.models.Promotion;
 import com.hesed.repositories.CatalogEventRepository;
+import com.hesed.repositories.ConsignmentRepository;
 import com.hesed.repositories.OrderItemRepository;
 import com.hesed.repositories.OrderRepository;
 import com.hesed.repositories.ProductRepository;
@@ -32,19 +34,22 @@ public class AnalyticsService {
     private final ProductRepository productRepository;
     private final StockMovementRepository stockMovementRepository;
     private final PromotionRepository promotionRepository;
+    private final ConsignmentRepository consignmentRepository;
 
     public AnalyticsService(OrderItemRepository orderItemRepository,
                             OrderRepository orderRepository,
                             CatalogEventRepository catalogEventRepository,
                             ProductRepository productRepository,
                             StockMovementRepository stockMovementRepository,
-                            PromotionRepository promotionRepository) {
+                            PromotionRepository promotionRepository,
+                            ConsignmentRepository consignmentRepository) {
         this.orderItemRepository = orderItemRepository;
         this.orderRepository = orderRepository;
         this.catalogEventRepository = catalogEventRepository;
         this.productRepository = productRepository;
         this.stockMovementRepository = stockMovementRepository;
         this.promotionRepository = promotionRepository;
+        this.consignmentRepository = consignmentRepository;
     }
 
     // ===========================================================================
@@ -119,6 +124,80 @@ public class AnalyticsService {
             movs.add(mv);
         }
         resp.setRecentMovements(movs);
+
+        return resp;
+    }
+
+    // ===========================================================================
+    // Revendedoras (dashboard — consignação Fase 2)
+    // ===========================================================================
+    /**
+     * Dashboard de Revendedoras. KPIs financeiros, ranking e peças consideram os
+     * lotes FECHADOS cujo fechamento (closedAt) caiu no período. A lista de
+     * consignações em aberto é sempre "agora" (independe do período).
+     */
+    public ResellersAnalyticsResponse resellers(LocalDateTime from, LocalDateTime to) {
+        LocalDateTime fromDt = from != null ? from : LocalDateTime.of(2000, 1, 1, 0, 0);
+        LocalDateTime toDt = to != null ? to : LocalDateTime.now().plusYears(1);
+
+        ResellersAnalyticsResponse resp = new ResellersAnalyticsResponse();
+
+        // KPIs financeiros dos fechados no período
+        ResellersAnalyticsResponse.Kpis kpis = new ResellersAnalyticsResponse.Kpis();
+        List<Object[]> kRows = consignmentRepository.closedKpis(fromDt, toDt);
+        Object[] kv = kRows.isEmpty() ? new Object[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, 0L} : kRows.get(0);
+        kpis.setTotalSold(scale(toBigDecimal(kv[0])));
+        kpis.setCommissionAmount(scale(toBigDecimal(kv[1])));
+        kpis.setNetAmount(scale(toBigDecimal(kv[2])));
+        kpis.setClosedCount(toLong(kv[3]));
+
+        // Peças (consignadas/vendidas/devolvidas) dos itens desses lotes
+        List<Object[]> pRows = consignmentRepository.closedItemPieces(fromDt, toDt);
+        Object[] pv = pRows.isEmpty() ? new Object[]{0L, 0L, 0L} : pRows.get(0);
+        long consigned = toLong(pv[0]);
+        long sold = toLong(pv[1]);
+        kpis.setPiecesConsigned(consigned);
+        kpis.setPiecesSold(sold);
+        kpis.setPiecesReturned(toLong(pv[2]));
+        kpis.setSellThroughRate(rate(sold, consigned));
+
+        kpis.setOpenCount(consignmentRepository.countByStatus("ABERTO"));
+        resp.setKpis(kpis);
+
+        // Ranking por revendedora: junta financeiro + peças (para a taxa de venda dela)
+        java.util.Map<String, long[]> piecesByName = new java.util.HashMap<>();
+        for (Object[] r : consignmentRepository.rankingPiecesByConsignee(fromDt, toDt)) {
+            piecesByName.put((String) r[0], new long[]{toLong(r[1]), toLong(r[2])});
+        }
+        List<ResellersAnalyticsResponse.ResellerRow> ranking = new java.util.ArrayList<>();
+        for (Object[] r : consignmentRepository.rankingByConsignee(fromDt, toDt)) {
+            ResellersAnalyticsResponse.ResellerRow row = new ResellersAnalyticsResponse.ResellerRow();
+            String name = (String) r[0];
+            row.setName(name);
+            row.setTotalSold(scale(toBigDecimal(r[1])));
+            row.setCommissionAmount(scale(toBigDecimal(r[2])));
+            row.setNetAmount(scale(toBigDecimal(r[3])));
+            row.setBatches(toLong(r[4]));
+            long[] pcs = piecesByName.getOrDefault(name, new long[]{0L, 0L});
+            row.setPiecesConsigned(pcs[0]);
+            row.setPiecesSold(pcs[1]);
+            row.setSellThroughRate(rate(pcs[1], pcs[0]));
+            ranking.add(row);
+        }
+        resp.setRanking(ranking);
+
+        // Consignações em aberto agora (valor potencial)
+        List<ResellersAnalyticsResponse.OpenRow> open = new java.util.ArrayList<>();
+        for (Object[] r : consignmentRepository.openConsignments()) {
+            ResellersAnalyticsResponse.OpenRow o = new ResellersAnalyticsResponse.OpenRow();
+            o.setId((java.util.UUID) r[0]);
+            o.setConsigneeName((String) r[1]);
+            o.setOpenedAt((LocalDateTime) r[2]);
+            o.setPieces(toLong(r[3]));
+            o.setPotentialValue(scale(toBigDecimal(r[4])));
+            open.add(o);
+        }
+        resp.setOpenConsignments(open);
 
         return resp;
     }
