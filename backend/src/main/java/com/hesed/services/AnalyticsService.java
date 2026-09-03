@@ -6,10 +6,14 @@ import com.hesed.dto.SalesAnalyticsResponse.*;
 import com.hesed.dto.StockAnalyticsResponse;
 import com.hesed.models.Product;
 import com.hesed.models.StockMovement;
+import com.hesed.dto.PromotionAnalyticsResponse;
+import com.hesed.dto.PromotionResponse;
+import com.hesed.models.Promotion;
 import com.hesed.repositories.CatalogEventRepository;
 import com.hesed.repositories.OrderItemRepository;
 import com.hesed.repositories.OrderRepository;
 import com.hesed.repositories.ProductRepository;
+import com.hesed.repositories.PromotionRepository;
 import com.hesed.repositories.StockMovementRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -27,17 +31,20 @@ public class AnalyticsService {
     private final CatalogEventRepository catalogEventRepository;
     private final ProductRepository productRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final PromotionRepository promotionRepository;
 
     public AnalyticsService(OrderItemRepository orderItemRepository,
                             OrderRepository orderRepository,
                             CatalogEventRepository catalogEventRepository,
                             ProductRepository productRepository,
-                            StockMovementRepository stockMovementRepository) {
+                            StockMovementRepository stockMovementRepository,
+                            PromotionRepository promotionRepository) {
         this.orderItemRepository = orderItemRepository;
         this.orderRepository = orderRepository;
         this.catalogEventRepository = catalogEventRepository;
         this.productRepository = productRepository;
         this.stockMovementRepository = stockMovementRepository;
+        this.promotionRepository = promotionRepository;
     }
 
     // ===========================================================================
@@ -110,6 +117,68 @@ public class AnalyticsService {
             movs.add(mv);
         }
         resp.setRecentMovements(movs);
+
+        return resp;
+    }
+
+    // ===========================================================================
+    // Promoções (dashboard)
+    // ===========================================================================
+    public PromotionAnalyticsResponse promotions(LocalDateTime from, LocalDateTime to) {
+        LocalDateTime fromDt = from != null ? from : LocalDateTime.of(2000, 1, 1, 0, 0);
+        LocalDateTime toDt = to != null ? to : LocalDateTime.now().plusYears(1);
+        String status = "CONFIRMADO";
+
+        PromotionAnalyticsResponse resp = new PromotionAnalyticsResponse();
+
+        // Split promoção vs preço cheio (no período)
+        PromotionAnalyticsResponse.Split split = new PromotionAnalyticsResponse.Split();
+        split.setPromoRevenue(BigDecimal.ZERO);
+        split.setRegularRevenue(BigDecimal.ZERO);
+        for (Object[] r : orderItemRepository.byPromotion(status, fromDt, toDt, true, "")) {
+            boolean wasPromo = Boolean.TRUE.equals(r[0]);
+            BigDecimal receita = scale(toBigDecimal(r[1]));
+            long itens = toLong(r[2]);
+            if (wasPromo) {
+                split.setPromoRevenue(receita);
+                split.setPromoItems(itens);
+            } else {
+                split.setRegularRevenue(receita);
+                split.setRegularItems(itens);
+            }
+        }
+        resp.setSplit(split);
+
+        // KPIs
+        PromotionAnalyticsResponse.Kpis kpis = new PromotionAnalyticsResponse.Kpis();
+        kpis.setActiveCount(promotionRepository.findActivePromotions(LocalDateTime.now()).size());
+        kpis.setTotalCount(promotionRepository.count());
+        kpis.setPromoRevenue(split.getPromoRevenue());
+        kpis.setPromoItems(split.getPromoItems());
+        BigDecimal totalRevenue = split.getPromoRevenue().add(split.getRegularRevenue());
+        kpis.setPromoShare(totalRevenue.signum() == 0 ? BigDecimal.ZERO
+                : split.getPromoRevenue().multiply(BigDecimal.valueOf(100))
+                    .divide(totalRevenue, 2, RoundingMode.HALF_UP));
+        kpis.setDiscountGranted(scale(orderItemRepository.discountGranted(status, fromDt, toDt)));
+        resp.setKpis(kpis);
+
+        // Top produtos vendidos em promoção (reusa topProducts com promoOnly=true)
+        List<PromotionAnalyticsResponse.ProductRow> top = new java.util.ArrayList<>();
+        for (Object[] r : orderItemRepository.topProducts(status, fromDt, toDt, true, "", true)) {
+            PromotionAnalyticsResponse.ProductRow p = new PromotionAnalyticsResponse.ProductRow();
+            p.setSku((String) r[0]);
+            p.setName((String) r[1]);
+            p.setCategory((String) r[2]);
+            p.setRevenue(scale(toBigDecimal(r[3])));
+            p.setItems(toLong(r[4]));
+            top.add(p);
+        }
+        resp.setTopPromoProducts(top);
+
+        // Promoções ativas agora (sempre "agora", independe do período)
+        List<PromotionResponse> active = promotionRepository.findActivePromotions(LocalDateTime.now())
+                .stream().map(PromotionResponse::from).toList();
+        resp.setActivePromotions(active);
 
         return resp;
     }

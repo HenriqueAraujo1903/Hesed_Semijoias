@@ -71,6 +71,22 @@ public class AnalyticsController {
      * distribuição por categoria, itens críticos e movimentações recentes.
      * Considera apenas o estoque próprio (produtos sob encomenda ficam de fora).
      */
+    /**
+     * Dashboard de promoções: KPIs (ativas/total, receita e participação da promoção,
+     * itens, desconto concedido), split promoção vs preço cheio, produtos mais vendidos
+     * em promoção e a lista de promoções ativas. Números de venda respeitam o período;
+     * a lista de ativas é sempre "agora".
+     */
+    @GetMapping("/promotions")
+    public ResponseEntity<com.hesed.dto.PromotionAnalyticsResponse> promotions(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+
+        LocalDateTime fromDt = from != null ? from.atStartOfDay() : null;
+        LocalDateTime toDt = to != null ? to.atTime(LocalTime.MAX) : null;
+        return ResponseEntity.ok(analyticsService.promotions(fromDt, toDt));
+    }
+
     @GetMapping("/stock")
     public ResponseEntity<StockAnalyticsResponse> stock(
             @RequestParam(required = false) String category,

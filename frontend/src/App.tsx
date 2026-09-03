@@ -8,6 +8,7 @@ import DashboardsPage from './pages/DashboardsPage';
 import SalesDashboardPage from './pages/dashboards/SalesDashboardPage';
 import EngagementDashboardPage from './pages/dashboards/EngagementDashboardPage';
 import StockDashboardPage from './pages/dashboards/StockDashboardPage';
+import PromotionsDashboardPage from './pages/dashboards/PromotionsDashboardPage';
 import OrdersPage from './pages/OrdersPage';
 import AdminPromotionsPage from './pages/AdminPromotionsPage';
 import ConsigneesPage from './pages/ConsigneesPage';
@@ -50,6 +51,9 @@ export default function App() {
         } />
         <Route path="/dashboards/estoque" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><StockDashboardPage /></ProtectedRoute>
+        } />
+        <Route path="/dashboards/promocoes" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><PromotionsDashboardPage /></ProtectedRoute>
         } />
         <Route path="/pedidos" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><OrdersPage /></ProtectedRoute>

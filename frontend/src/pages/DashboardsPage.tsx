@@ -60,7 +60,7 @@ const DASHBOARDS: DashboardItem[] = [
     to: '/dashboards/promocoes',
     accent: 'violet',
     icon: SparkleIcon,
-    available: false,
+    available: true,
   },
 ];
 

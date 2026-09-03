@@ -31,6 +31,7 @@ class AnalyticsServiceTest {
     @Mock private CatalogEventRepository catalogEventRepository;
     @Mock private ProductRepository productRepository;
     @Mock private StockMovementRepository stockMovementRepository;
+    @Mock private com.hesed.repositories.PromotionRepository promotionRepository;
 
     @InjectMocks private AnalyticsService service;
 
@@ -124,5 +125,63 @@ class AnalyticsServiceTest {
         org.mockito.ArgumentCaptor<LocalDateTime> mf = org.mockito.ArgumentCaptor.forClass(LocalDateTime.class);
         org.mockito.Mockito.verify(stockMovementRepository).findRecentWithProduct(mf.capture(), any());
         assertThat(mf.getValue()).isEqualTo(from);
+    }
+
+    @Test
+    @DisplayName("promotions: split, participação %, desconto concedido, ativas/total e top produtos")
+    void promotions_buildsPayload() {
+        // Split: promo receita 300 (5 itens), cheio 700 (10 itens) -> participacao 30%
+        when(orderItemRepository.byPromotion(any(), any(), any(), org.mockito.ArgumentMatchers.eq(true), any()))
+                .thenReturn(List.of(
+                        new Object[]{Boolean.TRUE, new BigDecimal("300.00"), 5L},
+                        new Object[]{Boolean.FALSE, new BigDecimal("700.00"), 10L}));
+        when(orderItemRepository.discountGranted(any(), any(), any())).thenReturn(new BigDecimal("120.00"));
+        when(orderItemRepository.topProducts(any(), any(), any(), org.mockito.ArgumentMatchers.eq(true), any(),
+                org.mockito.ArgumentMatchers.eq(true)))
+                .thenReturn(List.<Object[]>of(new Object[]{"A1", "Anel Promo", "Anel", new BigDecimal("300.00"), 5L}));
+
+        // Promoção ativa (com produto, pois PromotionResponse.from usa product)
+        com.hesed.models.Product prod = com.hesed.models.Product.builder()
+                .id(java.util.UUID.randomUUID()).sku("A1").name("Anel Promo")
+                .salePrice(new BigDecimal("60")).build();
+        com.hesed.models.Promotion promo = com.hesed.models.Promotion.builder()
+                .id(java.util.UUID.randomUUID()).product(prod).title("Promo QA")
+                .discountPercent(new BigDecimal("25")).active(true).build();
+        when(promotionRepository.findActivePromotions(any())).thenReturn(List.of(promo));
+        when(promotionRepository.count()).thenReturn(3L);
+
+        var r = service.promotions(null, null);
+
+        assertThat(r.getKpis().getActiveCount()).isEqualTo(1);
+        assertThat(r.getKpis().getTotalCount()).isEqualTo(3);
+        assertThat(r.getKpis().getPromoRevenue()).isEqualByComparingTo("300.00");
+        assertThat(r.getKpis().getPromoItems()).isEqualTo(5);
+        assertThat(r.getKpis().getPromoShare()).isEqualByComparingTo("30.00"); // 300/(300+700)
+        assertThat(r.getKpis().getDiscountGranted()).isEqualByComparingTo("120.00");
+
+        assertThat(r.getSplit().getRegularRevenue()).isEqualByComparingTo("700.00");
+        assertThat(r.getTopPromoProducts()).hasSize(1);
+        assertThat(r.getTopPromoProducts().get(0).getSku()).isEqualTo("A1");
+        assertThat(r.getActivePromotions()).hasSize(1);
+        assertThat(r.getActivePromotions().get(0).getTitle()).isEqualTo("Promo QA");
+    }
+
+    @Test
+    @DisplayName("promotions: sem vendas → participação 0, listas vazias")
+    void promotions_empty() {
+        when(orderItemRepository.byPromotion(any(), any(), any(), org.mockito.ArgumentMatchers.eq(true), any()))
+                .thenReturn(List.of());
+        when(orderItemRepository.discountGranted(any(), any(), any())).thenReturn(BigDecimal.ZERO);
+        when(orderItemRepository.topProducts(any(), any(), any(), org.mockito.ArgumentMatchers.eq(true), any(),
+                org.mockito.ArgumentMatchers.eq(true))).thenReturn(List.of());
+        when(promotionRepository.findActivePromotions(any())).thenReturn(List.of());
+        when(promotionRepository.count()).thenReturn(0L);
+
+        var r = service.promotions(null, null);
+
+        assertThat(r.getKpis().getPromoShare()).isEqualByComparingTo("0");
+        assertThat(r.getKpis().getActiveCount()).isZero();
+        assertThat(r.getTopPromoProducts()).isEmpty();
+        assertThat(r.getActivePromotions()).isEmpty();
     }
 }
