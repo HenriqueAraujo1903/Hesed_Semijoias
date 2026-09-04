@@ -189,7 +189,7 @@ Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, R
 ## 6. Features em produção
 
 - **Catálogo público:** sacola, carrossel de promoções (sem esgotados), preço promocional (`effectivePrice`), telemetria anônima, galeria de fotos (até 5).
-- **Pedidos:** registro via catálogo/WhatsApp, venda direta, edição, confirmar/cancelar (ambos exigem nome+telefone), aviso automático via WhatsApp com template + imagem opcional (link com preview).
+- **Pedidos:** registro via catálogo/WhatsApp, venda direta, edição, confirmar/cancelar (ambos exigem nome+telefone), aviso automático via WhatsApp com template + imagem opcional (link com preview). O aviso abre o **WhatsApp Web** (`web.whatsapp.com/send`) já com o texto preenchido para a operadora enviar com um clique (semi-automático); a aba é aberta no clique e depois apontada para a URL, para não ser bloqueada como popup após as chamadas de API.
 - **Estoque numérico:** quantidade como fonte da verdade; status derivado; baixa/estorno automático no pedido; ajuste manual (entrada/absoluto) com movimentações; alerta de baixo estoque e de garantia (3 faixas).
 - **Produto sob encomenda (onDemand):** comprável no catálogo (selo "Sob encomenda" + prazo em dias úteis) sem consumir estoque nem entrar em alertas de reposição; conta na receita (custo estimado).
 - **Cadastros:** clientes e fornecedores; pedido pode vincular cliente (snapshot de nome/telefone).
@@ -201,7 +201,7 @@ Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, R
 - **Configurações:** CRUD de usuários; templates de mensagem WhatsApp com imagem opcional.
 - **Segurança:** cookie HttpOnly, CSP, rate limit, uploads validados por magic bytes, catálogo sem vazar custo.
 
-**Pendente (bloqueado):** **mensagem em massa** (broadcast de promoção) — aguarda o dono obter conta **WhatsApp Business / Meta Cloud API** (o `wa.me` atual não faz envio em massa). A base de destinatários (entidade `Customer`) já existe; falta plugar a Cloud API e a tela de disparo. Quando houver a conta, fornecer: Phone Number ID, WhatsApp Business Account ID, token permanente e templates aprovados pela Meta.
+**Pendente (bloqueado):** **mensagem em massa** (broadcast de promoção) — aguarda o dono obter conta **WhatsApp Business / Meta Cloud API**. O aviso atual é semi-automático (abre o WhatsApp Web com o texto pronto), não faz envio em massa. A base de destinatários (entidade `Customer`) já existe; falta plugar a Cloud API e a tela de disparo. Quando houver a conta, fornecer: Phone Number ID, WhatsApp Business Account ID, token permanente e templates aprovados pela Meta.
 
 ---
 
@@ -252,7 +252,7 @@ Scripts Python (stdlib pura). Cada um cria e **limpa 100%** dos próprios dados 
 | `qa_estoque_dev.py` | Estoque: fornecedores, preços, status derivado, baixa/estorno, ajuste, garantia | 8080, admin@hesed.com |
 | `qa_metas.py` | Metas mensais + Visão Geral (herança, trava/justificativa, auditoria) | 8081, admin@homolog.com |
 | `qa_seguranca.py` | Red team: vazamento de custo, SSRF no import, upload por magic bytes, RBAC, rate limit | 8081, admin@homolog.com |
-| `qa_leva_config.py` | Config (usuários, mensagens), clientes, catálogo/promo, **sob encomenda**, **CG (consignação)** e **RD (dashboard revendedoras)** | 8081, admin@homolog.com, `QA_DB=hesed_homolog` |
+| `qa_leva_config.py` | Config (usuários, mensagens), clientes, catálogo/promo, **sob encomenda**, **CG (consignação)**, **RD (dashboard revendedoras)** e **EN (encoding UTF-8)** | 8081, admin@homolog.com, `QA_DB=hesed_homolog` |
 | `qa_logo_assets.py` | Assets de logo via ImageMagick (resolução, transparência, integridade) | — (só arquivos locais) |
 
 Parametrização: `QA_BASE`, `QA_ADMIN_EMAIL`, `QA_ADMIN_PASS` (e `QA_DB` no leva_config). Defaults apontam para homolog (8081), exceto `qa_estoque_dev` (dev 8080). Para rodar contra homolog, `qa_estoque_dev`/`qa_seguranca` precisam de `QA_ADMIN_EMAIL=admin@homolog.com QA_ADMIN_PASS=homolog123` explícitos.
@@ -262,9 +262,10 @@ Parametrização: `QA_BASE`, `QA_ADMIN_EMAIL`, `QA_ADMIN_PASS` (e `QA_DB` no lev
 ### Suíte de consignação — invariantes de estoque (via SQL, na `qa_leva_config`)
 - **CG:** reserva preserva o total físico (disponível+reservado); guardas (excede estoque, revendedora/lote inválido, vendido>levado); acerto parcial não mexe no estoque; fechar baixa só os vendidos (sem dupla baixa) + devolve o resto + gera receita CONSIGNADO + comissão por lote + movimentos SAIDA/LIBERACAO; refechar/recancelar/acertar-fechado retornam 400; cancelar restaura estoque; 100% vendido / 100% devolvido; multi-produto; filtros de status.
 - **RD:** coerência de KPIs/ranking/abertos, sell-through, ordenação desc, `net = total − comissão`, período futuro zera fechados mantendo abertos.
+- **EN (encoding UTF-8):** regressão do bug do aviso WhatsApp. Verifica que as respostas JSON declaram `Content-Type: application/json;charset=UTF-8` e que um template com emojis (✨ 💛 🛍️ 💰 🥰) e acentos faz roundtrip idêntico pela API (salvar → reler sem corromper).
 
-### Última bateria completa (03/09, homolog): **1.592 casos, 0 falhas**
-unit 124 · qa_leva_config 226 · qa_homolog 399 · qa_estoque_dev 262 · qa_seguranca 311 · qa_metas 270.
+### Última bateria completa (homolog): 0 falhas
+unit 124 · qa_leva_config (com CG/RD/EN) · qa_homolog 399 · qa_estoque_dev 262 · qa_seguranca 311 · qa_metas 270.
 
 **Limpeza de resíduos QA em homolog** (produtos retidos por FK de pedido são comportamento correto; para zerar antes do veredito):
 ```sql
@@ -284,23 +285,34 @@ DELETE FROM products WHERE sku LIKE 'QA-%';
 ### Branches (todas alinhadas)
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `92e70a4` (+ doc) | No ar em https://hesedsemijoias.online |
+| `main` (produção) | `d8c4fd7` | No ar em https://hesedsemijoias.online |
 | `dev` | sincronizada | Trabalhar aqui |
 | `homolog` | sincronizada | — |
 
-> O código de produção roda `92e70a4` (Consignação Fase 2). Commits de documentação posteriores não alteram o app.
+> As 3 branches estão alinhadas em `d8c4fd7`. Últimas levas: ajustes de marketing do catálogo (`baf3033`) e correção do aviso WhatsApp (`3410bee` + `d8c4fd7`).
+
+### Leva de catálogo/marketing (`baf3033`)
+- Garantia **6 meses → 1 ano** no catálogo.
+- Hero com diferenciais (Não escurece · Antialérgica · Garantia de 1 ano); rodapé com acabamentos (Ouro 18K, Prata 1000 e Ródio).
+- Ícone do WhatsApp no link "Atendimento via WhatsApp".
+
+### Correção do aviso WhatsApp — emojis quebrados + popup (`3410bee` + `d8c4fd7`)
+Dois bugs no aviso automático de confirmação/cancelamento de pedido:
+1. **Popup bloqueado:** `window.open` era chamado após os `await` das chamadas de API, fora do gesto de clique → o navegador bloqueava a aba. Correção: abrir a aba **no clique** e só depois apontá-la para a URL (via `sendWhatsAppViaWindow` recebendo o handle da janela).
+2. **Emojis viravam `�`:** duas causas somadas — (a) a API respondia `application/json` **sem** `charset=UTF-8` e, com `nosniff` no Nginx, o navegador quebrava multi-byte → corrigido no `WebConfig` (`extendMessageConverters` força UTF-8 no JSON e no texto); (b) o **`wa.me`** no desktop macOS faz handoff para o app nativo e **corrompe emojis** (4 bytes → `�`) → trocado para **`web.whatsapp.com/send`** (WhatsApp Web), que preserva o UTF-8. Regressão coberta pela suíte **EN** do `qa_leva_config`.
 
 ### Padrões técnicos aprendidos (evitar retrabalho)
 - **PostgreSQL + JPQL:** o Postgres não infere o tipo de parâmetro `null` (agrava com JOIN FETCH + Pageable). Normalizar datas no service: `from` → `2000-01-01`, `to` → `now()+1ano`. Padrão repetido em todos os métodos do `AnalyticsService`.
 - **`List.of(new Object[]{...})`** com um único array vira `List<Object>` → usar `List.<Object[]>of(...)`.
 - **Mockito/JDK:** `StockService`/`OrderService` não são mockáveis (Byte Buddy) — usar instâncias reais com repos mockados.
 - **PWA:** ao mexer em PWA/upload/nginx, revalidar o service worker (skipWaiting/clientsClaim) servindo o build (`npx vite preview`), pois SW velho já causou "fotos quebradas" no painel.
+- **Encoding UTF-8:** respostas HTTP devem declarar `charset=UTF-8` (feito no `WebConfig`); e o aviso ao cliente usa `web.whatsapp.com/send`, não `wa.me` (este corrompe emojis no handoff pro app nativo no desktop).
 
 ### Migrações de schema aplicadas (aditivas, via `ddl-auto: update`)
 `products.reserved_quantity`, `products.on_demand`, `products.lead_time_days`; `consignments`(`commission_rate`,`total_sold`,`commission_amount`,`net_amount`); `consignment_items`(`quantity`,`sold_quantity`,`returned_quantity`,`unit_sale_price`,`product_sku`,`product_name`); `orders.customer_id`; `users.phone`; `message_templates`(+`image_url`); tabelas `customers`, `catalog_events`, `monthly_goals`, `goal_change_logs`. A Fase 2 (dashboard) **não** alterou schema.
 
 ### Backups de produção (`/root/backups/` na VPS)
-Mais recentes: `hesed_db_pre_consignacao_20260903_210055.sql.gz` (Fase 1), `hesed_db_pre_dashrevendedoras_20260903_220256.sql.gz` (Fase 2).
+Mais recentes: `hesed_db_pre_dashrevendedoras_20260903_220256.sql.gz` (Fase 2) e `hesed_db_pre_catalogomkt_20260904_...sql.gz` (leva de marketing/fix WhatsApp). As levas de catálogo e a correção do WhatsApp **não** alteraram schema.
 
 ### Próxima feature planejada
 **Mensagem em massa (WhatsApp Business/Meta Cloud API)** — bloqueada até o dono obter a conta (ver seção 6). Decisão em aberto: manter o cadastro de clientes só para fluxos internos (atual) ou também capturar telefone no catálogo público (hoje o catálogo não pede telefone).
