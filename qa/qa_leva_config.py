@@ -1125,6 +1125,53 @@ def suite_resellers_dashboard():
 
 
 # ===========================================================================
+# EN — Encoding UTF-8 nas respostas da API (regressão do aviso WhatsApp)
+# Garante que emojis/acentos não se corrompem (viram �) ao trafegar pela API.
+# ===========================================================================
+def suite_encoding_utf8():
+    print("== SUÍTE EN: Encoding UTF-8 (emojis/acentos) ==")
+
+    # 1) O Content-Type das respostas JSON deve declarar charset=UTF-8. Sem isso,
+    #    com 'nosniff' no Nginx, o navegador quebra caracteres multi-byte.
+    req = urllib.request.Request(BASE + "/api/admin/settings/messages", method="GET")
+    ctype = ""
+    try:
+        with _opener.open(req, timeout=30) as resp:
+            ctype = resp.headers.get("Content-Type", "")
+    except Exception as e:
+        R.check("EN.content_type.acessivel", False, "200", str(e))
+    R.check("EN.content_type.utf8", "charset=utf-8" in ctype.lower(),
+            "application/json;charset=UTF-8", ctype)
+
+    # 2) Roundtrip de emojis + acentos por um template (o cenário exato do bug).
+    #    Guarda o original para o cleanup restaurar (TOUCHED_TEMPLATES).
+    st, lst = request("GET", "/api/admin/settings/messages")
+    if isinstance(lst, list):
+        for t in lst:
+            TOUCHED_TEMPLATES.setdefault(t["templateKey"], (t["body"], t["active"], t.get("imageUrl")))
+
+    amostra = "Olá {cliente}! ✨ Prontinho 💛 Itens 🛍️ Total 💰 Peça é ótima ção 🥰"
+    st, b = request("PUT", "/api/admin/settings/messages/ORDER_CONFIRMED",
+                    body={"body": amostra, "active": True})
+    R.check("EN.put.200", st == 200, 200, st)
+    R.check("EN.put.sem_replacement_char", isinstance(b, dict) and "\ufffd" not in b.get("body", ""),
+            "sem \ufffd", None)
+    R.check("EN.put.roundtrip_identico", isinstance(b, dict) and b.get("body") == amostra,
+            "body idêntico ao enviado", None)
+
+    # GET relê e confirma que persistiu íntegro (passa pelo banco).
+    st, lst2 = request("GET", "/api/admin/settings/messages")
+    t2 = next((x for x in lst2 if x["templateKey"] == "ORDER_CONFIRMED"), {}) if isinstance(lst2, list) else {}
+    R.check("EN.get.roundtrip_identico", t2.get("body") == amostra, "body idêntico após reler", None)
+    R.check("EN.get.emojis_preservados",
+            all(e in (t2.get("body") or "") for e in ["✨", "💛", "🛍️", "💰", "🥰"]),
+            "todos os emojis presentes", None)
+    R.check("EN.get.acentos_preservados",
+            all(a in (t2.get("body") or "") for a in ["Olá", "Peça", "é", "ótima", "ção"]),
+            "acentos presentes", None)
+
+
+# ===========================================================================
 # Cleanup
 # ===========================================================================
 def cleanup():
@@ -1234,6 +1281,7 @@ def main():
         suite_period_filter()
         suite_consignacao()
         suite_resellers_dashboard()
+        suite_encoding_utf8()
     finally:
         cleanup()
     dt = time.time() - t0

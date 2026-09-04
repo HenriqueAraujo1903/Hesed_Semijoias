@@ -3,10 +3,10 @@ import { BRL } from './format';
 /**
  * Utilitários de WhatsApp — isolados para reuso.
  *
- * Hoje (Caminho A / semi-automático) montamos o texto e abrimos o wa.me para a
- * operadora enviar com um clique. No futuro (Caminho B / API oficial), o
+ * Hoje (Caminho A / semi-automático) montamos o texto e abrimos o WhatsApp Web
+ * para a operadora enviar com um clique. No futuro (Caminho B / API oficial), o
  * `buildOrderMessage` continua sendo a fonte da mensagem — só troca o
- * `openWhatsApp` (link) por uma chamada de API no backend.
+ * `sendWhatsAppViaWindow` (link) por uma chamada de API no backend.
  */
 
 // Forma mínima de pedido necessária para montar a mensagem.
@@ -73,18 +73,6 @@ export function buildWhatsAppUrl(phone: string | null | undefined, message: stri
   const sanitized = sanitizePhone(phone);
   if (!sanitized) return null;
   return `https://web.whatsapp.com/send?phone=${sanitized}&text=${encodeURIComponent(message)}`;
-}
-
-/**
- * Abre o WhatsApp (web/app) com o número e a mensagem pré-preenchidos.
- * Deve ser chamado de forma síncrona a um gesto do usuário (clique) para não
- * ser bloqueado como popup. Retorna false se o telefone for inválido.
- */
-export function openWhatsApp(phone: string | null | undefined, message: string): boolean {
-  const url = buildWhatsAppUrl(phone, message);
-  if (!url) return false;
-  window.open(url, '_blank', 'noopener,noreferrer');
-  return true;
 }
 
 /**
