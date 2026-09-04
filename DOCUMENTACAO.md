@@ -193,6 +193,7 @@ Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, R
 - **Estoque numérico:** quantidade como fonte da verdade; status derivado; baixa/estorno automático no pedido; ajuste manual (entrada/absoluto) com movimentações; alerta de baixo estoque e de garantia (3 faixas).
 - **Produto sob encomenda (onDemand):** comprável no catálogo (selo "Sob encomenda" + prazo em dias úteis) sem consumir estoque nem entrar em alertas de reposição; conta na receita (custo estimado).
 - **Cadastros:** clientes e fornecedores; pedido pode vincular cliente (snapshot de nome/telefone).
+- **Precificação de produto (cadastro):** 4 campos — Preço fornecedor, Custo pago, **% de lucro** (default 85, editável) e Venda — com cálculo em cascata no frontend: Custo pago = Preço fornecedor ÷ 2; Venda = Custo ÷ (1 − lucro%/100) (85% ⇒ custo ÷ 0,15). Todos editáveis (editar venda na mão faz o % de lucro refletir o resultado). O cálculo vive só no frontend; o backend recebe/persiste `costPrice` e `salePrice` finais (o % de lucro NÃO é persistido — é derivável de custo/venda).
 - **Promoções:** CRUD + carrossel público.
 - **Consignação — Fase 1:** lotes com revendedoras. Abrir **reserva** estoque (disponível→reservado, movimento RESERVA); acerto por quantidade vendida; fechar **consome** os vendidos (SAIDA, sem voltar ao disponível), **devolve** o resto (LIBERACAO), gera venda canal **CONSIGNADO** na receita (sem dupla baixa) e apura comissão = totalSold × commissionRate (editável por lote, default da revendedora); cancelar libera todo o reservado.
 - **Consignação — Fase 2 (Dashboard de Revendedoras):** KPIs (total vendido, comissão paga, líquido, taxa de venda + peças consignadas/vendidas/devolvidas + consignações abertas), ranking por revendedora e tabela de consignações em aberto. KPIs/ranking consideram lotes **fechados** cujo `closedAt` caiu no período; os abertos são sempre "agora" (com valor potencial).
@@ -264,8 +265,10 @@ Parametrização: `QA_BASE`, `QA_ADMIN_EMAIL`, `QA_ADMIN_PASS` (e `QA_DB` no lev
 - **RD:** coerência de KPIs/ranking/abertos, sell-through, ordenação desc, `net = total − comissão`, período futuro zera fechados mantendo abertos.
 - **EN (encoding UTF-8):** regressão do bug do aviso WhatsApp. Verifica que as respostas JSON declaram `Content-Type: application/json;charset=UTF-8` e que um template com emojis (✨ 💛 🛍️ 💰 🥰) e acentos faz roundtrip idêntico pela API (salvar → reler sem corromper).
 
-### Última bateria completa (homolog): 0 falhas
-unit 124 · qa_leva_config (com CG/RD/EN) · qa_homolog 399 · qa_estoque_dev 262 · qa_seguranca 311 · qa_metas 270.
+### Última bateria completa (homolog): **1.605 casos, 0 falhas**
+unit 130 · qa_leva_config 233 (com CG/RD/EN) · qa_homolog 399 · qa_estoque_dev 262 · qa_seguranca 311 · qa_metas 270.
+
+Testes unitários cobrem também o **impacto da precificação**: `OrderServiceTest` (snapshot de preço no pedido — unitPrice=venda, costPrice=custo, effectivePrice com override; venda CONSIGNADO usa o preço do lote) e `AnalyticsServiceTest.sales`/`stock` (margem = receita − custo, marginPercent; valor de estoque a custo e a venda). Como o backend só lê custo/venda finais, esses testes travam os pontos financeiros/estoque contra regressão.
 
 **Limpeza de resíduos QA em homolog** (produtos retidos por FK de pedido são comportamento correto; para zerar antes do veredito):
 ```sql
@@ -285,11 +288,11 @@ DELETE FROM products WHERE sku LIKE 'QA-%';
 ### Branches (todas alinhadas)
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `d8c4fd7` | No ar em https://hesedsemijoias.online |
+| `main` (produção) | `bdc8fc9` | No ar em https://hesedsemijoias.online |
 | `dev` | sincronizada | Trabalhar aqui |
 | `homolog` | sincronizada | — |
 
-> As 3 branches estão alinhadas em `d8c4fd7`. Últimas levas: ajustes de marketing do catálogo (`baf3033`) e correção do aviso WhatsApp (`3410bee` + `d8c4fd7`).
+> As 3 branches estão alinhadas em `bdc8fc9`. Últimas levas: marketing do catálogo (`baf3033`), correção do aviso WhatsApp (`3410bee`/`d8c4fd7`) e campo % de lucro no cadastro (`4ea9444`/`bdc8fc9`).
 
 ### Leva de catálogo/marketing (`baf3033`)
 - Garantia **6 meses → 1 ano** no catálogo.
@@ -300,6 +303,9 @@ DELETE FROM products WHERE sku LIKE 'QA-%';
 Dois bugs no aviso automático de confirmação/cancelamento de pedido:
 1. **Popup bloqueado:** `window.open` era chamado após os `await` das chamadas de API, fora do gesto de clique → o navegador bloqueava a aba. Correção: abrir a aba **no clique** e só depois apontá-la para a URL (via `sendWhatsAppViaWindow` recebendo o handle da janela).
 2. **Emojis viravam `�`:** duas causas somadas — (a) a API respondia `application/json` **sem** `charset=UTF-8` e, com `nosniff` no Nginx, o navegador quebrava multi-byte → corrigido no `WebConfig` (`extendMessageConverters` força UTF-8 no JSON e no texto); (b) o **`wa.me`** no desktop macOS faz handoff para o app nativo e **corrompe emojis** (4 bytes → `�`) → trocado para **`web.whatsapp.com/send`** (WhatsApp Web), que preserva o UTF-8. Regressão coberta pela suíte **EN** do `qa_leva_config`.
+
+### Campo % de lucro no cadastro de produto (`4ea9444` + `bdc8fc9`)
+Novo campo **% de lucro** (default 85, editável) no formulário de produto, entre Custo pago e Venda. Cálculo em cascata no frontend: Custo pago = Preço fornecedor ÷ 2; Venda = Custo ÷ (1 − lucro%/100) (85% ⇒ custo ÷ 0,15, ou seja o custo é 15% da venda). Todos os campos editáveis; editar a Venda na mão faz o % de lucro refletir o resultado real. **Só frontend** — o backend recebe/persiste `costPrice` e `salePrice` finais como antes (o % de lucro não é persistido). Testes de impacto (margem, valor de estoque, snapshot de preço) adicionados em `OrderServiceTest`/`AnalyticsServiceTest`.
 
 ### Padrões técnicos aprendidos (evitar retrabalho)
 - **PostgreSQL + JPQL:** o Postgres não infere o tipo de parâmetro `null` (agrava com JOIN FETCH + Pageable). Normalizar datas no service: `from` → `2000-01-01`, `to` → `now()+1ano`. Padrão repetido em todos os métodos do `AnalyticsService`.
@@ -312,7 +318,7 @@ Dois bugs no aviso automático de confirmação/cancelamento de pedido:
 `products.reserved_quantity`, `products.on_demand`, `products.lead_time_days`; `consignments`(`commission_rate`,`total_sold`,`commission_amount`,`net_amount`); `consignment_items`(`quantity`,`sold_quantity`,`returned_quantity`,`unit_sale_price`,`product_sku`,`product_name`); `orders.customer_id`; `users.phone`; `message_templates`(+`image_url`); tabelas `customers`, `catalog_events`, `monthly_goals`, `goal_change_logs`. A Fase 2 (dashboard) **não** alterou schema.
 
 ### Backups de produção (`/root/backups/` na VPS)
-Mais recentes: `hesed_db_pre_dashrevendedoras_20260903_220256.sql.gz` (Fase 2) e `hesed_db_pre_catalogomkt_20260904_...sql.gz` (leva de marketing/fix WhatsApp). As levas de catálogo e a correção do WhatsApp **não** alteraram schema.
+Mais recentes: `hesed_db_pre_catalogomkt_...` (marketing/fix WhatsApp), `hesed_db_pre_wafix_...` (fix WhatsApp) e `hesed_db_pre_perclucro_20260904_230544.sql.gz` (campo % de lucro). As levas de catálogo, a correção do WhatsApp e o campo % de lucro **não** alteraram schema.
 
 ### Próxima feature planejada
 **Mensagem em massa (WhatsApp Business/Meta Cloud API)** — bloqueada até o dono obter a conta (ver seção 6). Decisão em aberto: manter o cadastro de clientes só para fluxos internos (atual) ou também capturar telefone no catálogo público (hoje o catálogo não pede telefone).
