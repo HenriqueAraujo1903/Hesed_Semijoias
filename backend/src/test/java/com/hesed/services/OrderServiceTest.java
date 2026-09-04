@@ -207,4 +207,89 @@ class OrderServiceTest {
         assertThat(resp.getCustomerName()).isEqualTo("Cliente Avulso");
         assertThat(resp.getCustomerPhone()).isEqualTo("5133330000");
     }
+
+    // ===========================================================================
+    // Snapshot de preço no pedido — impacto financeiro da precificação.
+    // O backend grava custo/venda FINAIS que vêm do produto; a mudança de UI
+    // (cálculo de custo/venda/% lucro) não altera essas regras. Estes testes
+    // travam o comportamento para pegar qualquer regressão.
+    // ===========================================================================
+
+    private com.hesed.dto.AdminOrderCreateRequest directReq(UUID productId, int qty, java.math.BigDecimal override) {
+        var req = new com.hesed.dto.AdminOrderCreateRequest();
+        var item = new com.hesed.dto.AdminOrderCreateRequest.Item();
+        item.setProductId(productId);
+        item.setQuantity(qty);
+        item.setEffectivePrice(override);
+        req.setItems(java.util.List.of(item));
+        req.setConfirm(false);
+        return req;
+    }
+
+    @Test
+    @DisplayName("snapshot: item copia unitPrice=venda e costPrice=custo do produto (sem promoção)")
+    void snapshot_copiesSalePriceAndCost() {
+        when(orderRepository.existsByOrderNumber(any())).thenReturn(false);
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        UUID pid = UUID.randomUUID();
+        // Produto precificado pela nova regra: fornecedor 176 → custo 88 → venda 88/0,15 = 586,67
+        when(productRepository.findById(pid)).thenReturn(Optional.of(com.hesed.models.Product.builder()
+                .id(pid).sku("AN-1").name("Anel").category("Anel")
+                .salePrice(new java.math.BigDecimal("586.67")).costPrice(new java.math.BigDecimal("88.00")).build()));
+        when(promotionRepository.findActiveByProduct(any(), any())).thenReturn(java.util.List.of());
+
+        var resp = orderService.createDirect(directReq(pid, 2, null));
+
+        var it = resp.getItems().get(0);
+        assertThat(it.getUnitPrice()).isEqualByComparingTo("586.67");     // preço cheio = venda do produto
+        assertThat(it.getEffectivePrice()).isEqualByComparingTo("586.67"); // sem promoção = preço cheio
+        assertThat(it.getCostPrice()).isEqualByComparingTo("88.00");       // custo do snapshot
+        assertThat(it.getWasPromotion()).isFalse();
+        // Total = effectivePrice * qty
+        assertThat(resp.getTotalAmount()).isEqualByComparingTo("1173.34");
+    }
+
+    @Test
+    @DisplayName("snapshot: preço negociado (override) vira effectivePrice; custo permanece o do produto")
+    void snapshot_overridePrice() {
+        when(orderRepository.existsByOrderNumber(any())).thenReturn(false);
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        UUID pid = UUID.randomUUID();
+        when(productRepository.findById(pid)).thenReturn(Optional.of(com.hesed.models.Product.builder()
+                .id(pid).sku("AN-2").name("Brinco").category("Brinco")
+                .salePrice(new java.math.BigDecimal("100.00")).costPrice(new java.math.BigDecimal("15.00")).build()));
+        when(promotionRepository.findActiveByProduct(any(), any())).thenReturn(java.util.List.of());
+
+        var resp = orderService.createDirect(directReq(pid, 1, new java.math.BigDecimal("90.00")));
+
+        var it = resp.getItems().get(0);
+        assertThat(it.getUnitPrice()).isEqualByComparingTo("100.00");     // referência = venda
+        assertThat(it.getEffectivePrice()).isEqualByComparingTo("90.00"); // negociado
+        assertThat(it.getCostPrice()).isEqualByComparingTo("15.00");      // custo inalterado (margem preservada)
+        assertThat(resp.getTotalAmount()).isEqualByComparingTo("90.00");
+    }
+
+    @Test
+    @DisplayName("venda CONSIGNADO: effectivePrice = preço de venda do lote; unitPrice/custo do produto")
+    void consignmentSale_usesLotPrice() {
+        when(orderRepository.existsByOrderNumber(any())).thenReturn(false);
+        when(orderRepository.save(any(Order.class))).thenAnswer(inv -> inv.getArgument(0));
+        UUID pid = UUID.randomUUID();
+        when(productRepository.findById(pid)).thenReturn(Optional.of(com.hesed.models.Product.builder()
+                .id(pid).sku("CG-1").name("Pulseira").category("Pulseira")
+                .salePrice(new java.math.BigDecimal("200.00")).costPrice(new java.math.BigDecimal("30.00")).build()));
+
+        // Preço do lote (unitSalePrice) diferente do salePrice atual do produto.
+        var saleItem = new OrderService.ConsignmentSaleItem(pid, 3, new java.math.BigDecimal("180.00"));
+        Order sale = orderService.createConsignmentSale("Maria Revendedora",
+                java.util.List.of(saleItem), java.time.LocalDateTime.now());
+
+        assertThat(sale.getChannel()).isEqualTo("CONSIGNADO");
+        assertThat(sale.getStatus()).isEqualTo("CONFIRMADO");
+        var it = sale.getItems().get(0);
+        assertThat(it.getUnitPrice()).isEqualByComparingTo("200.00");     // referência = venda do produto
+        assertThat(it.getEffectivePrice()).isEqualByComparingTo("180.00"); // preço praticado no lote
+        assertThat(it.getCostPrice()).isEqualByComparingTo("30.00");       // custo entra na margem do dashboard
+        assertThat(sale.getTotalAmount()).isEqualByComparingTo("540.00");  // 180 * 3
+    }
 }

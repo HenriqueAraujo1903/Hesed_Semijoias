@@ -187,6 +187,79 @@ class AnalyticsServiceTest {
     }
 
     @Test
+    @DisplayName("sales: margem = receita - custo e marginPercent; usa effectivePrice/costPrice do item")
+    void sales_computesMargin() {
+        // KPIs: receita 1173.34 (venda 586.67 x 2), custo 176.00 (88 x 2), 2 itens, 1 pedido
+        when(orderItemRepository.kpis(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(List.<Object[]>of(new Object[]{
+                        new BigDecimal("1173.34"), new BigDecimal("176.00"), 2L, 1L}));
+        // Demais componentes do payload: vazios (não interferem na margem).
+        when(orderItemRepository.timeSeriesByMonth(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(List.of());
+        when(orderItemRepository.byCategory(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(List.of());
+        when(orderItemRepository.topProducts(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(List.of());
+        when(orderItemRepository.byPromotion(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+                .thenReturn(List.of());
+        when(orderRepository.countByStatusInRange(any(), any())).thenReturn(List.of());
+
+        var r = service.sales("CONFIRMADO", "month", null, null, null, false);
+
+        assertThat(r.getKpis().getRevenue()).isEqualByComparingTo("1173.34");
+        assertThat(r.getKpis().getCost()).isEqualByComparingTo("176.00");
+        assertThat(r.getKpis().getMargin()).isEqualByComparingTo("997.34");        // 1173.34 - 176.00
+        assertThat(r.getKpis().getMarginPercent()).isEqualByComparingTo("85.00");  // 997.34/1173.34*100 → 85%
+        assertThat(r.getKpis().getItems()).isEqualTo(2);
+        assertThat(r.getKpis().getOrders()).isEqualTo(1);
+        assertThat(r.getKpis().getAverageTicket()).isEqualByComparingTo("1173.34"); // 1 pedido
+    }
+
+    @Test
+    @DisplayName("sales: sem vendas → tudo zero, sem divisão por zero na margem%")
+    void sales_empty() {
+        when(orderItemRepository.kpis(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(List.of());
+        when(orderItemRepository.timeSeriesByMonth(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(List.of());
+        when(orderItemRepository.byCategory(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(List.of());
+        when(orderItemRepository.topProducts(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any(), org.mockito.ArgumentMatchers.anyBoolean()))
+                .thenReturn(List.of());
+        when(orderItemRepository.byPromotion(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean(), any()))
+                .thenReturn(List.of());
+        when(orderRepository.countByStatusInRange(any(), any())).thenReturn(List.of());
+
+        var r = service.sales("CONFIRMADO", "month", null, null, null, false);
+
+        assertThat(r.getKpis().getRevenue()).isEqualByComparingTo("0");
+        assertThat(r.getKpis().getMargin()).isEqualByComparingTo("0");
+        assertThat(r.getKpis().getMarginPercent()).isEqualByComparingTo("0");
+        assertThat(r.getKpis().getAverageTicket()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    @DisplayName("stock: valor a custo e a venda = preço × quantidade (impacto da precificação)")
+    void stock_costAndSaleValue() {
+        // 1 SKU, 5 unidades, custo 88 → costValue 88; venda 586.67 → saleValue 586.67
+        when(productRepository.stockKpis(any(), any())).thenReturn(List.<Object[]>of(
+                new Object[]{1L, 5L, new BigDecimal("88.00"), new BigDecimal("586.67")}));
+        when(productRepository.stockCountByStatus(any(), any())).thenReturn(List.<Object[]>of(
+                new Object[]{"DISPONIVEL", 1L}));
+        when(productRepository.stockByCategory(any(), any())).thenReturn(List.<Object[]>of(
+                new Object[]{"Anel", 1L, 5L, new BigDecimal("88.00"), new BigDecimal("586.67")}));
+        when(productRepository.findCriticalStock(any(), any())).thenReturn(List.of());
+        when(stockMovementRepository.findRecentWithProduct(any(), any(), any())).thenReturn(List.of());
+
+        var r = service.stock(null, null, null, null);
+
+        assertThat(r.getKpis().getCostValue()).isEqualByComparingTo("88.00");
+        assertThat(r.getKpis().getSaleValue()).isEqualByComparingTo("586.67");
+        assertThat(r.getByCategory().get(0).getCostValue()).isEqualByComparingTo("88.00");
+        assertThat(r.getByCategory().get(0).getSaleValue()).isEqualByComparingTo("586.67");
+    }
+
+    @Test
     @DisplayName("resellers: KPIs (somas, sell-through), ranking mapeado e consignações abertas")
     void resellers_buildsPayload() {
         // KPIs financeiros dos fechados: vendido 600, comissão 240, líquido 360, 2 lotes
