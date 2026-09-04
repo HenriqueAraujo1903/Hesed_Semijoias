@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
-import { buildOrderMessage, openWhatsApp } from '../utils/whatsapp';
+import { buildOrderMessage, sendWhatsAppViaWindow } from '../utils/whatsapp';
 
 interface OrderItem {
   id: string;
@@ -100,16 +100,22 @@ export default function OrdersPage() {
     }).catch(() => {});
   }, []);
 
-  /** Abre o WhatsApp com o aviso do template, se ele existir e estiver ativo. */
-  function notifyCustomer(order: import('../utils/whatsapp').OrderLike, status: string) {
+  /**
+   * Envia o aviso do template pelo WhatsApp, usando uma aba já aberta no clique
+   * (`win`) para não ser bloqueada como popup após as chamadas de API. Se o
+   * aviso estiver desligado ou sem telefone, fecha a aba pré-aberta.
+   */
+  function notifyCustomer(win: Window | null, order: import('../utils/whatsapp').OrderLike, status: string) {
     const key = status === 'CONFIRMADO' ? 'ORDER_CONFIRMED'
       : status === 'CANCELADO' ? 'ORDER_CANCELLED' : null;
-    if (!key) return;
-    const tpl = messageTemplates[key];
-    if (!tpl || !tpl.active) return;                 // aviso desligado nas Configurações
-    if (!order.customerPhone) return;                // sem telefone não há como enviar
+    const tpl = key ? messageTemplates[key] : null;
+    // Sem template ativo ou sem telefone: não há o que enviar — fecha a aba pré-aberta.
+    if (!tpl || !tpl.active || !order.customerPhone) {
+      if (win && !win.closed) win.close();
+      return;
+    }
     const msg = buildOrderMessage(tpl.body, order, tpl.imageUrl);
-    openWhatsApp(order.customerPhone, msg);
+    sendWhatsAppViaWindow(win, order.customerPhone, msg);
   }
 
   /**
@@ -308,7 +314,7 @@ export default function OrdersPage() {
           products={products}
           onClose={() => { setEditTarget(null); setCreating(false); }}
           onSaved={() => { setEditTarget(null); setCreating(false); load(); }}
-          onResolved={(status, o) => notifyCustomer(o, status)}
+          onResolved={(status, o, win) => notifyCustomer(win, o, status)}
         />
       )}
     </div>
@@ -326,7 +332,7 @@ interface EditItem {
 
 function OrderEditModal({ order, products, onClose, onSaved, onResolved }: {
   order: Order | null; products: Product[]; onClose: () => void; onSaved: () => void;
-  onResolved: (status: 'CONFIRMADO' | 'CANCELADO', order: import('../utils/whatsapp').OrderLike) => void;
+  onResolved: (status: 'CONFIRMADO' | 'CANCELADO', order: import('../utils/whatsapp').OrderLike, win: Window | null) => void;
 }) {
   const isCreate = order === null;
   const [items, setItems] = useState<EditItem[]>(
@@ -407,6 +413,13 @@ function OrderEditModal({ order, products, onClose, onSaved, onResolved }: {
       effectivePrice: i.effectivePrice,
     }));
 
+    // Abre a aba do WhatsApp AGORA, ainda dentro do gesto de clique, para não
+    // ser bloqueada como popup depois dos await das chamadas de API. Só abre
+    // quando é uma resolução (confirmar/cancelar). A URL final é definida em
+    // notifyCustomer (via onResolved); se não houver o que enviar, a aba é
+    // fechada lá.
+    const waWindow = resolve ? window.open('about:blank', '_blank') : null;
+
     setLoading(true);
     try {
       let orderNumber = order?.orderNumber ?? '';
@@ -444,10 +457,12 @@ function OrderEditModal({ order, products, onClose, onSaved, onResolved }: {
           items: items.map((i) => ({
             productName: i.productName, quantity: i.quantity, effectivePrice: i.effectivePrice,
           })),
-        });
+        }, waWindow);
       }
       onSaved();
     } catch (e: any) {
+      // Falhou o salvamento: fecha a aba pré-aberta para não deixar aba órfã.
+      if (waWindow && !waWindow.closed) waWindow.close();
       setError(e.response?.data?.error || 'Erro ao salvar o pedido');
     } finally {
       setLoading(false);

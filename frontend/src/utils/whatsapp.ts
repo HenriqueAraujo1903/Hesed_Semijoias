@@ -62,14 +62,50 @@ export function buildOrderMessage(templateBody: string, order: OrderLike, imageU
 }
 
 /**
+ * Monta a URL do WhatsApp com telefone (sanitizado) e mensagem. Null se
+ * telefone inválido.
+ *
+ * Usamos web.whatsapp.com/send (WhatsApp Web) em vez de wa.me: no desktop do
+ * macOS, o wa.me faz handoff para o app nativo e corrompe emojis (4 bytes viram
+ * �). A versão web preserva o texto em UTF-8.
+ */
+export function buildWhatsAppUrl(phone: string | null | undefined, message: string): string | null {
+  const sanitized = sanitizePhone(phone);
+  if (!sanitized) return null;
+  return `https://web.whatsapp.com/send?phone=${sanitized}&text=${encodeURIComponent(message)}`;
+}
+
+/**
  * Abre o WhatsApp (web/app) com o número e a mensagem pré-preenchidos.
  * Deve ser chamado de forma síncrona a um gesto do usuário (clique) para não
  * ser bloqueado como popup. Retorna false se o telefone for inválido.
  */
 export function openWhatsApp(phone: string | null | undefined, message: string): boolean {
-  const sanitized = sanitizePhone(phone);
-  if (!sanitized) return false;
-  const url = `https://wa.me/${sanitized}?text=${encodeURIComponent(message)}`;
+  const url = buildWhatsAppUrl(phone, message);
+  if (!url) return false;
   window.open(url, '_blank', 'noopener,noreferrer');
+  return true;
+}
+
+/**
+ * Envia o aviso usando uma aba já aberta no clique (evita bloqueio de popup
+ * após chamadas assíncronas). Navega a aba para o WhatsApp Web
+ * (web.whatsapp.com/send), que preserva o texto em UTF-8 — diferente do wa.me,
+ * que no desktop faz handoff para o app nativo e corrompe emojis (viram �).
+ *
+ * Se o telefone for inválido, fecha a aba. Se não houver aba (popup bloqueado),
+ * faz fallback com window.open direto.
+ */
+export function sendWhatsAppViaWindow(win: Window | null, phone: string | null | undefined, message: string): boolean {
+  const url = buildWhatsAppUrl(phone, message);
+  if (!url) {
+    if (win && !win.closed) win.close();
+    return false;
+  }
+  if (win && !win.closed) {
+    win.location.href = url;
+  } else {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
   return true;
 }
