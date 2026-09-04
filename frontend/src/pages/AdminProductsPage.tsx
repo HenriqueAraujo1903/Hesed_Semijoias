@@ -371,6 +371,12 @@ function ProductModal({ product, onClose, onSaved }: {
     supplierPrice: product?.supplierPrice != null ? product.supplierPrice.toString() : '',
     costPrice: product?.costPrice?.toString() ?? '',
     salePrice: product?.salePrice?.toString() ?? '',
+    // % de lucro (margem sobre a venda): venda = custo / (1 - lucro/100).
+    // Só dirige os cálculos na tela; não é persistido. Ao editar num produto
+    // existente, deriva do custo/venda atuais; senão, default 85.
+    profitPercent: (product?.costPrice && product?.salePrice && product.salePrice > 0)
+      ? (Math.round((1 - product.costPrice / product.salePrice) * 1000) / 10).toString()
+      : '85',
     stockQuantity: product?.stockQuantity != null ? product.stockQuantity.toString() : (isEdit ? '0' : ''),
     lowStockThreshold: product?.lowStockThreshold != null ? product.lowStockThreshold.toString() : '3',
     supplierId: product?.supplierId ?? '',
@@ -407,6 +413,55 @@ function ProductModal({ product, onClose, onSaved }: {
     ? (costNum / supplierNum - 1) * 100 : null;
   const saleMargin = (!isNaN(costNum) && costNum > 0 && !isNaN(saleNum))
     ? (1 - costNum / saleNum) * 100 : null;
+
+  // ── Cálculo em cascata dos valores (todos os campos continuam editáveis) ──
+  // Regras: Custo pago = Preço fornecedor / 2; Venda = Custo / (1 - lucro%/100).
+  // Arredonda a 2 casas; string vazia quando não há base para calcular.
+  const round2 = (n: number) => (Math.round(n * 100) / 100).toString();
+
+  function saleFromCost(cost: number, profit: number): string {
+    if (isNaN(cost) || isNaN(profit) || profit >= 100) return '';
+    return round2(cost / (1 - profit / 100));
+  }
+
+  // Preço fornecedor muda → custo = metade; venda recalculada pelo lucro atual.
+  function handleSupplierChange(value: string) {
+    const supplier = parseFloat(value);
+    const profit = parseFloat(form.profitPercent);
+    if (!isNaN(supplier)) {
+      const cost = Math.round(supplier * 0.5 * 100) / 100;
+      setForm((f) => ({ ...f, supplierPrice: value, costPrice: round2(cost), salePrice: saleFromCost(cost, profit) }));
+    } else {
+      setForm((f) => ({ ...f, supplierPrice: value }));
+    }
+  }
+
+  // Custo pago editado → venda recalculada pelo lucro atual (mantém o lucro%).
+  function handleCostChange(value: string) {
+    const cost = parseFloat(value);
+    const profit = parseFloat(form.profitPercent);
+    setForm((f) => ({ ...f, costPrice: value, salePrice: !isNaN(cost) ? saleFromCost(cost, profit) : f.salePrice }));
+  }
+
+  // % de lucro editado → venda recalculada a partir do custo atual.
+  function handleProfitChange(value: string) {
+    const profit = parseFloat(value);
+    const cost = parseFloat(form.costPrice);
+    setForm((f) => ({ ...f, profitPercent: value, salePrice: !isNaN(cost) ? saleFromCost(cost, profit) : f.salePrice }));
+  }
+
+  // Venda editada na mão → mantém o valor; o lucro% passa a refletir o resultado.
+  function handleSaleChange(value: string) {
+    const sale = parseFloat(value);
+    const cost = parseFloat(form.costPrice);
+    setForm((f) => ({
+      ...f,
+      salePrice: value,
+      profitPercent: (!isNaN(sale) && sale > 0 && !isNaN(cost))
+        ? (Math.round((1 - cost / sale) * 1000) / 10).toString()
+        : f.profitPercent,
+    }));
+  }
 
   // Vencimento de garantia previsto.
   const warrantyExpiry = (() => {
@@ -498,26 +553,34 @@ function ProductModal({ product, onClose, onSaved }: {
               className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm resize-none focus:border-gold focus:outline-none" />
           </div>
 
-          {/* Valores: fornecedor (tabela) / custo (pago) / venda (cliente) */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Preço fornecedor (R$)</label>
+          {/* Valores: fornecedor (tabela) / custo (pago) / % lucro / venda (cliente).
+              Custo pago = fornecedor / 2; Venda = custo / (1 - lucro%/100). Editáveis. */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="flex flex-col">
+              <label className="flex-1 text-xs font-medium text-stone-600 mb-1 leading-tight">Preço fornecedor (R$)</label>
               <input type="number" step="0.01" min="0" value={form.supplierPrice}
-                onChange={(e) => setForm({ ...form, supplierPrice: e.target.value })}
+                onChange={(e) => handleSupplierChange(e.target.value)}
                 placeholder="tabela"
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="mt-auto w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Custo pago (R$) *</label>
+            <div className="flex flex-col">
+              <label className="flex-1 text-xs font-medium text-stone-600 mb-1 leading-tight">Custo pago (R$) *</label>
               <input required type="number" step="0.01" min="0" value={form.costPrice}
-                onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                onChange={(e) => handleCostChange(e.target.value)}
+                className="mt-auto w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Venda (R$) *</label>
+            <div className="flex flex-col">
+              <label className="flex-1 text-xs font-medium text-stone-600 mb-1 leading-tight">% de lucro</label>
+              <input type="number" step="0.1" min="0" max="99.9" value={form.profitPercent}
+                onChange={(e) => handleProfitChange(e.target.value)}
+                placeholder="85"
+                className="mt-auto w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+            </div>
+            <div className="flex flex-col">
+              <label className="flex-1 text-xs font-medium text-stone-600 mb-1 leading-tight">Venda (R$) *</label>
               <input required type="number" step="0.01" min="0" value={form.salePrice}
-                onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                onChange={(e) => handleSaleChange(e.target.value)}
+                className="mt-auto w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
           </div>
 
