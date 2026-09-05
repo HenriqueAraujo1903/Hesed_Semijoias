@@ -179,20 +179,6 @@ export default function CatalogoPage() {
               Selecione suas favoritas e envie pelo WhatsApp
             </p>
           </div>
-
-          {/* Category filters — pílulas que quebram em várias linhas (sem scroll) */}
-          <div className="flex flex-wrap items-center justify-center gap-2 pb-6 max-w-3xl mx-auto">
-            {categories.map((cat) => (
-              <button key={cat} onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-1.5 rounded-full text-[13px] font-medium border transition-all duration-300 ${
-                  activeCategory === cat
-                    ? 'bg-[#C8A96E] text-white border-[#C8A96E] shadow-sm'
-                    : 'bg-white/60 dark:bg-[#1C1A16]/60 text-[#7A766F] dark:text-[#A8A5A0] border-[#F0E4CC] dark:border-[#3D3A33] hover:border-[#C8A96E] hover:text-[#C8A96E] dark:hover:text-[#C8A96E]'
-                }`}>
-                {cat}
-              </button>
-            ))}
-          </div>
         </div>
       </section>
 
@@ -201,6 +187,22 @@ export default function CatalogoPage() {
         const product = products.find(p => p.id === productId);
         if (product && product.stockStatus !== 'ESGOTADO') toggle(product);
       }} />
+
+      {/* ═══════════ CATEGORY FILTERS (abaixo do carrossel) ═══════════ */}
+      <div className="max-w-6xl mx-auto px-4 pt-8">
+        <div className="flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto">
+          {categories.map((cat) => (
+            <button key={cat} onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-1.5 rounded-full text-[13px] font-medium border transition-all duration-300 ${
+                activeCategory === cat
+                  ? 'bg-[#C8A96E] text-white border-[#C8A96E] shadow-sm'
+                  : 'bg-white/60 dark:bg-[#1C1A16]/60 text-[#7A766F] dark:text-[#A8A5A0] border-[#F0E4CC] dark:border-[#3D3A33] hover:border-[#C8A96E] hover:text-[#C8A96E] dark:hover:text-[#C8A96E]'
+              }`}>
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* ═══════════ PRODUCTS GRID ═══════════ */}
       <main className="max-w-6xl mx-auto px-4 py-8 pb-56">
