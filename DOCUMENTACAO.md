@@ -189,7 +189,7 @@ Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, R
 
 ## 6. Features em produção
 
-- **Catálogo público:** sacola, carrossel de promoções (sem esgotados), preço promocional (`effectivePrice`), telemetria anônima, galeria de fotos (até 5).
+- **Catálogo público:** sacola, carrossel de promoções (sem esgotados), preço promocional (`effectivePrice`), telemetria anônima, galeria de fotos (até 5). Filtros de categoria em pílulas (quebram em várias linhas, sem scroll horizontal), posicionados abaixo do carrossel, logo antes da grade.
 - **Pedidos:** registro via catálogo/WhatsApp, venda direta, edição, confirmar/cancelar (ambos exigem nome+telefone), aviso automático via WhatsApp com template + imagem opcional (link com preview). O aviso abre o **WhatsApp Web** (`web.whatsapp.com/send`) já com o texto preenchido para a operadora enviar com um clique (semi-automático); a aba é aberta no clique e depois apontada para a URL, para não ser bloqueada como popup após as chamadas de API.
 - **Estoque numérico:** quantidade como fonte da verdade; status derivado; baixa/estorno automático no pedido; ajuste manual (entrada/absoluto) com movimentações; alerta de baixo estoque e de garantia (3 faixas).
 - **Produto sob encomenda (onDemand):** comprável no catálogo (selo "Sob encomenda" + prazo em dias úteis) sem consumir estoque nem entrar em alertas de reposição; conta na receita (custo estimado).
@@ -290,11 +290,14 @@ DELETE FROM products WHERE sku LIKE 'QA-%';
 ### Branches (todas alinhadas)
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `e519088` | No ar em https://hesedsemijoias.online |
+| `main` (produção) | `af0e4a7` | No ar em https://hesedsemijoias.online |
 | `dev` | sincronizada | Trabalhar aqui |
 | `homolog` | sincronizada | — |
 
-> As 3 branches estão alinhadas em `e519088`. Últimas levas: marketing do catálogo (`baf3033`), correção do aviso WhatsApp (`3410bee`/`d8c4fd7`), campo % de lucro no cadastro (`4ea9444`/`bdc8fc9`) e cadastro de categorias (`e519088`).
+> As 3 branches estão alinhadas em `af0e4a7`. Últimas levas: marketing do catálogo (`baf3033`), correção do aviso WhatsApp (`3410bee`/`d8c4fd7`), campo % de lucro no cadastro (`4ea9444`/`bdc8fc9`), cadastro de categorias (`e519088`) e melhoria visual dos filtros do catálogo (`41019a1`/`af0e4a7`).
+
+### Filtros de categoria no catálogo — melhoria visual (`41019a1` + `af0e4a7`)
+Só frontend. Os chips de categoria deixaram de ter scroll horizontal e passaram a **pílulas que quebram em várias linhas** (centralizadas, com contorno sutil — escalam bem com muitas categorias). O bloco de filtros foi **movido para abaixo do carrossel de promoções**, logo antes da grade. Deploy só de frontend (sem backup de banco; o backend usou cache e não reiniciou).
 
 ### Cadastro de categorias de produto (`e519088`)
 Nova aba **Categorias** em Cadastros (CRUD: nome, ordem, ativo/inativo). Backend: `Category` + `CategoryService` (nome único; exclusão bloqueada se houver produto usando o nome) + `CategoryController` `/api/admin/categories` + `GET /api/products/categories` (público, nomes ativos). Seed no `DataInitializer` popula a tabela a partir das categorias distintas dos produtos (idempotente, só se vazia). Frontend: `CategoriesPage`, e os seletores/filtros de categoria (produto, catálogo, dashboards) passaram a ler da nova fonte em vez de derivar de `/products/catalog`. **Opção A**: `Product.category` continua texto (sem FK) — a entidade só alimenta as listas.
