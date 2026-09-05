@@ -180,14 +180,14 @@ export default function CatalogoPage() {
             </p>
           </div>
 
-          {/* Category filters — centered, generous spacing */}
-          <div className="flex items-center justify-center gap-3 pb-6 overflow-x-auto scrollbar-hide">
+          {/* Category filters — pílulas que quebram em várias linhas (sem scroll) */}
+          <div className="flex flex-wrap items-center justify-center gap-2 pb-6 max-w-3xl mx-auto">
             {categories.map((cat) => (
               <button key={cat} onClick={() => setActiveCategory(cat)}
-                className={`shrink-0 px-5 py-2 rounded-full text-[13px] font-medium transition-all duration-300 ${
+                className={`px-4 py-1.5 rounded-full text-[13px] font-medium border transition-all duration-300 ${
                   activeCategory === cat
-                    ? 'bg-[#C8A96E] text-white'
-                    : 'text-[#7A766F] dark:text-[#A8A5A0] hover:text-[#C8A96E] dark:hover:text-[#C8A96E]'
+                    ? 'bg-[#C8A96E] text-white border-[#C8A96E] shadow-sm'
+                    : 'bg-white/60 dark:bg-[#1C1A16]/60 text-[#7A766F] dark:text-[#A8A5A0] border-[#F0E4CC] dark:border-[#3D3A33] hover:border-[#C8A96E] hover:text-[#C8A96E] dark:hover:text-[#C8A96E]'
                 }`}>
                 {cat}
               </button>
