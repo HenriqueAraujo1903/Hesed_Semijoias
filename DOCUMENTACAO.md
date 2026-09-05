@@ -143,6 +143,7 @@ Todas com `id` UUID e timestamps (`createdAt`/`updatedAt`).
 - **Metas:** `GET /api/admin/goals/current`, `GET /api/admin/goals` (year,month, com herança), `PUT` (upsert; alteração exige justificativa), `GET /history`, `GET /changes`.
 - **Estoque:** `POST /api/admin/stock/{productId}/adjust` (ENTRADA soma / AJUSTE absoluto), `GET /{productId}/movements`, `GET /low`, `GET /warranty?days=`.
 - **Fornecedores/Clientes/Usuários:** CRUD sob `/api/admin/suppliers`, `/api/admin/customers`, `/api/admin/users` (usuários com proteção: admin não se exclui/rebaixa, não remove o último admin).
+- **Categorias:** CRUD sob `/api/admin/categories` (nome único, `active`, `sortOrder`; exclusão bloqueada se houver produto usando o nome). Público: `GET /api/products/categories` (nomes das categorias ativas — fonte dos seletores/filtros e do catálogo).
 - **Configurações:** `GET /api/admin/settings/messages`, `PUT /api/admin/settings/messages/{key}`.
 
 ### 4.3 Segurança (`config/`)
@@ -192,7 +193,8 @@ Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, R
 - **Pedidos:** registro via catálogo/WhatsApp, venda direta, edição, confirmar/cancelar (ambos exigem nome+telefone), aviso automático via WhatsApp com template + imagem opcional (link com preview). O aviso abre o **WhatsApp Web** (`web.whatsapp.com/send`) já com o texto preenchido para a operadora enviar com um clique (semi-automático); a aba é aberta no clique e depois apontada para a URL, para não ser bloqueada como popup após as chamadas de API.
 - **Estoque numérico:** quantidade como fonte da verdade; status derivado; baixa/estorno automático no pedido; ajuste manual (entrada/absoluto) com movimentações; alerta de baixo estoque e de garantia (3 faixas).
 - **Produto sob encomenda (onDemand):** comprável no catálogo (selo "Sob encomenda" + prazo em dias úteis) sem consumir estoque nem entrar em alertas de reposição; conta na receita (custo estimado).
-- **Cadastros:** clientes e fornecedores; pedido pode vincular cliente (snapshot de nome/telefone).
+- **Cadastros:** clientes, fornecedores e **categorias**; pedido pode vincular cliente (snapshot de nome/telefone).
+- **Categorias de produto (Opção A):** cadastro central (Cadastros → Categorias) é a fonte de verdade dos seletores/filtros de categoria em todo o sistema (form e filtro de produto, catálogo público, dashboards Vendas/Estoque/Promoções). O `Product.category` continua sendo **texto** (sem FK): a entidade Category só alimenta as listas de opções. Renomear/inativar não altera produtos existentes; excluir é bloqueado se houver produto usando o nome; categoria inativa some dos seletores mas fica no cadastro. Seed inicial popula a tabela com as categorias distintas já presentes nos produtos (nada some dos filtros).
 - **Precificação de produto (cadastro):** 4 campos — Preço fornecedor, Custo pago, **% de lucro** (default 85, editável) e Venda — com cálculo em cascata no frontend: Custo pago = Preço fornecedor ÷ 2; Venda = Custo ÷ (1 − lucro%/100) (85% ⇒ custo ÷ 0,15). Todos editáveis (editar venda na mão faz o % de lucro refletir o resultado). O cálculo vive só no frontend; o backend recebe/persiste `costPrice` e `salePrice` finais (o % de lucro NÃO é persistido — é derivável de custo/venda).
 - **Promoções:** CRUD + carrossel público.
 - **Consignação — Fase 1:** lotes com revendedoras. Abrir **reserva** estoque (disponível→reservado, movimento RESERVA); acerto por quantidade vendida; fechar **consome** os vendidos (SAIDA, sem voltar ao disponível), **devolve** o resto (LIBERACAO), gera venda canal **CONSIGNADO** na receita (sem dupla baixa) e apura comissão = totalSold × commissionRate (editável por lote, default da revendedora); cancelar libera todo o reservado.
@@ -265,8 +267,8 @@ Parametrização: `QA_BASE`, `QA_ADMIN_EMAIL`, `QA_ADMIN_PASS` (e `QA_DB` no lev
 - **RD:** coerência de KPIs/ranking/abertos, sell-through, ordenação desc, `net = total − comissão`, período futuro zera fechados mantendo abertos.
 - **EN (encoding UTF-8):** regressão do bug do aviso WhatsApp. Verifica que as respostas JSON declaram `Content-Type: application/json;charset=UTF-8` e que um template com emojis (✨ 💛 🛍️ 💰 🥰) e acentos faz roundtrip idêntico pela API (salvar → reler sem corromper).
 
-### Última bateria completa (homolog): **1.605 casos, 0 falhas**
-unit 130 · qa_leva_config 233 (com CG/RD/EN) · qa_homolog 399 · qa_estoque_dev 262 · qa_seguranca 311 · qa_metas 270.
+### Última bateria completa (homolog): **1.611 casos, 0 falhas**
+unit 136 (inclui `CategoryServiceTest`: nome único, exclusão bloqueada em uso, exclusão ok sem vínculo) · qa_leva_config 233 (com CG/RD/EN) · qa_homolog 399 · qa_estoque_dev 262 · qa_seguranca 311 · qa_metas 270.
 
 Testes unitários cobrem também o **impacto da precificação**: `OrderServiceTest` (snapshot de preço no pedido — unitPrice=venda, costPrice=custo, effectivePrice com override; venda CONSIGNADO usa o preço do lote) e `AnalyticsServiceTest.sales`/`stock` (margem = receita − custo, marginPercent; valor de estoque a custo e a venda). Como o backend só lê custo/venda finais, esses testes travam os pontos financeiros/estoque contra regressão.
 
@@ -288,11 +290,14 @@ DELETE FROM products WHERE sku LIKE 'QA-%';
 ### Branches (todas alinhadas)
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `bdc8fc9` | No ar em https://hesedsemijoias.online |
+| `main` (produção) | `e519088` | No ar em https://hesedsemijoias.online |
 | `dev` | sincronizada | Trabalhar aqui |
 | `homolog` | sincronizada | — |
 
-> As 3 branches estão alinhadas em `bdc8fc9`. Últimas levas: marketing do catálogo (`baf3033`), correção do aviso WhatsApp (`3410bee`/`d8c4fd7`) e campo % de lucro no cadastro (`4ea9444`/`bdc8fc9`).
+> As 3 branches estão alinhadas em `e519088`. Últimas levas: marketing do catálogo (`baf3033`), correção do aviso WhatsApp (`3410bee`/`d8c4fd7`), campo % de lucro no cadastro (`4ea9444`/`bdc8fc9`) e cadastro de categorias (`e519088`).
+
+### Cadastro de categorias de produto (`e519088`)
+Nova aba **Categorias** em Cadastros (CRUD: nome, ordem, ativo/inativo). Backend: `Category` + `CategoryService` (nome único; exclusão bloqueada se houver produto usando o nome) + `CategoryController` `/api/admin/categories` + `GET /api/products/categories` (público, nomes ativos). Seed no `DataInitializer` popula a tabela a partir das categorias distintas dos produtos (idempotente, só se vazia). Frontend: `CategoriesPage`, e os seletores/filtros de categoria (produto, catálogo, dashboards) passaram a ler da nova fonte em vez de derivar de `/products/catalog`. **Opção A**: `Product.category` continua texto (sem FK) — a entidade só alimenta as listas.
 
 ### Leva de catálogo/marketing (`baf3033`)
 - Garantia **6 meses → 1 ano** no catálogo.
@@ -315,10 +320,10 @@ Novo campo **% de lucro** (default 85, editável) no formulário de produto, ent
 - **Encoding UTF-8:** respostas HTTP devem declarar `charset=UTF-8` (feito no `WebConfig`); e o aviso ao cliente usa `web.whatsapp.com/send`, não `wa.me` (este corrompe emojis no handoff pro app nativo no desktop).
 
 ### Migrações de schema aplicadas (aditivas, via `ddl-auto: update`)
-`products.reserved_quantity`, `products.on_demand`, `products.lead_time_days`; `consignments`(`commission_rate`,`total_sold`,`commission_amount`,`net_amount`); `consignment_items`(`quantity`,`sold_quantity`,`returned_quantity`,`unit_sale_price`,`product_sku`,`product_name`); `orders.customer_id`; `users.phone`; `message_templates`(+`image_url`); tabelas `customers`, `catalog_events`, `monthly_goals`, `goal_change_logs`. A Fase 2 (dashboard) **não** alterou schema.
+`products.reserved_quantity`, `products.on_demand`, `products.lead_time_days`; `consignments`(`commission_rate`,`total_sold`,`commission_amount`,`net_amount`); `consignment_items`(`quantity`,`sold_quantity`,`returned_quantity`,`unit_sale_price`,`product_sku`,`product_name`); `orders.customer_id`; `users.phone`; `message_templates`(+`image_url`); tabelas `customers`, `catalog_events`, `monthly_goals`, `goal_change_logs`, **`categories`** (nova, via cadastro de categorias — `Product.category` segue como texto, sem FK). A Fase 2 (dashboard) e o campo % de lucro **não** alteraram schema.
 
 ### Backups de produção (`/root/backups/` na VPS)
-Mais recentes: `hesed_db_pre_catalogomkt_...` (marketing/fix WhatsApp), `hesed_db_pre_wafix_...` (fix WhatsApp) e `hesed_db_pre_perclucro_20260904_230544.sql.gz` (campo % de lucro). As levas de catálogo, a correção do WhatsApp e o campo % de lucro **não** alteraram schema.
+Mais recentes: `hesed_db_pre_wafix_...` (fix WhatsApp), `hesed_db_pre_perclucro_20260904_230544.sql.gz` (campo % de lucro) e `hesed_db_pre_categorias_20260905_140237.sql.gz` (cadastro de categorias). O cadastro de categorias adicionou a tabela `categories` (aditivo); as demais levas não alteraram schema.
 
 ### Próxima feature planejada
 **Mensagem em massa (WhatsApp Business/Meta Cloud API)** — bloqueada até o dono obter a conta (ver seção 6). Decisão em aberto: manter o cadastro de clientes só para fluxos internos (atual) ou também capturar telefone no catálogo público (hoje o catálogo não pede telefone).
