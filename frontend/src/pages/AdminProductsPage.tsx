@@ -31,7 +31,6 @@ interface SupplierOption {
 }
 
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const CATEGORIES = ['Brinco', 'Brinco / Trio', 'Conjunto', 'Corrente', 'Gargantilha', 'Outro'];
 const STOCK_OPTIONS = [
   { value: 'DISPONIVEL', label: 'Disponível' },
   { value: 'BAIXO', label: 'Baixo' },
@@ -43,6 +42,7 @@ export function ProductsManager() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [categories, setCategories] = useState<string[]>([]);
   const [stockFilter, setStockFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editProduct, setEditProduct] = useState<Product | null>(null);
@@ -66,6 +66,13 @@ export function ProductsManager() {
   }, [search, categoryFilter, stockFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Categorias ativas (fonte: cadastro de categorias) para o filtro.
+  useEffect(() => {
+    api.get('/admin/categories')
+      .then((res) => setCategories(res.data.filter((c: any) => c.active).map((c: any) => c.name)))
+      .catch(() => setCategories([]));
+  }, []);
 
   async function handleDelete(id: string) {
     if (!confirm('Excluir este produto?')) return;
@@ -114,7 +121,7 @@ export function ProductsManager() {
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}
           className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm">
           <option value="">Todas categorias</option>
-          {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value)}
           className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm">
@@ -367,7 +374,7 @@ function ProductModal({ product, onClose, onSaved }: {
     sku: product?.sku ?? '',
     name: product?.name ?? '',
     description: product?.description ?? '',
-    category: product?.category ?? 'Brinco',
+    category: product?.category ?? '',
     supplierPrice: product?.supplierPrice != null ? product.supplierPrice.toString() : '',
     costPrice: product?.costPrice?.toString() ?? '',
     salePrice: product?.salePrice?.toString() ?? '',
@@ -391,11 +398,16 @@ function ProductModal({ product, onClose, onSaved }: {
     return [];
   });
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     api.get('/admin/suppliers').then((res) => setSuppliers(res.data)).catch(() => setSuppliers([]));
+    // Categorias ativas (cadastro de categorias) para o seletor do produto.
+    api.get('/admin/categories')
+      .then((res) => setCategories(res.data.filter((c: any) => c.active).map((c: any) => c.name)))
+      .catch(() => setCategories([]));
   }, []);
 
   // Status de estoque derivado (espelha a regra do backend) para pré-visualização.
@@ -535,7 +547,13 @@ function ProductModal({ product, onClose, onSaved }: {
               <label className="block text-xs font-medium text-stone-600 mb-1">Categoria</label>
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
                 className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none">
-                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                <option value="" disabled>Selecione...</option>
+                {/* Garante que a categoria atual do produto apareça mesmo se ela
+                    tiver sido inativada/renomeada no cadastro. */}
+                {(form.category && !categories.includes(form.category)
+                  ? [form.category, ...categories]
+                  : categories
+                ).map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
           </div>

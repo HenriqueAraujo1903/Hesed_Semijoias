@@ -56,10 +56,16 @@ export default function CatalogoPage() {
     }
   }, []);
 
-  const categories = useMemo(() => {
-    const cats = Array.from(new Set(products.map((p) => p.category))).sort();
-    return ['Todos', ...cats];
-  }, [products]);
+  const [categoryNames, setCategoryNames] = useState<string[]>([]);
+
+  // Categorias ativas (cadastro de categorias). Público via /api/products/categories.
+  useEffect(() => {
+    axios.get('/api/products/categories')
+      .then((res) => setCategoryNames(res.data))
+      .catch(() => setCategoryNames([]));
+  }, []);
+
+  const categories = useMemo(() => ['Todos', ...categoryNames], [categoryNames]);
 
   const filtered = useMemo(() => {
     if (activeCategory === 'Todos') return products;

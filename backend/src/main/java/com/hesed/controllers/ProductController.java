@@ -1,6 +1,7 @@
 package com.hesed.controllers;
 
 import com.hesed.dto.PublicProductResponse;
+import com.hesed.services.CategoryService;
 import com.hesed.services.ProductService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,9 +18,17 @@ import java.util.List;
 public class ProductController {
 
     private final ProductService productService;
+    private final CategoryService categoryService;
 
-    public ProductController(ProductService productService) {
+    public ProductController(ProductService productService, CategoryService categoryService) {
         this.productService = productService;
+        this.categoryService = categoryService;
+    }
+
+    /** Nomes das categorias ativas (fonte dos seletores/filtros). Público. */
+    @GetMapping("/categories")
+    public ResponseEntity<List<String>> categories() {
+        return ResponseEntity.ok(categoryService.activeNames());
     }
 
     @GetMapping

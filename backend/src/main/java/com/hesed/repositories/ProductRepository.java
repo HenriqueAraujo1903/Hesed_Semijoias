@@ -17,6 +17,13 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     boolean existsBySupplierId(UUID supplierId);
 
+    /** Há algum produto usando esta categoria (texto)? Usado para bloquear exclusão. */
+    boolean existsByCategoryIgnoreCase(String category);
+
+    /** Categorias distintas presentes nos produtos (para o seed inicial). */
+    @Query("SELECT DISTINCT p.category FROM Product p WHERE p.category IS NOT NULL ORDER BY p.category")
+    List<String> findDistinctCategories();
+
     @Query("SELECT p FROM Product p WHERE " +
            "(:category IS NULL OR p.category = :category) AND " +
            "(:stockStatus IS NULL OR p.stockStatus = :stockStatus) AND " +

@@ -32,12 +32,9 @@ export default function PromotionsDashboardPage() {
   const [category, setCategory] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
 
-  // Carrega as categorias uma vez (do catálogo).
+  // Carrega as categorias uma vez (cadastro de categorias).
   useEffect(() => {
-    api.get('/products/catalog').then((res) => {
-      const cats = Array.from(new Set(res.data.map((p: any) => p.category))).sort() as string[];
-      setCategories(cats);
-    }).catch(() => {});
+    api.get('/products/categories').then((res) => setCategories(res.data)).catch(() => {});
   }, []);
 
   const load = useCallback(async () => {

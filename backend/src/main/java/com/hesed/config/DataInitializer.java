@@ -27,12 +27,40 @@ public class DataInitializer {
      */
     @Bean
     CommandLineRunner initData(ProductRepository productRepository,
-                               com.hesed.repositories.MessageTemplateRepository messageTemplateRepository) {
+                               com.hesed.repositories.MessageTemplateRepository messageTemplateRepository,
+                               com.hesed.repositories.CategoryRepository categoryRepository) {
         return args -> {
             backfillStockQuantities(productRepository);
             seedMessageTemplates(messageTemplateRepository);
+            seedCategories(categoryRepository, productRepository);
             System.out.println("🌿 HESED API pronta!");
         };
+    }
+
+    /**
+     * Semeia a tabela de categorias a partir das categorias distintas já
+     * presentes nos produtos — apenas na primeira vez (se a tabela estiver
+     * vazia). Garante que nada some dos seletores/filtros ao introduzir o
+     * cadastro de categorias. Idempotente: não roda se já houver categorias.
+     */
+    private void seedCategories(com.hesed.repositories.CategoryRepository categoryRepository,
+                                ProductRepository productRepository) {
+        if (categoryRepository.count() > 0) return;
+        List<String> distinct = productRepository.findDistinctCategories();
+        int order = 0;
+        for (String name : distinct) {
+            if (name == null || name.isBlank()) continue;
+            String trimmed = name.trim();
+            if (categoryRepository.existsByNameIgnoreCase(trimmed)) continue;
+            categoryRepository.save(com.hesed.models.Category.builder()
+                    .name(trimmed)
+                    .active(true)
+                    .sortOrder(order++)
+                    .build());
+        }
+        if (order > 0) {
+            System.out.println("🏷️  Seed de categorias: " + order + " categoria(s) criada(s) a partir dos produtos.");
+        }
     }
 
     /**

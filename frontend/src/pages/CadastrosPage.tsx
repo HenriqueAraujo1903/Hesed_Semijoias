@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import SuppliersPage from './SuppliersPage';
 import CustomersPage from './CustomersPage';
+import CategoriesPage from './CategoriesPage';
 
-type Tab = 'clientes' | 'fornecedores';
+type Tab = 'clientes' | 'fornecedores' | 'categorias';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'clientes', label: 'Clientes' },
   { key: 'fornecedores', label: 'Fornecedores' },
+  { key: 'categorias', label: 'Categorias' },
 ];
 
 export default function CadastrosPage() {
@@ -16,7 +18,7 @@ export default function CadastrosPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold text-stone-800">Cadastros</h1>
-        <p className="mt-1 text-sm text-stone-500">Clientes e fornecedores da loja.</p>
+        <p className="mt-1 text-sm text-stone-500">Clientes, fornecedores e categorias da loja.</p>
       </div>
 
       {/* Sub-abas */}
@@ -36,7 +38,9 @@ export default function CadastrosPage() {
         ))}
       </div>
 
-      {tab === 'clientes' ? <CustomersPage /> : <SuppliersPage />}
+      {tab === 'clientes' && <CustomersPage />}
+      {tab === 'fornecedores' && <SuppliersPage />}
+      {tab === 'categorias' && <CategoriesPage />}
     </div>
   );
 }
