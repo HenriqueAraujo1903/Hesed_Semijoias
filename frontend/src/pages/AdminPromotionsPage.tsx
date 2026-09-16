@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
+import { PRODUCT_PLACEHOLDER, handleImageError } from '../utils/image';
 
 interface Promotion {
   id: string;
@@ -113,13 +114,12 @@ export default function AdminPromotionsPage() {
             <div key={promo.id} className={`card p-5 flex flex-col sm:flex-row items-start gap-4 transition-opacity ${!promo.active ? 'opacity-50' : ''}`}>
               {/* Product image */}
               <div className="w-16 h-16 rounded-xl bg-stone-100 dark:bg-charcoal-700 overflow-hidden shrink-0">
-                {promo.productImageUrl ? (
-                  <img src={promo.productImageUrl} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-xs text-stone-400 font-mono">
-                    {promo.productSku}
-                  </div>
-                )}
+                <img
+                  src={promo.productImageUrl || PRODUCT_PLACEHOLDER}
+                  alt=""
+                  onError={handleImageError}
+                  className="w-full h-full object-cover"
+                />
               </div>
 
               {/* Info */}

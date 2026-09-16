@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useTheme } from '../contexts/ThemeContext';
 import { trackCatalogEvent } from '../services/telemetry';
 import Logo from '../components/Logo';
+import { PRODUCT_PLACEHOLDER, PRODUCT_PLACEHOLDER_WIDE, handleImageError } from '../utils/image';
 
 interface Product {
   id: string;
@@ -226,7 +227,7 @@ export default function CatalogoPage() {
                 ? p.imageUrls
                 : (p.imageUrl ? [p.imageUrl] : []);
               const photoCount = gallery.length;
-              const imgUrl = gallery[0] || `https://placehold.co/400x400/FAF7F2/C8A96E?text=${encodeURIComponent(p.sku)}`;
+              const imgUrl = gallery[0] || PRODUCT_PLACEHOLDER;
 
               return (
                 <div key={p.id}
@@ -273,6 +274,7 @@ export default function CatalogoPage() {
                     <img 
                       src={imgUrl} 
                       alt={p.name} 
+                      onError={handleImageError}
                       className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" 
                     />
                     {!isEsgotado && (
@@ -570,8 +572,7 @@ function PromotionCarousel({ onSelectProduct }: { onSelectProduct: (productId: s
   if (slides.length === 0) return null;
 
   const slide = slides[current];
-  const imgUrl = slide.bannerUrl || slide.productImageUrl
-    || `https://placehold.co/500x500/FAF7F2/C8A96E?font=playfair-display&text=${encodeURIComponent(slide.productSku)}`;
+  const imgUrl = slide.bannerUrl || slide.productImageUrl || PRODUCT_PLACEHOLDER_WIDE;
 
   return (
     <section className="max-w-6xl mx-auto px-4 pt-8 pb-6">
@@ -583,6 +584,7 @@ function PromotionCarousel({ onSelectProduct }: { onSelectProduct: (productId: s
             <img
               src={imgUrl}
               alt={slide.productName}
+              onError={handleImageError}
               className="w-full h-full object-cover"
             />
           </div>
@@ -708,9 +710,7 @@ function ProductDetailModal({ product, isSelected, onClose, onToggle }: {
     };
   }, [gallery.length, onClose]);
 
-  const activeUrl = hasPhotos
-    ? gallery[active]
-    : `https://placehold.co/600x600/FAF7F2/C8A96E?text=${encodeURIComponent(product.sku)}`;
+  const activeUrl = hasPhotos ? gallery[active] : PRODUCT_PLACEHOLDER;
 
   return (
     <div
@@ -736,7 +736,7 @@ function ProductDetailModal({ product, isSelected, onClose, onToggle }: {
           {/* Galeria */}
           <div className="w-full md:w-1/2 p-4 md:p-6">
             <div className="relative aspect-square overflow-hidden rounded-2xl bg-gradient-to-br from-[#FAF7F2] to-[#F5F0EA] dark:from-[#292620] dark:to-[#141210]">
-              <img src={activeUrl} alt={product.name} className="h-full w-full object-cover" />
+              <img src={activeUrl} alt={product.name} onError={handleImageError} className="h-full w-full object-cover" />
 
               {gallery.length > 1 && (
                 <>
