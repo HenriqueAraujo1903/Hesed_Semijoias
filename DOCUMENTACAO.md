@@ -2,7 +2,7 @@
 
 > **Arquivo único de contexto.** Toda a documentação do projeto (arquitetura, features, deploy, fluxo de trabalho, QA e contexto entre sessões) vive aqui. Não há outros arquivos de doc — se precisar de contexto, é este.
 >
-> **Última atualização:** 03/09/2026
+> **Última atualização:** 16/09/2026
 > **Status:** 🟢 Em produção e estável em https://hesedsemijoias.online
 
 ---
@@ -189,7 +189,7 @@ Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, R
 
 ## 6. Features em produção
 
-- **Catálogo público:** sacola, carrossel de promoções (sem esgotados), preço promocional (`effectivePrice`), telemetria anônima, galeria de fotos (até 5). Filtros de categoria em pílulas (quebram em várias linhas, sem scroll horizontal), posicionados abaixo do carrossel, logo antes da grade.
+- **Catálogo público:** sacola, carrossel de promoções (sem esgotados), preço promocional (`effectivePrice`), telemetria anônima, galeria de fotos (até 5). Filtros de categoria em pílulas (quebram em várias linhas, sem scroll horizontal), posicionados abaixo do carrossel, logo antes da grade. Produtos **sem foto** exibem uma **imagem padrão da marca** ("FOTO DISPONÍVEL EM BREVE") servida localmente (`public/product-placeholder*.jpg`) — substitui o antigo fallback externo `placehold.co`.
 - **Pedidos:** registro via catálogo/WhatsApp, venda direta, edição, confirmar/cancelar (ambos exigem nome+telefone), aviso automático via WhatsApp com template + imagem opcional (link com preview). O aviso abre o **WhatsApp Web** (`web.whatsapp.com/send`) já com o texto preenchido para a operadora enviar com um clique (semi-automático); a aba é aberta no clique e depois apontada para a URL, para não ser bloqueada como popup após as chamadas de API.
 - **Estoque numérico:** quantidade como fonte da verdade; status derivado; baixa/estorno automático no pedido; ajuste manual (entrada/absoluto) com movimentações; alerta de baixo estoque e de garantia (3 faixas).
 - **Produto sob encomenda (onDemand):** comprável no catálogo (selo "Sob encomenda" + prazo em dias úteis) sem consumir estoque nem entrar em alertas de reposição; conta na receita (custo estimado).
@@ -232,8 +232,12 @@ ssh root@103.199.184.97 'cd /root/Hesed_Semijoias && git pull origin main'
 #   cd /root/Hesed_Semijoias && docker compose up -d --build
 #   (o aviso de "foreground" é falso positivo — sobe com -d)
 
-# 4. Aguardar backend healthy e fazer smoke test HTTPS:
-#    catálogo público 200, login admin 200, endpoint novo respondendo, schema migrado.
+# 4. Se o rebuild recriou o container frontend/backend, RECARREGAR o nginx externo
+#    (senão ele mantém o upstream no IP antigo do container e devolve 502):
+#    ssh root@103.199.184.97 'docker exec hesed-nginx nginx -s reload'
+
+# 5. Aguardar backend healthy e fazer smoke test HTTPS:
+#    catálogo público 200, login admin 200, endpoint/asset novo respondendo, schema migrado.
 ```
 **Rollback:** na VPS `git checkout <commit_anterior>` + `docker compose up -d --build`; restaurar banco pelo dump se necessário. Backups em `/root/backups/`.
 
@@ -290,11 +294,14 @@ DELETE FROM products WHERE sku LIKE 'QA-%';
 ### Branches (todas alinhadas)
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `af0e4a7` | No ar em https://hesedsemijoias.online |
+| `main` (produção) | `267f649` | No ar em https://hesedsemijoias.online |
 | `dev` | sincronizada | Trabalhar aqui |
 | `homolog` | sincronizada | — |
 
-> As 3 branches estão alinhadas em `af0e4a7`. Últimas levas: marketing do catálogo (`baf3033`), correção do aviso WhatsApp (`3410bee`/`d8c4fd7`), campo % de lucro no cadastro (`4ea9444`/`bdc8fc9`), cadastro de categorias (`e519088`) e melhoria visual dos filtros do catálogo (`41019a1`/`af0e4a7`).
+> As 3 branches estão alinhadas em `267f649`. Últimas levas: marketing do catálogo (`baf3033`), correção do aviso WhatsApp (`3410bee`/`d8c4fd7`), campo % de lucro no cadastro (`4ea9444`/`bdc8fc9`), cadastro de categorias (`e519088`), melhoria visual dos filtros do catálogo (`41019a1`/`af0e4a7`) e imagem padrão de produto sem foto (`267f649`).
+
+### Imagem padrão de produto sem foto (`267f649`)
+Só frontend + 2 assets estáticos. Produtos sem foto passaram a exibir a **arte da marca** ("FOTO DISPONÍVEL EM BREVE") no lugar do antigo fallback externo `placehold.co` (dependência de terceiros, sem identidade). Duas versões locais em `frontend/public/`: **`product-placeholder-square.jpg`** (800×800, para os cards e o modal do produto — áreas `aspect-square`, com `object-cover` preenche sem faixas nem cortar o texto) e **`product-placeholder.jpg`** (1024×559 paisagem, para o carrossel de promoções). Helper central em `frontend/src/utils/image.ts` (`PRODUCT_PLACEHOLDER`, `PRODUCT_PLACEHOLDER_WIDE`, `handleImageError`). Aplicado em: grade do catálogo, modal de detalhe, carrossel de promoções e card do admin de promoções. Adicionado **`onError`** nas `<img>` de produto: se uma foto real quebrar (arquivo removido / URL inválida), cai no placeholder em vez de mostrar imagem quebrada. As imagens originais grandes foram otimizadas com ImageMagick (2,5 MB → ~60 KB). **Deploy só de frontend** (sem alteração de schema/dados); o backup de banco foi feito mesmo assim por regra de ouro.
 
 ### Filtros de categoria no catálogo — melhoria visual (`41019a1` + `af0e4a7`)
 Só frontend. Os chips de categoria deixaram de ter scroll horizontal e passaram a **pílulas que quebram em várias linhas** (centralizadas, com contorno sutil — escalam bem com muitas categorias). O bloco de filtros foi **movido para abaixo do carrossel de promoções**, logo antes da grade. Deploy só de frontend (sem backup de banco; o backend usou cache e não reiniciou).
@@ -321,12 +328,14 @@ Novo campo **% de lucro** (default 85, editável) no formulário de produto, ent
 - **Mockito/JDK:** `StockService`/`OrderService` não são mockáveis (Byte Buddy) — usar instâncias reais com repos mockados.
 - **PWA:** ao mexer em PWA/upload/nginx, revalidar o service worker (skipWaiting/clientsClaim) servindo o build (`npx vite preview`), pois SW velho já causou "fotos quebradas" no painel.
 - **Encoding UTF-8:** respostas HTTP devem declarar `charset=UTF-8` (feito no `WebConfig`); e o aviso ao cliente usa `web.whatsapp.com/send`, não `wa.me` (este corrompe emojis no handoff pro app nativo no desktop).
+- **Deploy: 502 após `docker compose up -d --build`.** Quando o rebuild recria o container frontend (ou backend), ele ganha um **IP interno novo**, mas o `hesed-nginx` (que não é recriado) mantém o upstream no IP antigo → `connect() failed (111: Connection refused)` e **502** só nas rotas do container recriado (a API pode seguir 200 se o backend não mudou de IP). Correção: `docker exec hesed-nginx nginx -s reload` após o rebuild. Já incorporado ao procedimento de deploy (passo 4).
+- **DNS de produção / "Credenciais inválidas" falso.** Se o login falha com a requisição em `(failed)`/0 B no DevTools e o site não abre, checar **DNS** antes de suspeitar do backend: comparar o IP resolvido (`dig @8.8.8.8 hesedsemijoias.online`) com a VPS (`103.199.184.97`) e testar direto pelo IP (`curl -k https://103.199.184.97/`). Já aconteceu: domínio suspenso (NS `dns-suspended.com`) e, depois de reativado, **cache DNS negativo** preso na máquina/rede (macOS: `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`; Windows: `ipconfig /flushdns`; ou trocar DNS para `1.1.1.1`/`8.8.8.8`). A aplicação estava intacta o tempo todo.
 
 ### Migrações de schema aplicadas (aditivas, via `ddl-auto: update`)
 `products.reserved_quantity`, `products.on_demand`, `products.lead_time_days`; `consignments`(`commission_rate`,`total_sold`,`commission_amount`,`net_amount`); `consignment_items`(`quantity`,`sold_quantity`,`returned_quantity`,`unit_sale_price`,`product_sku`,`product_name`); `orders.customer_id`; `users.phone`; `message_templates`(+`image_url`); tabelas `customers`, `catalog_events`, `monthly_goals`, `goal_change_logs`, **`categories`** (nova, via cadastro de categorias — `Product.category` segue como texto, sem FK). A Fase 2 (dashboard) e o campo % de lucro **não** alteraram schema.
 
 ### Backups de produção (`/root/backups/` na VPS)
-Mais recentes: `hesed_db_pre_wafix_...` (fix WhatsApp), `hesed_db_pre_perclucro_20260904_230544.sql.gz` (campo % de lucro) e `hesed_db_pre_categorias_20260905_140237.sql.gz` (cadastro de categorias). O cadastro de categorias adicionou a tabela `categories` (aditivo); as demais levas não alteraram schema.
+Mais recentes: `hesed_db_pre_perclucro_20260904_230544.sql.gz` (campo % de lucro), `hesed_db_pre_categorias_20260905_140237.sql.gz` (cadastro de categorias) e `hesed_db_pre_placeholder_20260916_155252.sql.gz` (imagem padrão de produto). O cadastro de categorias adicionou a tabela `categories` (aditivo); as demais levas (incl. imagem padrão) não alteraram schema.
 
 ### Próxima feature planejada
 **Mensagem em massa (WhatsApp Business/Meta Cloud API)** — bloqueada até o dono obter a conta (ver seção 6). Decisão em aberto: manter o cadastro de clientes só para fluxos internos (atual) ou também capturar telefone no catálogo público (hoje o catálogo não pede telefone).
