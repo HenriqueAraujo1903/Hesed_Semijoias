@@ -2,7 +2,7 @@
 
 > **Arquivo único de contexto.** Toda a documentação do projeto (arquitetura, features, deploy, fluxo de trabalho, QA e contexto entre sessões) vive aqui. Não há outros arquivos de doc — se precisar de contexto, é este.
 >
-> **Última atualização:** 16/09/2026
+> **Última atualização:** 17/09/2026
 > **Status:** 🟢 Em produção e estável em https://hesedsemijoias.online
 
 ---
@@ -201,6 +201,12 @@ Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, R
 - **Consignação — Fase 2 (Dashboard de Revendedoras):** KPIs (total vendido, comissão paga, líquido, taxa de venda + peças consignadas/vendidas/devolvidas + consignações abertas), ranking por revendedora e tabela de consignações em aberto. KPIs/ranking consideram lotes **fechados** cujo `closedAt` caiu no período; os abertos são sempre "agora" (com valor potencial).
 - **Dashboards:** Vendas, Engajamento, Estoque, Promoções, Revendedoras — todos com filtro de período compartilhado (atalhos + intervalo customizado).
 - **Metas mensais:** metas de receita/pedidos com herança e trava de alteração (justificativa + auditoria); progresso na Visão Geral.
+- **Financeiro (módulo, aba própria):** quatro áreas —
+  - **Fluxo de caixa:** extrato consolidado por período unindo, sem duplicar dados, os recebimentos (pela **data de repasse**), as parcelas de despesa pagas e os lançamentos manuais; KPIs de entradas/saídas/saldo.
+  - **Contas a pagar (despesas):** despesas por categoria, com **parcelamento mensal**; status derivado das parcelas (PENDENTE/PARCIAL/PAGO; **ATRASADO** derivado em leitura quando a parcela vence no passado); marcar/reabrir parcela paga.
+  - **Pagamentos de pedido:** um pedido aceita **várias formas**; cada pagamento tem valor bruto, **taxa** e líquido. **Cartão de crédito parcelado** gera liquidações (recebíveis) com **data de repasse da adquirente**: crédito **D+30/60/90…** (uma a cada 30 dias), débito **D+1 dia útil**, Pix/dinheiro/boleto/transferência **D+0**. O caixa usa a data de repasse; a taxa sai na data da venda.
+  - **DRE mensal:** Receita − CMV = Margem bruta; − Comissões de consignação − Taxas de pagamento − Despesas operacionais = Resultado líquido. Comissão de consignação é **dedução separada** (não é custo do produto).
+- **Entrada de compra em lote (Estoque → Compras):** registra uma compra do fornecedor com vários itens (produto **novo** cria o SKU; **existente** repõe estoque, com preços em cascata iguais ao cadastro individual). Dá **entrada no estoque** e gera **uma conta a pagar** parcelável ao fornecedor na categoria **"Compra de mercadoria"** (não-operacional). **Regra de custo:** a compra vira estoque (ativo), NÃO despesa operacional — o custo entra como **CMV só na venda**, contado uma vez (a categoria não-operacional é excluída do DRE para não duplicar).
 - **Configurações:** CRUD de usuários; templates de mensagem WhatsApp com imagem opcional.
 - **Segurança:** cookie HttpOnly, CSP, rate limit, uploads validados por magic bytes, catálogo sem vazar custo.
 
@@ -256,6 +262,7 @@ Scripts Python (stdlib pura). Cada um cria e **limpa 100%** dos próprios dados 
 | Script | Cobre | Env (padrão) |
 |---|---|---|
 | `qa_homolog.py` | E2E completo + regressão (auth/RBAC, produtos, promoções, consignados, pedidos, segurança) | 8081, admin@homolog.com |
+| `qa_financeiro.py` | **Financeiro** (categorias, contas a pagar/parcelas, pagamentos/repasse de cartão, caixa, DRE, compra em lote) **+ reexecuta a regressão do `qa_homolog`** — 562 casos | 8081, admin@homolog.com |
 | `qa_estoque_dev.py` | Estoque: fornecedores, preços, status derivado, baixa/estorno, ajuste, garantia | 8080, admin@hesed.com |
 | `qa_metas.py` | Metas mensais + Visão Geral (herança, trava/justificativa, auditoria) | 8081, admin@homolog.com |
 | `qa_seguranca.py` | Red team: vazamento de custo, SSRF no import, upload por magic bytes, RBAC, rate limit | 8081, admin@homolog.com |
@@ -271,8 +278,8 @@ Parametrização: `QA_BASE`, `QA_ADMIN_EMAIL`, `QA_ADMIN_PASS` (e `QA_DB` no lev
 - **RD:** coerência de KPIs/ranking/abertos, sell-through, ordenação desc, `net = total − comissão`, período futuro zera fechados mantendo abertos.
 - **EN (encoding UTF-8):** regressão do bug do aviso WhatsApp. Verifica que as respostas JSON declaram `Content-Type: application/json;charset=UTF-8` e que um template com emojis (✨ 💛 🛍️ 💰 🥰) e acentos faz roundtrip idêntico pela API (salvar → reler sem corromper).
 
-### Última bateria completa (homolog): **1.611 casos, 0 falhas**
-unit 136 (inclui `CategoryServiceTest`: nome único, exclusão bloqueada em uso, exclusão ok sem vínculo) · qa_leva_config 233 (com CG/RD/EN) · qa_homolog 399 · qa_estoque_dev 262 · qa_seguranca 311 · qa_metas 270.
+### Última bateria completa (homolog): **1.611 casos, 0 falhas** (+ `qa_financeiro` **562**, 0 falhas)
+unit 136 (inclui `CategoryServiceTest`: nome único, exclusão bloqueada em uso, exclusão ok sem vínculo) · qa_leva_config 233 (com CG/RD/EN) · qa_homolog 399 · qa_estoque_dev 262 · qa_seguranca 311 · qa_metas 270. Para o módulo financeiro, `qa_financeiro.py` roda **562** casos (regressão do `qa_homolog` + suítes financeiras), 0 falhas.
 
 Testes unitários cobrem também o **impacto da precificação**: `OrderServiceTest` (snapshot de preço no pedido — unitPrice=venda, costPrice=custo, effectivePrice com override; venda CONSIGNADO usa o preço do lote) e `AnalyticsServiceTest.sales`/`stock` (margem = receita − custo, marginPercent; valor de estoque a custo e a venda). Como o backend só lê custo/venda finais, esses testes travam os pontos financeiros/estoque contra regressão.
 
@@ -294,11 +301,25 @@ DELETE FROM products WHERE sku LIKE 'QA-%';
 ### Branches (todas alinhadas)
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `267f649` | No ar em https://hesedsemijoias.online |
+| `main` (produção) | `7c1017c` | No ar em https://hesedsemijoias.online |
 | `dev` | sincronizada | Trabalhar aqui |
 | `homolog` | sincronizada | — |
 
-> As 3 branches estão alinhadas em `267f649`. Últimas levas: marketing do catálogo (`baf3033`), correção do aviso WhatsApp (`3410bee`/`d8c4fd7`), campo % de lucro no cadastro (`4ea9444`/`bdc8fc9`), cadastro de categorias (`e519088`), melhoria visual dos filtros do catálogo (`41019a1`/`af0e4a7`) e imagem padrão de produto sem foto (`267f649`).
+> As 3 branches estão alinhadas em `7c1017c`. Últimas levas: correção do aviso WhatsApp (`3410bee`/`d8c4fd7`), campo % de lucro no cadastro (`4ea9444`/`bdc8fc9`), cadastro de categorias (`e519088`), melhoria visual dos filtros do catálogo (`41019a1`/`af0e4a7`), imagem padrão de produto sem foto (`267f649`) e **módulo financeiro** (`7c1017c`).
+
+### Módulo financeiro (`7c1017c`) — deploy 17/09/2026
+Feature grande, com alteração de schema (aditiva). Entregou: **fluxo de caixa**, **contas a pagar** com parcelamento, **pagamentos de pedido** (múltiplas formas, taxa/líquido, cartão parcelado com datas de repasse), **DRE mensal** e **entrada de compra em lote** (estoque + conta a pagar ao fornecedor). Removeu a entidade legada `Sale`/`SaleItem` (as tabelas `sales`/`sale_items` ficam órfãs no banco, inertes — `ddl-auto` não dropa; sem perda de dado).
+
+**Decisões de modelagem (custo não conta em dobro):**
+- A **venda** é a única fonte de receita: `Order` com status `CONFIRMADO` (a antiga `Sale` era legado sem uso).
+- **CMV** entra uma vez, na venda, via `costPrice` do `OrderItem`. A **comissão de consignação** é dedução de venda **separada**, não um segundo custo.
+- **Compra de mercadoria** (lote) NÃO é despesa no DRE: vira estoque. A conta a pagar gerada usa categoria com `operational=false`, excluída do cálculo de despesas do DRE.
+
+**Repasse de cartão (recebíveis):** cada `Payment` gera `PaymentSettlement`(s) com `expectedDate` — crédito Nx a cada 30 dias (D+30, D+60…), crédito 1x em D+30, débito em D+1 dia útil (pula fim de semana; feriados não considerados), demais em D+0. O **fluxo de caixa** lança a entrada na data de repasse; o **DRE** reconhece receita/taxa na data da venda (competência).
+
+**Novas entidades:** `Payment`, `PaymentSettlement`, `Expense`, `ExpenseInstallment`, `ExpenseCategory` (com flag `operational`), `CashEntry`, `PurchaseBatch`, `PurchaseBatchItem`. Endpoints sob `/api/admin/finance/**` e `/api/admin/stock/purchases` (herdam ROLE_ADMIN). Frontend: `FinancePage` (rota `/admin/financeiro`) + aba **Compras** em Estoque + campos de pagamento no modal de pedido.
+
+**QA:** bateria dedicada `qa/qa_financeiro.py` — reexecuta a regressão do `qa_homolog` (399) + 7 suítes financeiras (categorias, despesas/parcelas, pagamentos/repasse, caixa, DRE, compra em lote, volume). **562 casos, 0 falhas** em homolog. Deploy com backup prévio (`hesed_db_pre_financeiro_20260917_002942.sql.gz`), rebuild Docker + reload do Nginx; smoke test HTTPS OK e 8 tabelas financeiras confirmadas no banco de produção.
 
 ### Imagem padrão de produto sem foto (`267f649`)
 Só frontend + 2 assets estáticos. Produtos sem foto passaram a exibir a **arte da marca** ("FOTO DISPONÍVEL EM BREVE") no lugar do antigo fallback externo `placehold.co` (dependência de terceiros, sem identidade). Duas versões locais em `frontend/public/`: **`product-placeholder-square.jpg`** (800×800, para os cards e o modal do produto — áreas `aspect-square`, com `object-cover` preenche sem faixas nem cortar o texto) e **`product-placeholder.jpg`** (1024×559 paisagem, para o carrossel de promoções). Helper central em `frontend/src/utils/image.ts` (`PRODUCT_PLACEHOLDER`, `PRODUCT_PLACEHOLDER_WIDE`, `handleImageError`). Aplicado em: grade do catálogo, modal de detalhe, carrossel de promoções e card do admin de promoções. Adicionado **`onError`** nas `<img>` de produto: se uma foto real quebrar (arquivo removido / URL inválida), cai no placeholder em vez de mostrar imagem quebrada. As imagens originais grandes foram otimizadas com ImageMagick (2,5 MB → ~60 KB). **Deploy só de frontend** (sem alteração de schema/dados); o backup de banco foi feito mesmo assim por regra de ouro.
@@ -332,10 +353,10 @@ Novo campo **% de lucro** (default 85, editável) no formulário de produto, ent
 - **DNS de produção / "Credenciais inválidas" falso.** Se o login falha com a requisição em `(failed)`/0 B no DevTools e o site não abre, checar **DNS** antes de suspeitar do backend: comparar o IP resolvido (`dig @8.8.8.8 hesedsemijoias.online`) com a VPS (`103.199.184.97`) e testar direto pelo IP (`curl -k https://103.199.184.97/`). Já aconteceu: domínio suspenso (NS `dns-suspended.com`) e, depois de reativado, **cache DNS negativo** preso na máquina/rede (macOS: `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`; Windows: `ipconfig /flushdns`; ou trocar DNS para `1.1.1.1`/`8.8.8.8`). A aplicação estava intacta o tempo todo.
 
 ### Migrações de schema aplicadas (aditivas, via `ddl-auto: update`)
-`products.reserved_quantity`, `products.on_demand`, `products.lead_time_days`; `consignments`(`commission_rate`,`total_sold`,`commission_amount`,`net_amount`); `consignment_items`(`quantity`,`sold_quantity`,`returned_quantity`,`unit_sale_price`,`product_sku`,`product_name`); `orders.customer_id`; `users.phone`; `message_templates`(+`image_url`); tabelas `customers`, `catalog_events`, `monthly_goals`, `goal_change_logs`, **`categories`** (nova, via cadastro de categorias — `Product.category` segue como texto, sem FK). A Fase 2 (dashboard) e o campo % de lucro **não** alteraram schema.
+`products.reserved_quantity`, `products.on_demand`, `products.lead_time_days`; `consignments`(`commission_rate`,`total_sold`,`commission_amount`,`net_amount`); `consignment_items`(`quantity`,`sold_quantity`,`returned_quantity`,`unit_sale_price`,`product_sku`,`product_name`); `orders.customer_id`; `users.phone`; `message_templates`(+`image_url`); tabelas `customers`, `catalog_events`, `monthly_goals`, `goal_change_logs`, **`categories`** (nova, via cadastro de categorias — `Product.category` segue como texto, sem FK). A Fase 2 (dashboard) e o campo % de lucro **não** alteraram schema. **Módulo financeiro (`7c1017c`):** 8 tabelas novas — `payments`, `payment_settlements`, `expenses`, `expense_installments`, `expense_categories`, `cash_entries`, `purchase_batches`, `purchase_batch_items` — criadas no boot; `expense_categories.operational` distingue despesa operacional (entra no DRE) de "Compra de mercadoria" (não-operacional). As tabelas legadas `sales`/`sale_items` deixaram de ser mapeadas (ficam órfãs, sem perda de dado).
 
 ### Backups de produção (`/root/backups/` na VPS)
-Mais recentes: `hesed_db_pre_perclucro_20260904_230544.sql.gz` (campo % de lucro), `hesed_db_pre_categorias_20260905_140237.sql.gz` (cadastro de categorias) e `hesed_db_pre_placeholder_20260916_155252.sql.gz` (imagem padrão de produto). O cadastro de categorias adicionou a tabela `categories` (aditivo); as demais levas (incl. imagem padrão) não alteraram schema.
+Mais recentes: `hesed_db_pre_categorias_20260905_140237.sql.gz` (cadastro de categorias), `hesed_db_pre_placeholder_20260916_155252.sql.gz` (imagem padrão de produto) e `hesed_db_pre_financeiro_20260917_002942.sql.gz` (**módulo financeiro** — última migração de schema, aditiva: 8 tabelas financeiras). O cadastro de categorias adicionou a tabela `categories`; o módulo financeiro adicionou as 8 tabelas financeiras; as demais levas (incl. imagem padrão) não alteraram schema.
 
 ### Próxima feature planejada
 **Mensagem em massa (WhatsApp Business/Meta Cloud API)** — bloqueada até o dono obter a conta (ver seção 6). Decisão em aberto: manter o cadastro de clientes só para fluxos internos (atual) ou também capturar telefone no catálogo público (hoje o catálogo não pede telefone).
