@@ -19,6 +19,7 @@ import CadastrosPage from './pages/CadastrosPage';
 import StockPage from './pages/StockPage';
 import SettingsPage from './pages/SettingsPage';
 import CatalogoPage from './pages/CatalogoPage';
+import FinancePage from './pages/FinancePage';
 
 export default function App() {
   const { isAuthenticated, loading } = useAuth();
@@ -80,6 +81,9 @@ export default function App() {
         <Route path="/admin/fornecedores" element={<Navigate to="/admin/cadastros" replace />} />
         <Route path="/admin/estoque" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><StockPage /></ProtectedRoute>
+        } />
+        <Route path="/admin/financeiro" element={
+          <ProtectedRoute requiredRole="ROLE_ADMIN"><FinancePage /></ProtectedRoute>
         } />
         <Route path="/admin/configuracoes" element={
           <ProtectedRoute requiredRole="ROLE_ADMIN"><SettingsPage /></ProtectedRoute>

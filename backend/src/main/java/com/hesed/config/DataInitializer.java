@@ -28,14 +28,54 @@ public class DataInitializer {
     @Bean
     CommandLineRunner initData(ProductRepository productRepository,
                                com.hesed.repositories.MessageTemplateRepository messageTemplateRepository,
-                               com.hesed.repositories.CategoryRepository categoryRepository) {
+                               com.hesed.repositories.CategoryRepository categoryRepository,
+                               com.hesed.repositories.ExpenseCategoryRepository expenseCategoryRepository) {
         return args -> {
             backfillStockQuantities(productRepository);
             seedMessageTemplates(messageTemplateRepository);
             seedCategories(categoryRepository, productRepository);
+            seedExpenseCategories(expenseCategoryRepository);
             System.out.println("🌿 HESED API pronta!");
         };
     }
+
+    /**
+     * Semeia categorias de despesa padrão do módulo financeiro, apenas se a
+     * tabela estiver vazia (idempotente). A operadora pode editar/adicionar
+     * pela tela financeira depois.
+     */
+    private void seedExpenseCategories(com.hesed.repositories.ExpenseCategoryRepository repo) {
+        // Categorias operacionais padrão (entram no DRE). Semeadas só na 1ª vez.
+        if (repo.count() == 0) {
+            List<String> defaults = List.of(
+                    "Infraestrutura de sistemas",
+                    "Taxa de maquininha",
+                    "Embalagens",
+                    "Mostruário",
+                    "Marketing",
+                    "Frete",
+                    "Impostos",
+                    "Outros");
+            int order = 0;
+            for (String name : defaults) {
+                repo.save(com.hesed.models.ExpenseCategory.builder()
+                        .name(name).active(true).operational(true).sortOrder(order++).build());
+            }
+            System.out.println("💰 Seed financeiro: " + order + " categoria(s) de despesa criada(s).");
+        }
+
+        // Categoria de COMPRA DE MERCADORIA (não-operacional): não entra no DRE
+        // — o custo já é CMV na venda. Idempotente por nome (criada mesmo em
+        // bancos que já tinham as demais categorias).
+        if (!repo.existsByNameIgnoreCase(PURCHASE_CATEGORY_NAME)) {
+            repo.save(com.hesed.models.ExpenseCategory.builder()
+                    .name(PURCHASE_CATEGORY_NAME).active(true).operational(false).sortOrder(100).build());
+            System.out.println("📦 Seed financeiro: categoria '" + PURCHASE_CATEGORY_NAME + "' (não-operacional) criada.");
+        }
+    }
+
+    /** Nome canônico da categoria de compra de mercadoria (usada pelo lote de compra). */
+    public static final String PURCHASE_CATEGORY_NAME = "Compra de mercadoria";
 
     /**
      * Semeia a tabela de categorias a partir das categorias distintas já
