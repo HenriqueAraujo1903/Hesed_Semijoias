@@ -2,7 +2,7 @@
 
 > **Arquivo único de contexto.** Toda a documentação do projeto (arquitetura, features, deploy, fluxo de trabalho, QA e contexto entre sessões) vive aqui. Não há outros arquivos de doc — se precisar de contexto, é este.
 >
-> **Última atualização:** 17/09/2026
+> **Última atualização:** 18/09/2026
 > **Status:** 🟢 Em produção e estável em https://hesedsemijoias.online
 
 ---
@@ -110,7 +110,8 @@ Todas com `id` UUID e timestamps (`createdAt`/`updatedAt`).
 - **Supplier** (`suppliers`): name, phone, email, website, notes.
 - **Order** (`orders`): orderNumber (unique, ex `HSD-20260903-1234`), status (PENDENTE|CONFIRMADO|CANCELADO), **channel** (WHATSAPP|DIRETA|**CONSIGNADO**), totalAmount, orderedAt, resolvedAt, customer (opcional) + customerName/customerPhone (snapshot), items. Só CONFIRMADO entra na receita.
 - **OrderItem** (`order_items`): snapshot productSku/productName/productCategory, unitPrice (cheio), effectivePrice (cobrado), costPrice, quantity, wasPromotion, discountPercent.
-- **Customer** (`customers`): name, phone, email (unique, opcional), notes.
+- **Customer** (`customers`): name, phone, email (unique, opcional), **birthDate** (data de nascimento, opcional), notes.
+- **NotificationDismissal** (`notification_dismissals`): notificationKey (unique, ex. `BIRTHDAY:{customerId}:{ano}`), dismissedBy (userId), dismissedAt. Registra o que o usuário **dispensou** — as notificações em si são derivadas (não persistidas).
 - **Promotion** (`promotions`): product, title, subtitle, discountPercent, promoPrice, bannerUrl, active, startsAt, endsAt, sortOrder.
 - **Consignee** (`consignees`, revendedoras): name, phone, email (unique), **commissionRate** (fração 0..1).
 - **Consignment** (`consignments`, lote): consignee, status (ABERTO|FECHADO|CANCELADO), **commissionRate** (snapshot do lote), **totalSold/commissionAmount/netAmount** (apurados no fechamento), openedAt, closedAt, notes, items.
@@ -145,13 +146,14 @@ Todas com `id` UUID e timestamps (`createdAt`/`updatedAt`).
 - **Fornecedores/Clientes/Usuários:** CRUD sob `/api/admin/suppliers`, `/api/admin/customers`, `/api/admin/users` (usuários com proteção: admin não se exclui/rebaixa, não remove o último admin).
 - **Categorias:** CRUD sob `/api/admin/categories` (nome único, `active`, `sortOrder`; exclusão bloqueada se houver produto usando o nome). Público: `GET /api/products/categories` (nomes das categorias ativas — fonte dos seletores/filtros e do catálogo).
 - **Configurações:** `GET /api/admin/settings/messages`, `PUT /api/admin/settings/messages/{key}`.
+- **Notificações:** `GET /api/admin/notifications` (lista derivada — aniversários na janela), `POST /api/admin/notifications/dismiss` (`{key}` — dispensa).
 
 ### 4.3 Segurança (`config/`)
 - **SecurityConfig:** stateless, CSRF off, CORS com credenciais. Público: `/api/auth/**`, GETs de `/api/products` e `/api/promotions`, `POST /api/orders`, `POST /api/catalog-events`, `/uploads/**`. `/api/admin/**` e `/api/consignees/**` = `ROLE_ADMIN`. Demais = autenticado.
 - **JwtService:** HMAC, subject = userId, claims email+role, expiração `app.jwt.expiration-ms`.
 - **JwtAuthFilter:** lê token do cookie HttpOnly `jwt` (prioridade) ou do header `Authorization: Bearer` (retrocompat p/ scripts QA).
 - **LoginRateLimitFilter:** 20 tentativas/60s por IP no `POST /api/auth/login` (429 + Retry-After).
-- **DataInitializer:** NÃO faz seed de catálogo nem de usuários. Faz backfill idempotente de `stockQuantity` (dados pré-feature de estoque) e seed dos templates ORDER_CONFIRMED/ORDER_CANCELLED.
+- **DataInitializer:** NÃO faz seed de catálogo nem de usuários. Faz backfill idempotente de `stockQuantity` (dados pré-feature de estoque), seed dos templates ORDER_CONFIRMED/ORDER_CANCELLED/**BIRTHDAY**, das categorias de despesa (incl. "Compra de mercadoria" não-operacional) e das categorias de produto.
 
 ### 4.4 Profiles (`application*.yml`)
 | Profile | Porta | Banco | cookie.secure | upload base-url |
@@ -183,7 +185,7 @@ Protegido (dentro do `DashboardLayout`):
 - `/admin/promocoes`, `/admin/cadastros` (clientes+fornecedores), `/admin/estoque` (produtos+reposição+garantia), `/admin/configuracoes` (usuários+mensagens) — todas ADMIN.
 - Redirects: `/produtos` e `/admin/produtos` → `/admin/estoque`; `/admin/fornecedores` → `/admin/cadastros`; `/admin/usuarios` → `/admin/configuracoes`.
 
-Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, Revendedoras, Consignações, Promoções, Configurações (itens `adminOnly` só aparecem para admin).
+Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, Revendedoras, Consignações, Promoções, **Financeiro**, Configurações (itens `adminOnly` só aparecem para admin). O header (desktop e mobile) tem o **sino de notificações** (`components/NotificationBell.tsx`): consulta `/admin/notifications` ao abrir o painel e a cada 5 min; dropdown com dispensar e "Enviar parabéns".
 
 ---
 
@@ -193,7 +195,8 @@ Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, R
 - **Pedidos:** registro via catálogo/WhatsApp, venda direta, edição, confirmar/cancelar (ambos exigem nome+telefone), aviso automático via WhatsApp com template + imagem opcional (link com preview). O aviso abre o **WhatsApp Web** (`web.whatsapp.com/send`) já com o texto preenchido para a operadora enviar com um clique (semi-automático); a aba é aberta no clique e depois apontada para a URL, para não ser bloqueada como popup após as chamadas de API.
 - **Estoque numérico:** quantidade como fonte da verdade; status derivado; baixa/estorno automático no pedido; ajuste manual (entrada/absoluto) com movimentações; alerta de baixo estoque e de garantia (3 faixas).
 - **Produto sob encomenda (onDemand):** comprável no catálogo (selo "Sob encomenda" + prazo em dias úteis) sem consumir estoque nem entrar em alertas de reposição; conta na receita (custo estimado).
-- **Cadastros:** clientes, fornecedores e **categorias**; pedido pode vincular cliente (snapshot de nome/telefone).
+- **Cadastros:** clientes (com **data de nascimento** opcional), fornecedores e **categorias**; pedido pode vincular cliente (snapshot de nome/telefone).
+- **Notificações (sino no header):** ponto central de notificações para qualquer usuário logado (badge de contagem + dropdown). Hoje há um gerador: **aniversário de cliente** — notifica da véspera dos 5 dias até o próprio dia (janela 0..5, recorrente por ano, trata virada de ano e 29/02), uma por dia. As notificações são **derivadas** (calculadas em tempo real da data de nascimento — não persistidas); só as **dispensas** são gravadas (`notification_dismissals`, chave inclui o ano → reaparece no ano seguinte). Cada item mostra "Hoje 🎉 / Amanhã / Em N dias", com ações **Dispensar** e **Enviar parabéns** (leva a Configurações → Mensagens, `?tab=mensagens`, onde vive o template **BIRTHDAY** com a variável `{cliente}`).
 - **Categorias de produto (Opção A):** cadastro central (Cadastros → Categorias) é a fonte de verdade dos seletores/filtros de categoria em todo o sistema (form e filtro de produto, catálogo público, dashboards Vendas/Estoque/Promoções). O `Product.category` continua sendo **texto** (sem FK): a entidade Category só alimenta as listas de opções. Renomear/inativar não altera produtos existentes; excluir é bloqueado se houver produto usando o nome; categoria inativa some dos seletores mas fica no cadastro. Seed inicial popula a tabela com as categorias distintas já presentes nos produtos (nada some dos filtros).
 - **Precificação de produto (cadastro):** 4 campos — Preço fornecedor, Custo pago, **% de lucro** (default 85, editável) e Venda — com cálculo em cascata no frontend: Custo pago = Preço fornecedor ÷ 2; Venda = Custo ÷ (1 − lucro%/100) (85% ⇒ custo ÷ 0,15). Todos editáveis (editar venda na mão faz o % de lucro refletir o resultado). O cálculo vive só no frontend; o backend recebe/persiste `costPrice` e `salePrice` finais (o % de lucro NÃO é persistido — é derivável de custo/venda).
 - **Promoções:** CRUD + carrossel público.
@@ -263,6 +266,7 @@ Scripts Python (stdlib pura). Cada um cria e **limpa 100%** dos próprios dados 
 |---|---|---|
 | `qa_homolog.py` | E2E completo + regressão (auth/RBAC, produtos, promoções, consignados, pedidos, segurança) | 8081, admin@homolog.com |
 | `qa_financeiro.py` | **Financeiro** (categorias, contas a pagar/parcelas, pagamentos/repasse de cartão, caixa, DRE, compra em lote) **+ reexecuta a regressão do `qa_homolog`** — 562 casos | 8081, admin@homolog.com |
+| `qa_notificacoes.py` | **Data de nascimento** do cliente + **notificações de aniversário** (janela, contagem, ordenação, dispensar, template BIRTHDAY, RBAC) — 34 casos | 8081, admin@homolog.com |
 | `qa_estoque_dev.py` | Estoque: fornecedores, preços, status derivado, baixa/estorno, ajuste, garantia | 8080, admin@hesed.com |
 | `qa_metas.py` | Metas mensais + Visão Geral (herança, trava/justificativa, auditoria) | 8081, admin@homolog.com |
 | `qa_seguranca.py` | Red team: vazamento de custo, SSRF no import, upload por magic bytes, RBAC, rate limit | 8081, admin@homolog.com |
@@ -278,8 +282,8 @@ Parametrização: `QA_BASE`, `QA_ADMIN_EMAIL`, `QA_ADMIN_PASS` (e `QA_DB` no lev
 - **RD:** coerência de KPIs/ranking/abertos, sell-through, ordenação desc, `net = total − comissão`, período futuro zera fechados mantendo abertos.
 - **EN (encoding UTF-8):** regressão do bug do aviso WhatsApp. Verifica que as respostas JSON declaram `Content-Type: application/json;charset=UTF-8` e que um template com emojis (✨ 💛 🛍️ 💰 🥰) e acentos faz roundtrip idêntico pela API (salvar → reler sem corromper).
 
-### Última bateria completa (homolog): **1.611 casos, 0 falhas** (+ `qa_financeiro` **562**, 0 falhas)
-unit 136 (inclui `CategoryServiceTest`: nome único, exclusão bloqueada em uso, exclusão ok sem vínculo) · qa_leva_config 233 (com CG/RD/EN) · qa_homolog 399 · qa_estoque_dev 262 · qa_seguranca 311 · qa_metas 270. Para o módulo financeiro, `qa_financeiro.py` roda **562** casos (regressão do `qa_homolog` + suítes financeiras), 0 falhas.
+### Última bateria completa (homolog): **1.611 casos, 0 falhas** (+ `qa_financeiro` **562** + `qa_notificacoes` **34**, 0 falhas)
+unit 136 (inclui `CategoryServiceTest`: nome único, exclusão bloqueada em uso, exclusão ok sem vínculo) · qa_leva_config 233 (com CG/RD/EN) · qa_homolog 399 · qa_estoque_dev 262 · qa_seguranca 311 · qa_metas 270. Para o módulo financeiro, `qa_financeiro.py` roda **562** casos (regressão do `qa_homolog` + suítes financeiras), 0 falhas. Para a leva de notificações, `qa_notificacoes.py` roda **34** casos (data de nascimento + aniversário), 0 falhas.
 
 Testes unitários cobrem também o **impacto da precificação**: `OrderServiceTest` (snapshot de preço no pedido — unitPrice=venda, costPrice=custo, effectivePrice com override; venda CONSIGNADO usa o preço do lote) e `AnalyticsServiceTest.sales`/`stock` (margem = receita − custo, marginPercent; valor de estoque a custo e a venda). Como o backend só lê custo/venda finais, esses testes travam os pontos financeiros/estoque contra regressão.
 
@@ -301,11 +305,20 @@ DELETE FROM products WHERE sku LIKE 'QA-%';
 ### Branches (todas alinhadas)
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `7c1017c` | No ar em https://hesedsemijoias.online |
+| `main` (produção) | `26128f0` | No ar em https://hesedsemijoias.online |
 | `dev` | sincronizada | Trabalhar aqui |
 | `homolog` | sincronizada | — |
 
-> As 3 branches estão alinhadas em `7c1017c`. Últimas levas: correção do aviso WhatsApp (`3410bee`/`d8c4fd7`), campo % de lucro no cadastro (`4ea9444`/`bdc8fc9`), cadastro de categorias (`e519088`), melhoria visual dos filtros do catálogo (`41019a1`/`af0e4a7`), imagem padrão de produto sem foto (`267f649`) e **módulo financeiro** (`7c1017c`).
+> As 3 branches estão alinhadas em `26128f0`. Últimas levas: cadastro de categorias (`e519088`), imagem padrão de produto sem foto (`267f649`), **módulo financeiro** (`7c1017c`) e **data de nascimento + notificações de aniversário** (`e8c764f` feature + `26128f0` QA).
+
+### Data de nascimento + notificações de aniversário (`e8c764f`) — deploy 18/09/2026
+Duas features numa leva, com alteração de schema (aditiva). **(1)** Cliente ganhou **data de nascimento** (opcional, validação `@Past` — não aceita futuro), exibida na tabela/cards e no formulário de Cadastros → Clientes. **(2)** **Ponto de notificações** (sino no header, desktop e mobile) com o primeiro gerador: **aniversário de cliente**.
+
+**Modelo:** notificações são **derivadas** em tempo real (`NotificationService` varre clientes com `birthDate` e calcula `daysUntil` na janela 0..5), não são persistidas — só as **dispensas** (`NotificationDismissal`). A chave `BIRTHDAY:{customerId}:{ano}` inclui o ano do próximo aniversário, então dispensar em 2026 não silencia 2027. Cálculo de dias trata virada de ano e 29/02 (cai em 28/02 em ano não-bissexto). Endpoints `GET /api/admin/notifications` e `POST /api/admin/notifications/dismiss`.
+
+**UX:** sino com badge; dropdown lista "Hoje 🎉 / Amanhã / Em N dias" com **Dispensar** e **Enviar parabéns** (navega para Configurações → Mensagens via `?tab=mensagens`). Template **BIRTHDAY** semeado (usa `{cliente}`).
+
+**QA:** `qa/qa_notificacoes.py` (34 casos: birthDate persistência/edição/remoção/futura/opcional; janela 0..5; contagem; ordenação; dispensar idempotente e persistente; RBAC; template) — **0 falhas**. Regressão `qa_financeiro.py` reexecutada: **562, 0 falhas** (corrigido para ancorar em `date.today()` + próximo dia útil, evitando falso negativo por data fixa). Deploy com backup `hesed_db_pre_notificacoes_20260918_162101.sql.gz`, rebuild Docker + reload Nginx; smoke test HTTPS OK e schema (`notification_dismissals`, `customers.birth_date`) confirmado em produção.
 
 ### Módulo financeiro (`7c1017c`) — deploy 17/09/2026
 Feature grande, com alteração de schema (aditiva). Entregou: **fluxo de caixa**, **contas a pagar** com parcelamento, **pagamentos de pedido** (múltiplas formas, taxa/líquido, cartão parcelado com datas de repasse), **DRE mensal** e **entrada de compra em lote** (estoque + conta a pagar ao fornecedor). Removeu a entidade legada `Sale`/`SaleItem` (as tabelas `sales`/`sale_items` ficam órfãs no banco, inertes — `ddl-auto` não dropa; sem perda de dado).
@@ -353,10 +366,10 @@ Novo campo **% de lucro** (default 85, editável) no formulário de produto, ent
 - **DNS de produção / "Credenciais inválidas" falso.** Se o login falha com a requisição em `(failed)`/0 B no DevTools e o site não abre, checar **DNS** antes de suspeitar do backend: comparar o IP resolvido (`dig @8.8.8.8 hesedsemijoias.online`) com a VPS (`103.199.184.97`) e testar direto pelo IP (`curl -k https://103.199.184.97/`). Já aconteceu: domínio suspenso (NS `dns-suspended.com`) e, depois de reativado, **cache DNS negativo** preso na máquina/rede (macOS: `sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder`; Windows: `ipconfig /flushdns`; ou trocar DNS para `1.1.1.1`/`8.8.8.8`). A aplicação estava intacta o tempo todo.
 
 ### Migrações de schema aplicadas (aditivas, via `ddl-auto: update`)
-`products.reserved_quantity`, `products.on_demand`, `products.lead_time_days`; `consignments`(`commission_rate`,`total_sold`,`commission_amount`,`net_amount`); `consignment_items`(`quantity`,`sold_quantity`,`returned_quantity`,`unit_sale_price`,`product_sku`,`product_name`); `orders.customer_id`; `users.phone`; `message_templates`(+`image_url`); tabelas `customers`, `catalog_events`, `monthly_goals`, `goal_change_logs`, **`categories`** (nova, via cadastro de categorias — `Product.category` segue como texto, sem FK). A Fase 2 (dashboard) e o campo % de lucro **não** alteraram schema. **Módulo financeiro (`7c1017c`):** 8 tabelas novas — `payments`, `payment_settlements`, `expenses`, `expense_installments`, `expense_categories`, `cash_entries`, `purchase_batches`, `purchase_batch_items` — criadas no boot; `expense_categories.operational` distingue despesa operacional (entra no DRE) de "Compra de mercadoria" (não-operacional). As tabelas legadas `sales`/`sale_items` deixaram de ser mapeadas (ficam órfãs, sem perda de dado).
+`products.reserved_quantity`, `products.on_demand`, `products.lead_time_days`; `consignments`(`commission_rate`,`total_sold`,`commission_amount`,`net_amount`); `consignment_items`(`quantity`,`sold_quantity`,`returned_quantity`,`unit_sale_price`,`product_sku`,`product_name`); `orders.customer_id`; `users.phone`; `message_templates`(+`image_url`); tabelas `customers`, `catalog_events`, `monthly_goals`, `goal_change_logs`, **`categories`** (nova, via cadastro de categorias — `Product.category` segue como texto, sem FK). A Fase 2 (dashboard) e o campo % de lucro **não** alteraram schema. **Módulo financeiro (`7c1017c`):** 8 tabelas novas — `payments`, `payment_settlements`, `expenses`, `expense_installments`, `expense_categories`, `cash_entries`, `purchase_batches`, `purchase_batch_items` — criadas no boot; `expense_categories.operational` distingue despesa operacional (entra no DRE) de "Compra de mercadoria" (não-operacional). As tabelas legadas `sales`/`sale_items` deixaram de ser mapeadas (ficam órfãs, sem perda de dado). **Notificações (`e8c764f`):** coluna `customers.birth_date` + tabela nova `notification_dismissals`.
 
 ### Backups de produção (`/root/backups/` na VPS)
-Mais recentes: `hesed_db_pre_categorias_20260905_140237.sql.gz` (cadastro de categorias), `hesed_db_pre_placeholder_20260916_155252.sql.gz` (imagem padrão de produto) e `hesed_db_pre_financeiro_20260917_002942.sql.gz` (**módulo financeiro** — última migração de schema, aditiva: 8 tabelas financeiras). O cadastro de categorias adicionou a tabela `categories`; o módulo financeiro adicionou as 8 tabelas financeiras; as demais levas (incl. imagem padrão) não alteraram schema.
+Mais recentes: `hesed_db_pre_placeholder_20260916_155252.sql.gz` (imagem padrão de produto), `hesed_db_pre_financeiro_20260917_002942.sql.gz` (**módulo financeiro** — 8 tabelas financeiras) e `hesed_db_pre_notificacoes_20260918_162101.sql.gz` (**data de nascimento + notificações** — coluna `customers.birth_date` + tabela `notification_dismissals`). O módulo financeiro adicionou as 8 tabelas financeiras; a leva de notificações adicionou a coluna/tabela citadas; as demais levas (incl. imagem padrão) não alteraram schema.
 
 ### Próxima feature planejada
 **Mensagem em massa (WhatsApp Business/Meta Cloud API)** — bloqueada até o dono obter a conta (ver seção 6). Decisão em aberto: manter o cadastro de clientes só para fluxos internos (atual) ou também capturar telefone no catálogo público (hoje o catálogo não pede telefone).
