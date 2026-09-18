@@ -68,7 +68,17 @@ CREATED_SUPPLIERS = set()
 
 
 def today():
-    return date(2026, 9, 16)
+    # Data real de execução — as datas de repasse do backend usam LocalDate.now(),
+    # então o teste precisa ancorar em "hoje" para não quebrar conforme o dia.
+    return date.today()
+
+
+def next_business_day(d):
+    """Próximo dia útil após d (pula sábado/domingo). Espelha nextBusinessDay do backend."""
+    nd = d + timedelta(days=1)
+    while nd.weekday() >= 5:  # 5=sáb, 6=dom
+        nd += timedelta(days=1)
+    return nd
 
 
 def dstr(d):
@@ -371,8 +381,8 @@ def suite_fc():
                         body={"method": "CARTAO_DEBITO", "grossAmount": 50.00})
         if isinstance(b, dict) and b.get("payments"):
             s = b["payments"][0]["settlements"][0]
-            R.check("FC.debito.repasse_d1util", s.get("expectedDate") == dstr(today() + timedelta(days=1)),
-                    dstr(today() + timedelta(days=1)), s.get("expectedDate"))
+            R.check("FC.debito.repasse_d1util", s.get("expectedDate") == dstr(next_business_day(today())),
+                    dstr(next_business_day(today())), s.get("expectedDate"))
 
     # FC6. Crédito parcelado 3x -> 3 liquidações D+30/60/90, valores somam o líquido
     oid3 = make_confirmed_order(900.00)
