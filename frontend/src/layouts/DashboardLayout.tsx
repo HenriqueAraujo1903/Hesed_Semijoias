@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import ThemeToggle from '../components/ThemeToggle';
 import Logo from '../components/Logo';
+import NotificationBell from '../components/NotificationBell';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Visão Geral', icon: DashboardIcon },
@@ -153,7 +154,15 @@ export default function DashboardLayout() {
             </svg>
           </button>
           <Logo className="h-12" />
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <ThemeToggle />
+          </div>
+        </header>
+
+        {/* Desktop Header (barra superior com o sino de notificações) */}
+        <header className="hidden md:flex items-center justify-end border-b border-charcoal-100/40 dark:border-charcoal-700/40 bg-white dark:bg-charcoal-800 px-6 py-2.5">
+          <NotificationBell />
         </header>
 
         {/* Page Content */}

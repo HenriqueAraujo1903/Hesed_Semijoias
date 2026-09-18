@@ -9,6 +9,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -35,6 +36,10 @@ public class Customer {
 
     @Column(unique = true)
     private String email;
+
+    /** Data de nascimento (opcional). Base para futura felicitação de aniversário. */
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
 
     @Column(columnDefinition = "TEXT")
     private String notes;

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import UsersPage from './UsersPage';
 
@@ -10,7 +11,10 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<Tab>('usuarios');
+  const [searchParams] = useSearchParams();
+  // Permite abrir direto numa aba via ?tab=mensagens (ex.: vindo do sino de notificações).
+  const initialTab: Tab = searchParams.get('tab') === 'mensagens' ? 'mensagens' : 'usuarios';
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   return (
     <div className="space-y-6">
@@ -98,7 +102,8 @@ function MessagesSettings() {
           ))}
         </div>
         <p className="mt-3 text-xs text-stone-400">
-          Estas mensagens são abertas no WhatsApp ao confirmar ou cancelar um pedido. Desative para não enviar aquele aviso.
+          As mensagens de pedido são abertas no WhatsApp ao confirmar ou cancelar um pedido. A mensagem de <strong>aniversário</strong> é usada
+          a partir do sino de notificações (usa apenas <code className="text-gold font-mono">{'{cliente}'}</code>). Desative para não usar aquele aviso.
           Você pode anexar uma imagem opcional (ex.: cuidados com a peça) — o link dela entra na mensagem e o WhatsApp mostra a prévia.
         </p>
       </div>

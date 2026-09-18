@@ -3,6 +3,7 @@ package com.hesed.dto;
 import com.hesed.models.Customer;
 import lombok.Data;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -12,6 +13,7 @@ public class CustomerResponse {
     private String name;
     private String phone;
     private String email;
+    private LocalDate birthDate;
     private String notes;
     private LocalDateTime createdAt;
 
@@ -21,6 +23,7 @@ public class CustomerResponse {
         r.setName(c.getName());
         r.setPhone(c.getPhone());
         r.setEmail(c.getEmail());
+        r.setBirthDate(c.getBirthDate());
         r.setNotes(c.getNotes());
         r.setCreatedAt(c.getCreatedAt());
         return r;

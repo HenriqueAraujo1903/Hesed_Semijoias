@@ -41,6 +41,7 @@ public class CustomerService {
                 .name(request.getName().trim())
                 .phone(request.getPhone().trim())
                 .email(email)
+                .birthDate(request.getBirthDate())
                 .notes(normalizeNotes(request.getNotes()))
                 .build();
 
@@ -60,6 +61,7 @@ public class CustomerService {
         customer.setName(request.getName().trim());
         customer.setPhone(request.getPhone().trim());
         customer.setEmail(email);
+        customer.setBirthDate(request.getBirthDate());
         customer.setNotes(normalizeNotes(request.getNotes()));
 
         return CustomerResponse.from(customerRepository.save(customer));

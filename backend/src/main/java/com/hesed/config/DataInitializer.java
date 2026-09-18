@@ -113,6 +113,10 @@ public class DataInitializer {
                 "Olá {cliente}! 💛\n\nSeu pedido {pedido} foi confirmado.\n\n{itens}\n\nTotal: {total}\n\nObrigada por comprar na HESED Semijoias! Volte sempre. ✨");
         seedTemplate(repo, "ORDER_CANCELLED", "Pedido cancelado",
                 "Olá {cliente}!\n\nSeu pedido {pedido} foi cancelado.\n\nSentiremos sua falta e esperamos você em uma próxima compra na HESED Semijoias. 💛");
+        // Mensagem de aniversário — usada a partir do sino de notificações.
+        // Só a variável {cliente} faz sentido aqui.
+        seedTemplate(repo, "BIRTHDAY", "Aniversário do cliente",
+                "Olá {cliente}! 🎉🎂\n\nA HESED Semijoias deseja um feliz aniversário para você! Que seu dia seja tão especial e brilhante quanto as nossas joias. ✨💛\n\nPasse na loja para ganhar um mimo!");
     }
 
     private void seedTemplate(com.hesed.repositories.MessageTemplateRepository repo,

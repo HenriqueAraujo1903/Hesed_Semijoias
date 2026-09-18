@@ -6,8 +6,16 @@ interface Customer {
   name: string;
   phone: string | null;
   email: string | null;
+  birthDate: string | null;
   notes: string | null;
   createdAt: string;
+}
+
+/** Formata uma data ISO (yyyy-MM-dd) para dd/MM/yyyy, sem depender de fuso. */
+function formatBirthDate(iso: string | null): string {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  return d && m && y ? `${d}/${m}/${y}` : iso;
 }
 
 export default function CustomersPage() {
@@ -78,7 +86,7 @@ export default function CustomersPage() {
               <table className="min-w-full divide-y divide-stone-100 text-sm">
                 <thead className="bg-stone-50">
                   <tr>
-                    {['Nome', 'Telefone', 'E-mail', 'Observações', 'Ações'].map((col) => (
+                    {['Nome', 'Telefone', 'E-mail', 'Nascimento', 'Observações', 'Ações'].map((col) => (
                       <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500">{col}</th>
                     ))}
                   </tr>
@@ -89,6 +97,7 @@ export default function CustomersPage() {
                       <td className="px-4 py-3 font-medium text-stone-800">{c.name}</td>
                       <td className="px-4 py-3 text-stone-600">{c.phone || '—'}</td>
                       <td className="px-4 py-3 text-stone-500 max-w-[200px] truncate">{c.email || '—'}</td>
+                      <td className="px-4 py-3 text-stone-600 whitespace-nowrap">{formatBirthDate(c.birthDate)}</td>
                       <td className="px-4 py-3 text-stone-500 max-w-[240px] truncate">{c.notes || '—'}</td>
                       <td className="px-4 py-3">
                         <div className="flex gap-2">
@@ -111,6 +120,7 @@ export default function CustomersPage() {
                 <div className="mt-2 space-y-1 text-sm text-stone-500">
                   <p>{c.phone || '—'}</p>
                   {c.email && <p className="truncate">{c.email}</p>}
+                  {c.birthDate && <p className="text-xs text-stone-400">🎂 {formatBirthDate(c.birthDate)}</p>}
                   {c.notes && <p className="text-xs text-stone-400 line-clamp-2">{c.notes}</p>}
                 </div>
                 <div className="mt-3 flex gap-4 border-t border-stone-100 pt-3">
@@ -142,6 +152,7 @@ function CustomerModal({ customer, onClose, onSaved }: {
     name: customer?.name ?? '',
     phone: customer?.phone ?? '',
     email: customer?.email ?? '',
+    birthDate: customer?.birthDate ?? '',
     notes: customer?.notes ?? '',
   });
   const [loading, setLoading] = useState(false);
@@ -156,6 +167,7 @@ function CustomerModal({ customer, onClose, onSaved }: {
       name: form.name,
       phone: form.phone,
       email: form.email || null,
+      birthDate: form.birthDate || null,
       notes: form.notes || null,
     };
 
@@ -198,6 +210,12 @@ function CustomerModal({ customer, onClose, onSaved }: {
           <div>
             <label className="block text-xs font-medium text-stone-600 mb-1">E-mail</label>
             <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-stone-600 mb-1">Data de nascimento</label>
+            <input type="date" value={form.birthDate} max={new Date().toISOString().slice(0, 10)}
+              onChange={(e) => setForm({ ...form, birthDate: e.target.value })}
               className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
           </div>
           <div>

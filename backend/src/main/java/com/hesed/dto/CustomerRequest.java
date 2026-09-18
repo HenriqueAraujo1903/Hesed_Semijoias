@@ -2,9 +2,12 @@ package com.hesed.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+
+import java.time.LocalDate;
 
 @Data
 public class CustomerRequest {
@@ -26,6 +29,10 @@ public class CustomerRequest {
 
     @Email(message = "E-mail inválido")
     private String email;
+
+    /** Data de nascimento (opcional). Não pode ser no futuro. */
+    @Past(message = "Data de nascimento deve ser no passado")
+    private LocalDate birthDate;
 
     @Size(max = 1000, message = "Observações muito longas (máx. 1000 caracteres)")
     private String notes;
