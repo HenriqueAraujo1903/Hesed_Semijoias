@@ -27,4 +27,14 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     @Query("SELECT p.method, COALESCE(SUM(p.netAmount),0), COALESCE(SUM(p.feeAmount),0), COUNT(p) " +
            "FROM Payment p WHERE p.paidAt >= :from AND p.paidAt <= :to GROUP BY p.method")
     List<Object[]> byMethodInRange(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /**
+     * Pedidos CONFIRMADO que ainda não possuem NENHUM pagamento registrado.
+     * Usado pelo backfill (DataInitializer) para trazer ao fluxo de caixa as
+     * vendas anteriores à introdução do módulo financeiro. Idempotente: uma vez
+     * que o pedido ganha um Payment, deixa de aparecer aqui.
+     */
+    @Query("SELECT o FROM Order o WHERE o.status = 'CONFIRMADO' " +
+           "AND NOT EXISTS (SELECT 1 FROM Payment p WHERE p.order = o)")
+    List<com.hesed.models.Order> findConfirmedOrdersWithoutPayment();
 }

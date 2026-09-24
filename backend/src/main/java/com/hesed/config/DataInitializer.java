@@ -29,14 +29,73 @@ public class DataInitializer {
     CommandLineRunner initData(ProductRepository productRepository,
                                com.hesed.repositories.MessageTemplateRepository messageTemplateRepository,
                                com.hesed.repositories.CategoryRepository categoryRepository,
-                               com.hesed.repositories.ExpenseCategoryRepository expenseCategoryRepository) {
+                               com.hesed.repositories.ExpenseCategoryRepository expenseCategoryRepository,
+                               com.hesed.repositories.PaymentRepository paymentRepository) {
         return args -> {
             backfillStockQuantities(productRepository);
             seedMessageTemplates(messageTemplateRepository);
             seedCategories(categoryRepository, productRepository);
             seedExpenseCategories(expenseCategoryRepository);
+            backfillOrderPayments(paymentRepository);
             System.out.println("🌿 HESED API pronta!");
         };
+    }
+
+    /**
+     * MIGRAÇÃO DE DADOS idempotente para o módulo financeiro: pedidos que já
+     * estavam CONFIRMADO antes de existir o registro de pagamentos ficaram sem
+     * nenhum {@link com.hesed.models.Payment}. Sem Payment não há
+     * {@link com.hesed.models.PaymentSettlement}, então essas vendas não
+     * apareciam no FLUXO DE CAIXA (que é dirigido pelas liquidações).
+     *
+     * Este backfill cria, para cada pedido confirmado sem pagamento, um Payment
+     * à vista — método DINHEIRO, sem taxa (líquido = total do pedido) — com uma
+     * liquidação D+0 na data em que o pedido foi confirmado ({@code resolvedAt},
+     * com fallback para {@code orderedAt}). Assim a venda entra no caixa na data
+     * correta. O DRE já enxergava essas vendas (lê direto dos pedidos
+     * CONFIRMADO), então não é afetado.
+     *
+     * Idempotente: uma vez que o pedido ganha um Payment (por este backfill ou
+     * por registro manual), deixa de ser selecionado. Seguro reexecutar no boot.
+     */
+    private void backfillOrderPayments(com.hesed.repositories.PaymentRepository paymentRepository) {
+        List<com.hesed.models.Order> pending = paymentRepository.findConfirmedOrdersWithoutPayment();
+        int migrated = 0;
+        for (com.hesed.models.Order order : pending) {
+            java.math.BigDecimal total = order.getTotalAmount() != null
+                    ? order.getTotalAmount() : java.math.BigDecimal.ZERO;
+            // Data de competência/recebimento: quando o pedido foi confirmado.
+            java.time.LocalDateTime paidAt = order.getResolvedAt() != null
+                    ? order.getResolvedAt()
+                    : (order.getOrderedAt() != null ? order.getOrderedAt() : java.time.LocalDateTime.now());
+
+            com.hesed.models.Payment payment = com.hesed.models.Payment.builder()
+                    .order(order)
+                    .method("DINHEIRO")
+                    .grossAmount(total)
+                    .feeAmount(java.math.BigDecimal.ZERO)
+                    .netAmount(total)
+                    .installments(1)
+                    .paidAt(paidAt)
+                    .notes("Pagamento registrado automaticamente (migração do módulo financeiro).")
+                    .build();
+
+            // Liquidação D+0: dinheiro entra no caixa na data da venda.
+            payment.getSettlements().add(com.hesed.models.PaymentSettlement.builder()
+                    .payment(payment)
+                    .installmentNumber(1)
+                    .netAmount(total)
+                    .expectedDate(paidAt.toLocalDate())
+                    .status("PENDENTE")
+                    .build());
+
+            paymentRepository.save(payment);
+            migrated++;
+        }
+        if (migrated > 0) {
+            System.out.println("💵 Migração financeira: " + migrated
+                    + " pedido(s) confirmado(s) sem pagamento receberam pagamento à vista (DINHEIRO, D+0).");
+        }
     }
 
     /**
