@@ -2,7 +2,7 @@
 
 > **Arquivo único de contexto.** Toda a documentação do projeto (arquitetura, features, deploy, fluxo de trabalho, QA e contexto entre sessões) vive aqui. Não há outros arquivos de doc — se precisar de contexto, é este.
 >
-> **Última atualização:** 18/09/2026
+> **Última atualização:** 24/09/2026
 > **Status:** 🟢 Em produção e estável em https://hesedsemijoias.online
 
 ---
@@ -205,7 +205,7 @@ Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, R
 - **Dashboards:** Vendas, Engajamento, Estoque, Promoções, Revendedoras — todos com filtro de período compartilhado (atalhos + intervalo customizado).
 - **Metas mensais:** metas de receita/pedidos com herança e trava de alteração (justificativa + auditoria); progresso na Visão Geral.
 - **Financeiro (módulo, aba própria):** quatro áreas —
-  - **Fluxo de caixa:** extrato consolidado por período unindo, sem duplicar dados, os recebimentos (pela **data de repasse**), as parcelas de despesa pagas e os lançamentos manuais; KPIs de entradas/saídas/saldo.
+  - **Fluxo de caixa:** extrato consolidado por período unindo, sem duplicar dados, os recebimentos (pela **data de repasse**), as parcelas de despesa pagas e os lançamentos manuais; KPIs de entradas/saídas/saldo. Como o caixa é dirigido pelas liquidações de `Payment`, pedidos confirmados **anteriores** ao módulo financeiro (sem pagamento registrado) foram trazidos ao caixa por um **backfill idempotente** no `DataInitializer` (ver §9).
   - **Contas a pagar (despesas):** despesas por categoria, com **parcelamento mensal**; status derivado das parcelas (PENDENTE/PARCIAL/PAGO; **ATRASADO** derivado em leitura quando a parcela vence no passado); marcar/reabrir parcela paga.
   - **Pagamentos de pedido:** um pedido aceita **várias formas**; cada pagamento tem valor bruto, **taxa** e líquido. **Cartão de crédito parcelado** gera liquidações (recebíveis) com **data de repasse da adquirente**: crédito **D+30/60/90…** (uma a cada 30 dias), débito **D+1 dia útil**, Pix/dinheiro/boleto/transferência **D+0**. O caixa usa a data de repasse; a taxa sai na data da venda.
   - **DRE mensal:** Receita − CMV = Margem bruta; − Comissões de consignação − Taxas de pagamento − Despesas operacionais = Resultado líquido. Comissão de consignação é **dedução separada** (não é custo do produto).
@@ -305,11 +305,18 @@ DELETE FROM products WHERE sku LIKE 'QA-%';
 ### Branches (todas alinhadas)
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `26128f0` | No ar em https://hesedsemijoias.online |
+| `main` (produção) | `79d8e58` | No ar em https://hesedsemijoias.online |
 | `dev` | sincronizada | Trabalhar aqui |
 | `homolog` | sincronizada | — |
 
-> As 3 branches estão alinhadas em `26128f0`. Últimas levas: cadastro de categorias (`e519088`), imagem padrão de produto sem foto (`267f649`), **módulo financeiro** (`7c1017c`) e **data de nascimento + notificações de aniversário** (`e8c764f` feature + `26128f0` QA).
+> As 3 branches estão alinhadas em `79d8e58`. Últimas levas: imagem padrão de produto sem foto (`267f649`), **módulo financeiro** (`7c1017c`), **data de nascimento + notificações de aniversário** (`e8c764f` feature + `26128f0` QA) e **backfill de pagamento p/ vendas antigas no fluxo de caixa** (`79d8e58`).
+
+### Backfill de pagamento p/ pedidos antigos no fluxo de caixa (`79d8e58`) — deploy 24/09/2026
+Correção sem alteração de schema. O **fluxo de caixa** é dirigido pelas liquidações de `Payment`/`PaymentSettlement`, que só nascem no registro (manual) de pagamento — então pedidos já `CONFIRMADO` **antes** do módulo financeiro ficaram sem pagamento e **não apareciam no caixa** (o DRE já os via, pois lê direto dos pedidos confirmados por competência).
+
+**Solução:** migração idempotente no `DataInitializer.backfillOrderPayments`, apoiada em `PaymentRepository.findConfirmedOrdersWithoutPayment()` (JPQL `NOT EXISTS`). Para cada pedido confirmado sem pagamento, cria um `Payment` **à vista** — método `DINHEIRO`, sem taxa (`gross=net=total`) — com uma liquidação **D+0** na data de confirmação do pedido (`resolvedAt`, fallback `orderedAt`), marcada por `notes` ("Pagamento registrado automaticamente…"). Idempotente: uma vez com pagamento, o pedido sai do conjunto (seguro reexecutar no boot).
+
+**QA (focado):** validado em dev (23 pedidos migrados), homolog (8 migrados, 0 divergências em `gross=net=total`, `fee=0` e `expected_date`=data de confirmação; idempotência confirmada em 2º boot). Deploy com backup `hesed_db_pre_backfill_pagamentos_20260924_231442.sql.gz`, rebuild Docker + reload Nginx. Em produção **15 pedidos** migrados (era 15 confirmados sem pagamento → 0); smoke test HTTPS OK (catálogo 200, login 200, cash-flow lista os recebimentos).
 
 ### Data de nascimento + notificações de aniversário (`e8c764f`) — deploy 18/09/2026
 Duas features numa leva, com alteração de schema (aditiva). **(1)** Cliente ganhou **data de nascimento** (opcional, validação `@Past` — não aceita futuro), exibida na tabela/cards e no formulário de Cadastros → Clientes. **(2)** **Ponto de notificações** (sino no header, desktop e mobile) com o primeiro gerador: **aniversário de cliente**.
