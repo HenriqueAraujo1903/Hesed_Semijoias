@@ -33,4 +33,13 @@ public interface ExpenseInstallmentRepository extends JpaRepository<ExpenseInsta
     @Query("SELECT COALESCE(SUM(i.amount),0) FROM ExpenseInstallment i " +
            "WHERE i.status = 'PENDENTE' AND i.dueDate <= :until")
     java.math.BigDecimal sumPendingDueUntil(@Param("until") LocalDate until);
+
+    /** Total em aberto (PENDENTE) com vencimento no intervalo. */
+    @Query("SELECT COALESCE(SUM(i.amount),0) FROM ExpenseInstallment i " +
+           "WHERE i.status = 'PENDENTE' AND i.dueDate >= :from AND i.dueDate <= :to")
+    java.math.BigDecimal sumPendingDueBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /** Total a pagar ainda em aberto (PENDENTE), sem limite de data. */
+    @Query("SELECT COALESCE(SUM(i.amount),0) FROM ExpenseInstallment i WHERE i.status = 'PENDENTE'")
+    java.math.BigDecimal sumAllPending();
 }

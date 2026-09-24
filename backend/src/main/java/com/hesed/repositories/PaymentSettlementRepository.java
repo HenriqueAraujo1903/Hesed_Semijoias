@@ -32,4 +32,13 @@ public interface PaymentSettlementRepository extends JpaRepository<PaymentSettle
     @Query("SELECT COALESCE(SUM(s.netAmount),0) FROM PaymentSettlement s " +
            "WHERE s.status = 'PENDENTE' AND s.expectedDate <= :until")
     java.math.BigDecimal sumPendingUntil(@Param("until") LocalDate until);
+
+    /** Total ainda a receber (PENDENTE) com repasse previsto no intervalo. */
+    @Query("SELECT COALESCE(SUM(s.netAmount),0) FROM PaymentSettlement s " +
+           "WHERE s.status = 'PENDENTE' AND s.expectedDate >= :from AND s.expectedDate <= :to")
+    java.math.BigDecimal sumPendingBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /** Total a receber ainda em aberto (PENDENTE), sem limite de data. */
+    @Query("SELECT COALESCE(SUM(s.netAmount),0) FROM PaymentSettlement s WHERE s.status = 'PENDENTE'")
+    java.math.BigDecimal sumAllPending();
 }

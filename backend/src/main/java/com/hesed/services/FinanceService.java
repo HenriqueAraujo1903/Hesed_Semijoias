@@ -580,6 +580,94 @@ public class FinanceService {
     }
 
     // ===========================================================================
+    // Projeção financeira (Dashboard Financeiro): presente + futuro factual
+    // ===========================================================================
+
+    /**
+     * Monta a projeção financeira factual: a foto do momento (mês corrente e
+     * valores em aberto), o histórico de caixa realizado e a projeção mês a mês
+     * do que já está lançado (recebíveis a repassar − contas a pagar a vencer).
+     *
+     * @param months quantos meses projetar para frente (inclui o mês corrente).
+     *               Limitado a 1..24; default tratado no controller.
+     */
+    public FinanceForecastResponse forecast(int months) {
+        int span = Math.max(1, Math.min(months, 24));
+        LocalDate today = LocalDate.now();
+        LocalDate monthStart = today.withDayOfMonth(1);
+
+        FinanceForecastResponse resp = new FinanceForecastResponse();
+
+        // ---- PRESENTE: caixa realizado do mês corrente ----
+        LocalDate curMonthEnd = monthStart.plusMonths(1).minusDays(1);
+        CashFlowResponse curFlow = cashFlow(monthStart, curMonthEnd);
+        resp.setCurrentMonthInflow(scale(curFlow.getTotalInflow()));
+        resp.setCurrentMonthOutflow(scale(curFlow.getTotalOutflow()));
+        resp.setCurrentMonthNet(scale(curFlow.getNet()));
+
+        // ---- PRESENTE: valores em aberto (independem de data) ----
+        BigDecimal receivablesOpen = nz(settlementRepository.sumAllPending());
+        BigDecimal payablesOpen = nz(installmentRepository.sumAllPending());
+        resp.setReceivablesOpen(scale(receivablesOpen));
+        resp.setPayablesOpen(scale(payablesOpen));
+        resp.setOpenBalance(scale(receivablesOpen.subtract(payablesOpen)));
+
+        // Parcelas em aberto já vencidas (atrasadas): pendentes até ontem.
+        resp.setOverduePayables(scale(nz(installmentRepository.sumPendingDueUntil(today.minusDays(1)))));
+
+        // ---- PRESENTE: resultado do mês (DRE) ----
+        IncomeStatementResponse dre = incomeStatement(today.getYear(), today.getMonthValue());
+        resp.setCurrentMonthResult(scale(dre.getNetResult()));
+
+        // ---- HISTÓRICO: caixa realizado dos últimos 6 meses (inclui o atual) ----
+        List<FinanceForecastResponse.MonthPoint> history = new ArrayList<>();
+        LocalDate histStart = monthStart.minusMonths(5);
+        for (int i = 0; i < 6; i++) {
+            LocalDate mStart = histStart.plusMonths(i);
+            LocalDate mEnd = mStart.plusMonths(1).minusDays(1);
+            CashFlowResponse f = cashFlow(mStart, mEnd);
+            FinanceForecastResponse.MonthPoint mp = new FinanceForecastResponse.MonthPoint();
+            mp.setPeriod(periodLabel(mStart));
+            mp.setInflow(scale(f.getTotalInflow()));
+            mp.setOutflow(scale(f.getTotalOutflow()));
+            mp.setNet(scale(f.getNet()));
+            history.add(mp);
+        }
+        resp.setHistory(history);
+
+        // ---- FUTURO: projeção do que já está lançado, mês a mês ----
+        // Recebíveis previstos = liquidações de cartão ainda PENDENTE a repassar.
+        // A pagar previsto = parcelas de despesa PENDENTE a vencer no mês.
+        List<FinanceForecastResponse.ForecastPoint> forecast = new ArrayList<>();
+        BigDecimal cumulative = BigDecimal.ZERO;
+        for (int i = 0; i < span; i++) {
+            LocalDate mStart = monthStart.plusMonths(i);
+            LocalDate mEnd = mStart.plusMonths(1).minusDays(1);
+
+            BigDecimal recv = nz(settlementRepository.sumPendingBetween(mStart, mEnd));
+            BigDecimal pay = nz(installmentRepository.sumPendingDueBetween(mStart, mEnd));
+            BigDecimal net = recv.subtract(pay);
+            cumulative = cumulative.add(net);
+
+            FinanceForecastResponse.ForecastPoint fp = new FinanceForecastResponse.ForecastPoint();
+            fp.setPeriod(periodLabel(mStart));
+            fp.setExpectedReceivables(scale(recv));
+            fp.setExpectedPayables(scale(pay));
+            fp.setNet(scale(net));
+            fp.setCumulativeNet(scale(cumulative));
+            forecast.add(fp);
+        }
+        resp.setForecast(forecast);
+
+        return resp;
+    }
+
+    /** Rótulo yyyy-MM de uma data (base 1º do mês). */
+    private String periodLabel(LocalDate d) {
+        return String.format("%04d-%02d", d.getYear(), d.getMonthValue());
+    }
+
+    // ===========================================================================
     // Helpers
     // ===========================================================================
 

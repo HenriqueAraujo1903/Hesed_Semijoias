@@ -188,4 +188,15 @@ public class FinanceController {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
+
+    /**
+     * Projeção financeira do Dashboard Financeiro: foto do presente (mês
+     * corrente + valores em aberto) e projeção factual dos próximos `months`
+     * meses (recebíveis a repassar − contas a pagar a vencer, já lançados).
+     */
+    @GetMapping("/forecast")
+    public ResponseEntity<FinanceForecastResponse> forecast(
+            @RequestParam(defaultValue = "6") int months) {
+        return ResponseEntity.ok(financeService.forecast(months));
+    }
 }
