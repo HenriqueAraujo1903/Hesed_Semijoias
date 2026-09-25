@@ -10,6 +10,8 @@ interface Product {
   sku: string;
   name: string;
   category: string;
+  line: string | null;       // linha do produto (quando informada)
+  luxo: boolean;             // derivado: a linha do produto é de luxo
   salePrice: number;         // preço cheio (referência)
   effectivePrice: number;    // preço a pagar (com promoção, se houver)
   onSale: boolean;
@@ -37,6 +39,9 @@ export default function CatalogoPage() {
   const [selected, setSelected] = useState<Product[]>([]);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
   const [activeCategory, setActiveCategory] = useState('Todos');
+  const [activeLine, setActiveLine] = useState('Todas');
+  // Modo luxo: transforma o catálogo numa vitrine premium exclusiva (só produtos de luxo).
+  const [luxoMode, setLuxoMode] = useState(false);
   const [orderNumber] = useState(generateOrderNumber());
   // Sacola: expande ao adicionar item e minimiza sozinha após alguns segundos,
   // para não atrapalhar a navegação pelo catálogo.
@@ -58,20 +63,49 @@ export default function CatalogoPage() {
   }, []);
 
   const [categoryNames, setCategoryNames] = useState<string[]>([]);
+  const [lineNames, setLineNames] = useState<string[]>([]);
 
   // Categorias ativas (cadastro de categorias). Público via /api/products/categories.
   useEffect(() => {
     axios.get('/api/products/categories')
       .then((res) => setCategoryNames(res.data))
       .catch(() => setCategoryNames([]));
+    // Linhas ativas (cadastro de linhas). Público via /api/products/lines.
+    axios.get('/api/products/lines')
+      .then((res) => setLineNames(res.data))
+      .catch(() => setLineNames([]));
   }, []);
 
   const categories = useMemo(() => ['Todos', ...categoryNames], [categoryNames]);
+  const lines = useMemo(() => ['Todas', ...lineNames], [lineNames]);
 
+  // Produtos de luxo (linha marcada como luxo) — usados no modo luxo.
+  const luxoProducts = useMemo(() => products.filter((p) => p.luxo), [products]);
+
+  // Opções de filtro derivadas dos produtos de luxo (só o que existe no acervo luxo).
+  const luxoCategories = useMemo(
+    () => ['Todos', ...Array.from(new Set(luxoProducts.map((p) => p.category).filter(Boolean)))],
+    [luxoProducts]
+  );
+  const luxoLines = useMemo(
+    () => ['Todas', ...Array.from(new Set(luxoProducts.map((p) => p.line).filter((l): l is string => !!l)))],
+    [luxoProducts]
+  );
+
+  // Grade: no modo luxo mostra os produtos de luxo (filtrados por categoria/linha
+  // dentro do acervo luxo); senão aplica os filtros normais de categoria e linha.
   const filtered = useMemo(() => {
-    if (activeCategory === 'Todos') return products;
-    return products.filter((p) => p.category === activeCategory);
-  }, [products, activeCategory]);
+    if (luxoMode) {
+      return luxoProducts.filter((p) =>
+        (activeCategory === 'Todos' || p.category === activeCategory) &&
+        (activeLine === 'Todas' || p.line === activeLine)
+      );
+    }
+    return products.filter((p) =>
+      (activeCategory === 'Todos' || p.category === activeCategory) &&
+      (activeLine === 'Todas' || p.line === activeLine)
+    );
+  }, [products, activeCategory, activeLine, luxoMode, luxoProducts]);
 
   function expandCartThenCollapse() {
     setCartExpanded(true);
@@ -115,10 +149,59 @@ export default function CatalogoPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] dark:bg-[#141210] transition-colors duration-300">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      luxoMode
+        ? 'bg-gradient-to-b from-[#141210] via-[#1A1712] to-[#0E0C0A]'
+        : 'bg-[#FDFBF7] dark:bg-[#141210]'
+    }`}>
+
+      {/* ═══════════ STICKY NAV — acesso persistente à Linha Luxo ═══════════ */}
+      {luxoProducts.length > 0 && (
+        <div className={`sticky top-0 z-40 backdrop-blur-md border-b transition-colors duration-500 ${
+          luxoMode
+            ? 'bg-[#141210]/90 border-[#C8A96E]/25'
+            : 'bg-[#FDFBF7]/85 dark:bg-[#141210]/85 border-[#F0E4CC]/60 dark:border-[#292620]'
+        }`}>
+          <div className="max-w-6xl mx-auto px-4 h-12 flex items-center justify-between">
+            {luxoMode ? (
+              <button
+                onClick={() => { setLuxoMode(false); setActiveCategory('Todos'); setActiveLine('Todas'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                className="inline-flex items-center gap-1.5 text-[12px] sm:text-[13px] font-medium tracking-wide text-[#E2CFA3] hover:text-[#F5F0EA] transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+                </svg>
+                Voltar ao catálogo
+              </button>
+            ) : (
+              <span className="text-[11px] uppercase tracking-[0.22em] text-[#A8A5A0] dark:text-[#5C584F]">
+                HESED Semijoias
+              </span>
+            )}
+            <button
+              onClick={() => { setLuxoMode((v) => !v); setActiveCategory('Todos'); setActiveLine('Todas'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              className={`group inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[12px] sm:text-[13px] font-medium tracking-[0.08em] transition-all duration-300 ${
+                luxoMode
+                  ? 'bg-[#E2CFA3] text-[#292620] shadow-sm'
+                  : 'text-[#96784A] dark:text-[#E2CFA3] ring-1 ring-[#C8A96E]/40 hover:bg-[#C8A96E] hover:text-white dark:hover:text-[#292620]'
+              }`}
+            >
+              <span className={luxoMode ? 'text-[#96784A]' : 'text-[#C8A96E]'}>✦</span>
+              Linha Luxo
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ═══════════ HERO (scrolls with page) ═══════════ */}
-      <section className="relative bg-white dark:bg-[#1C1A16] border-b border-[#F0E4CC]/50 dark:border-[#292620]">
+      <section className={`relative border-b transition-colors duration-500 ${
+        luxoMode
+          ? 'bg-[#141210] border-[#C8A96E]/25'
+          : 'bg-white dark:bg-[#1C1A16] border-[#F0E4CC]/50 dark:border-[#292620]'
+      }`}>
+        {luxoMode && (
+          <div className="pointer-events-none absolute -top-24 left-1/2 h-56 w-[42rem] -translate-x-1/2 rounded-full bg-[#C8A96E]/10 blur-3xl" />
+        )}
         {/* Subtle gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-[#FAF7F2]/50 dark:to-[#141210]/50 pointer-events-none" />
 
@@ -160,61 +243,140 @@ export default function CatalogoPage() {
           </div>
 
           {/* Logo + Headline — generous breathing room */}
-          <div className="text-center pt-6 pb-10">
-            <Logo className="h-32 mx-auto mb-8" />
-            
-            <h2 className="font-serif text-2xl md:text-3xl text-[#353229] dark:text-[#E8E7E5] font-medium tracking-wide leading-relaxed">
-              Peças que contam <span className="text-[#C8A96E] italic">a sua história</span>
-            </h2>
-            
-            {/* Diferenciais — explícitos, mas discretos */}
-            <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[13px] tracking-wide text-[#96784A] dark:text-[#C9B892]">
-              <span>Não escurece</span>
-              <span className="text-[#E2CFA3] dark:text-[#3D3A33]">•</span>
-              <span>Antialérgica</span>
-              <span className="text-[#E2CFA3] dark:text-[#3D3A33]">•</span>
-              <span>Garantia de 1 ano</span>
-            </div>
+          <div className="relative text-center pt-6 pb-10">
+            <Logo className={`h-32 mx-auto mb-8 transition-all duration-500 ${luxoMode ? 'drop-shadow-[0_0_18px_rgba(200,169,110,0.35)]' : ''}`} />
 
-            <p className="mt-4 text-[13px] text-[#A8A5A0] dark:text-[#5C584F] tracking-wide">
-              Selecione suas favoritas e envie pelo WhatsApp
-            </p>
+            {luxoMode ? (
+              <div className="py-2 sm:py-6">
+                <div className="flex items-center justify-center gap-3 sm:gap-4 mb-4 sm:mb-5">
+                  <span className="h-px w-8 sm:w-14 bg-gradient-to-r from-transparent to-[#C8A96E]/50" />
+                  <span className="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.3em] sm:tracking-[0.42em] text-[#C8A96E]">Coleção Exclusiva</span>
+                  <span className="h-px w-8 sm:w-14 bg-gradient-to-l from-transparent to-[#C8A96E]/50" />
+                </div>
+                <h2 className="font-serif text-4xl sm:text-5xl md:text-6xl font-medium tracking-[0.02em] text-[#F5F0EA]">
+                  Linha <span className="italic text-[#E2CFA3]">Luxo</span>
+                </h2>
+                <p className="mt-4 sm:mt-5 text-[11px] sm:text-[13px] tracking-[0.12em] sm:tracking-[0.15em] uppercase text-[#8C8579]">
+                  Peças raras · para quem aprecia o extraordinário
+                </p>
+              </div>
+            ) : (
+              <>
+                <h2 className="font-serif text-2xl md:text-3xl text-[#353229] dark:text-[#E8E7E5] font-medium tracking-wide leading-relaxed">
+                  Peças que contam <span className="text-[#C8A96E] italic">a sua história</span>
+                </h2>
+
+                {/* Diferenciais — explícitos, mas discretos */}
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[13px] tracking-wide text-[#96784A] dark:text-[#C9B892]">
+                  <span>Não escurece</span>
+                  <span className="text-[#E2CFA3] dark:text-[#3D3A33]">•</span>
+                  <span>Antialérgica</span>
+                  <span className="text-[#E2CFA3] dark:text-[#3D3A33]">•</span>
+                  <span>Garantia de 1 ano</span>
+                </div>
+
+                <p className="mt-4 text-[13px] text-[#A8A5A0] dark:text-[#5C584F] tracking-wide">
+                  Selecione suas favoritas e envie pelo WhatsApp
+                </p>
+              </>
+            )}
+
           </div>
         </div>
       </section>
 
-      {/* ═══════════ PROMOTIONS CAROUSEL ═══════════ */}
-      <PromotionCarousel onSelectProduct={(productId) => {
-        const product = products.find(p => p.id === productId);
-        if (product && product.stockStatus !== 'ESGOTADO') toggle(product);
-      }} />
+      {/* ═══════════ PROMOTIONS CAROUSEL (oculto no modo luxo) ═══════════ */}
+      {!luxoMode && (
+        <PromotionCarousel onSelectProduct={(productId) => {
+          const product = products.find(p => p.id === productId);
+          if (product && product.stockStatus !== 'ESGOTADO') toggle(product);
+        }} />
+      )}
 
-      {/* ═══════════ CATEGORY FILTERS (abaixo do carrossel) ═══════════ */}
-      <div className="max-w-6xl mx-auto px-4 pt-8">
-        <div className="flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto">
-          {categories.map((cat) => (
-            <button key={cat} onClick={() => setActiveCategory(cat)}
-              className={`px-4 py-1.5 rounded-full text-[13px] font-medium border transition-all duration-300 ${
-                activeCategory === cat
-                  ? 'bg-[#C8A96E] text-white border-[#C8A96E] shadow-sm'
-                  : 'bg-white/60 dark:bg-[#1C1A16]/60 text-[#7A766F] dark:text-[#A8A5A0] border-[#F0E4CC] dark:border-[#3D3A33] hover:border-[#C8A96E] hover:text-[#C8A96E] dark:hover:text-[#C8A96E]'
-              }`}>
-              {cat}
-            </button>
-          ))}
+      {/* ═══════════ FILTROS DO MODO LUXO (categoria + linha, visual premium) ═══ */}
+      {luxoMode && (
+        <div className="max-w-6xl mx-auto px-4 pt-8 space-y-2.5">
+          {luxoCategories.length > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto">
+              {luxoCategories.map((cat) => (
+                <button key={cat} onClick={() => setActiveCategory(cat)}
+                  className={`px-4 py-1.5 rounded-full text-[12px] tracking-wide transition-all duration-300 ${
+                    activeCategory === cat
+                      ? 'bg-[#E2CFA3] text-[#292620]'
+                      : 'text-[#A8A5A0] ring-1 ring-[#C8A96E]/25 hover:ring-[#C8A96E]/60 hover:text-[#E2CFA3]'
+                  }`}>
+                  {cat}
+                </button>
+              ))}
+            </div>
+          )}
+          {luxoLines.length > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto">
+              {luxoLines.map((ln) => (
+                <button key={ln} onClick={() => setActiveLine(ln)}
+                  className={`px-3.5 py-1 rounded-full text-[11px] uppercase tracking-[0.12em] transition-all duration-300 ${
+                    activeLine === ln
+                      ? 'bg-[#C8A96E]/20 text-[#E2CFA3] ring-1 ring-[#C8A96E]/50'
+                      : 'text-[#8C8579] ring-1 ring-[#3D3A33] hover:ring-[#C8A96E]/40 hover:text-[#E2CFA3]'
+                  }`}>
+                  <span className="mr-1 text-[#C8A96E]">✦</span>{ln === 'Todas' ? 'Todas' : ln}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
+      )}
+
+      {/* ═══════════ CATEGORY + LINE FILTERS (ocultos no modo luxo) ═══════════ */}
+      {!luxoMode && (
+        <div className="max-w-6xl mx-auto px-4 pt-8 space-y-3">
+          <div className="flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto">
+            {categories.map((cat) => (
+              <button key={cat} onClick={() => setActiveCategory(cat)}
+                className={`px-4 py-1.5 rounded-full text-[13px] font-medium border transition-all duration-300 ${
+                  activeCategory === cat
+                    ? 'bg-[#C8A96E] text-white border-[#C8A96E] shadow-sm'
+                    : 'bg-white/60 dark:bg-[#1C1A16]/60 text-[#7A766F] dark:text-[#A8A5A0] border-[#F0E4CC] dark:border-[#3D3A33] hover:border-[#C8A96E] hover:text-[#C8A96E] dark:hover:text-[#C8A96E]'
+                }`}>
+                {cat}
+              </button>
+            ))}
+          </div>
+          {/* Filtro por linha (só aparece se houver linhas cadastradas) */}
+          {lineNames.length > 0 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 max-w-3xl mx-auto">
+              {lines.map((ln) => (
+                <button key={ln} onClick={() => setActiveLine(ln)}
+                  className={`px-3.5 py-1 rounded-full text-[12px] font-medium border transition-all duration-300 ${
+                    activeLine === ln
+                      ? 'bg-[#353229] text-[#E2CFA3] border-[#353229] shadow-sm dark:bg-[#E2CFA3] dark:text-[#292620] dark:border-[#E2CFA3]'
+                      : 'bg-transparent text-[#A8A5A0] dark:text-[#7A766F] border-[#E8E7E5] dark:border-[#3D3A33] hover:border-[#C8A96E] hover:text-[#96784A]'
+                  }`}>
+                  {ln === 'Todas' ? 'Todas as linhas' : ln}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ═══════════ PRODUCTS GRID ═══════════ */}
-      <main className="max-w-6xl mx-auto px-4 py-8 pb-56">
-        {filtered.length === 0 ? (
+      <main className={`max-w-6xl mx-auto px-4 pb-56 ${luxoMode ? 'py-12 md:py-16' : 'py-8'}`}>
+        {luxoMode ? (
+          <LuxuryGrid
+            products={filtered}
+            selectedIds={selected.map((s) => s.id)}
+            onToggle={toggle}
+            onDetail={setDetailProduct}
+          />
+        ) : filtered.length === 0 ? (
           <div className="text-center py-24">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-[#F9F3E8] dark:bg-[#292620] mb-4">
               <svg className="w-8 h-8 text-[#C8A96E]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
               </svg>
             </div>
-            <p className="text-[#7A766F] dark:text-[#A8A5A0] text-sm">Nenhum produto nesta categoria.</p>
+            <p className="text-[#7A766F] dark:text-[#A8A5A0] text-sm">Nenhum produto encontrado com esses filtros.</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
@@ -264,6 +426,11 @@ export default function CatalogoPage() {
                   {isOnDemand && !isSelected && (
                     <div className="absolute top-3 left-3 z-10 bg-gradient-to-r from-[#C8A96E] to-[#96784A] text-white text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-wide">
                       Sob encomenda
+                    </div>
+                  )}
+                  {p.luxo && !isSelected && (
+                    <div className={`absolute ${(isEsgotado || isBaixo || isOnDemand) ? 'top-11' : 'top-3'} left-3 z-10 flex items-center gap-1 bg-gradient-to-r from-[#4A3B25] to-[#292620] text-[#E2CFA3] text-[10px] font-semibold px-2.5 py-1 rounded-full uppercase tracking-[0.12em] ring-1 ring-[#C8A96E]/40`}>
+                      <span className="text-[9px]">✦</span> Luxo
                     </div>
                   )}
 
@@ -459,7 +626,11 @@ export default function CatalogoPage() {
       )}
 
       {/* ═══════════ FOOTER ═══════════ */}
-      <footer className="bg-white dark:bg-[#1C1A16] border-t border-[#F0E4CC]/40 dark:border-[#3D3A33]/40 py-12 transition-colors">
+      <footer className={`border-t py-12 transition-colors duration-500 ${
+        luxoMode
+          ? 'bg-[#0E0C0A] border-[#C8A96E]/20'
+          : 'bg-white dark:bg-[#1C1A16] border-[#F0E4CC]/40 dark:border-[#3D3A33]/40'
+      }`}>
         <div className="max-w-6xl mx-auto px-4 text-center">
           <Logo className="h-16 mx-auto mb-6" />
           
@@ -528,6 +699,107 @@ interface PromotionSlide {
   discountPercent: number | null;
   promoPrice: number | null;
   bannerUrl: string | null;
+}
+
+// ─── Grade de Luxo — vitrine editorial premium ───────────────────────────────
+// Princípios (Van Cleef, alta joalheria): a peça é a única "cor"; layout discreto,
+// muito respiro, poucas colunas, tipografia serif, molduras hairline douradas.
+function LuxuryGrid({ products, selectedIds, onToggle, onDetail }: {
+  products: Product[];
+  selectedIds: string[];
+  onToggle: (p: Product) => void;
+  onDetail: (p: Product) => void;
+}) {
+  if (products.length === 0) {
+    return (
+      <div className="text-center py-32">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full ring-1 ring-[#C8A96E]/30 mb-5 text-[#C8A96E] text-2xl">✦</div>
+        <p className="text-[#A8A5A0] text-sm tracking-wide">Nenhuma peça de luxo disponível no momento.</p>
+      </div>
+    );
+  }
+  return (
+    // 2 colunas no mobile (peças menores, sem esticar), 2 no tablet, 3 no desktop.
+    // Espaçamento cresce com o breakpoint = respiro premium sem exagero no celular.
+    <div className="grid grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-8 sm:gap-x-8 sm:gap-y-14 pt-2 sm:pt-4">
+      {products.map((p) => {
+        const isSelected = selectedIds.includes(p.id);
+        const isOnDemand = p.onDemand;
+        const isEsgotado = p.stockStatus === 'ESGOTADO' && !isOnDemand;
+        const gallery = (p.imageUrls && p.imageUrls.length > 0)
+          ? p.imageUrls
+          : (p.imageUrl ? [p.imageUrl] : []);
+        const imgUrl = gallery[0] || PRODUCT_PLACEHOLDER;
+
+        return (
+          <article key={p.id} className={`group flex flex-col ${isEsgotado ? 'opacity-50' : ''}`}>
+            {/* Imagem — moldura hairline dourada (gradiente), cantos retos, profundidade */}
+            <div
+              onClick={() => !isEsgotado && onDetail(p)}
+              className="relative cursor-pointer overflow-hidden p-[1px] bg-gradient-to-b from-[#C8A96E]/40 via-[#C8A96E]/10 to-transparent"
+            >
+              <div className="relative aspect-[4/5] overflow-hidden bg-gradient-to-b from-[#1A1712] to-[#0E0C0A]">
+                <img src={imgUrl} alt={p.name} onError={handleImageError}
+                  className="h-full w-full object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-105" />
+                {/* Vinheta sutil para dar profundidade à peça */}
+                <div className="pointer-events-none absolute inset-0 shadow-[inset_0_0_80px_rgba(0,0,0,0.45)]" />
+
+                {isSelected && (
+                  <div className="absolute top-4 right-4 z-10 flex items-center justify-center w-8 h-8 rounded-full bg-[#E2CFA3] text-[#292620] shadow-lg">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                )}
+                {isEsgotado && (
+                  <div className="absolute top-4 left-4 z-10 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#A8A5A0]">
+                    Esgotado
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Texto — centrado, muito respiro, serif, a peça em foco.
+                Tamanhos crescem do mobile para o desktop (sem esticar no celular). */}
+            <div className="flex flex-col items-center text-center px-1 pt-3.5 sm:px-2 sm:pt-6">
+              <span className="text-[8px] sm:text-[10px] font-medium uppercase tracking-[0.25em] sm:tracking-[0.3em] text-[#C8A96E]">
+                {p.line || 'Luxo'}
+              </span>
+              <h3 className="mt-1.5 sm:mt-3 font-serif text-base sm:text-2xl font-medium leading-snug text-[#F5F0EA] line-clamp-2">
+                {p.name}
+              </h3>
+              <p className="mt-1 text-[9px] sm:text-[10px] font-mono tracking-wide text-[#6B6459]">Ref: {p.sku}</p>
+
+              {/* Hairline dourada separando o preço */}
+              <span className="my-3 sm:my-5 h-px w-10 sm:w-12 bg-gradient-to-r from-transparent via-[#C8A96E]/60 to-transparent" />
+
+              <div className="flex flex-col items-center leading-tight">
+                {p.onSale && (
+                  <span className="text-[11px] sm:text-xs text-[#6B6459] line-through">{BRL.format(p.salePrice)}</span>
+                )}
+                <span className="font-serif text-lg sm:text-2xl text-[#E2CFA3] tracking-wide">
+                  {BRL.format(p.effectivePrice)}
+                </span>
+              </div>
+
+              {!isEsgotado && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggle(p); }}
+                  className={`mt-3.5 sm:mt-6 inline-flex items-center justify-center gap-2 px-5 sm:px-8 py-2 sm:py-2.5 text-[10px] sm:text-[11px] font-medium uppercase tracking-[0.15em] sm:tracking-[0.2em] transition-all duration-500 ${
+                    isSelected
+                      ? 'bg-[#E2CFA3] text-[#292620]'
+                      : 'text-[#E2CFA3] ring-1 ring-[#C8A96E]/40 hover:bg-[#E2CFA3] hover:text-[#292620]'
+                  }`}
+                >
+                  {isSelected ? '✓ Selecionada' : 'Selecionar'}
+                </button>
+              )}
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
 }
 
 function PromotionCarousel({ onSelectProduct }: { onSelectProduct: (productId: string) => void }) {

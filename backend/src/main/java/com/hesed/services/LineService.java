@@ -37,6 +37,12 @@ public class LineService {
                 .stream().map(Line::getName).toList();
     }
 
+    /** Nomes das linhas ativas marcadas como luxo (para derivar o flag no catálogo). */
+    public java.util.Set<String> luxoNames() {
+        return lineRepository.findByLuxoTrueAndActiveTrueOrderBySortOrderAscNameAsc()
+                .stream().map(Line::getName).collect(java.util.stream.Collectors.toSet());
+    }
+
     public LineResponse findById(UUID id) {
         Line l = lineRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Linha não encontrada."));

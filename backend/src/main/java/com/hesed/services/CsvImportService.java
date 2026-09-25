@@ -137,6 +137,9 @@ public class CsvImportService {
                     req.setSku(sku.trim());
                     req.setName(name.trim());
                     req.setCategory(parseCategory(getField(record, headerMap, "category")));
+                    // Linha (opcional): se o CSV não tiver a coluna, fica null e não altera o produto.
+                    String lineRaw = getField(record, headerMap, "line");
+                    req.setLine(lineRaw != null && !lineRaw.isBlank() ? lineRaw.trim() : null);
                     req.setSalePrice(parsePrice(getField(record, headerMap, "salePrice")));
                     req.setCostPrice(parsePrice(getField(record, headerMap, "costPrice")));
                     req.setStockStatus(parseStockStatus(getField(record, headerMap, "stockStatus")));
@@ -174,6 +177,8 @@ public class CsvImportService {
                 map.put("name", h);
             } else if (lower.contains("categoria") || lower.contains("category")) {
                 map.put("category", h);
+            } else if (lower.equals("linha") || lower.equals("line")) {
+                map.put("line", h);
             } else if (lower.contains("venda") || lower.contains("sale")) {
                 map.put("salePrice", h);
             } else if (lower.contains("custo") || lower.contains("cost")) {

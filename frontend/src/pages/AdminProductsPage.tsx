@@ -7,6 +7,7 @@ interface Product {
   name: string;
   description: string | null;
   category: string;
+  line: string | null;
   imageUrl: string | null;
   imageUrls: string[] | null;
   supplierPrice: number | null;
@@ -375,6 +376,7 @@ function ProductModal({ product, onClose, onSaved }: {
     name: product?.name ?? '',
     description: product?.description ?? '',
     category: product?.category ?? '',
+    line: product?.line ?? '',
     supplierPrice: product?.supplierPrice != null ? product.supplierPrice.toString() : '',
     costPrice: product?.costPrice?.toString() ?? '',
     salePrice: product?.salePrice?.toString() ?? '',
@@ -399,6 +401,7 @@ function ProductModal({ product, onClose, onSaved }: {
   });
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
+  const [lines, setLines] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -408,6 +411,10 @@ function ProductModal({ product, onClose, onSaved }: {
     api.get('/admin/categories')
       .then((res) => setCategories(res.data.filter((c: any) => c.active).map((c: any) => c.name)))
       .catch(() => setCategories([]));
+    // Linhas ativas (cadastro de linhas) para o seletor do produto.
+    api.get('/admin/lines')
+      .then((res) => setLines(res.data.filter((l: any) => l.active).map((l: any) => l.name)))
+      .catch(() => setLines([]));
   }, []);
 
   // Status de estoque derivado (espelha a regra do backend) para pré-visualização.
@@ -494,6 +501,7 @@ function ProductModal({ product, onClose, onSaved }: {
       sku: form.sku,
       name: form.name,
       category: form.category,
+      line: form.line || null,
       description: form.description || null,
       supplierPrice: form.supplierPrice ? parseFloat(form.supplierPrice) : null,
       costPrice: parseFloat(form.costPrice),
@@ -556,6 +564,20 @@ function ProductModal({ product, onClose, onSaved }: {
                 ).map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-stone-600 mb-1">Linha</label>
+            <select value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })}
+              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none">
+              <option value="">Nenhuma</option>
+              {/* Garante que a linha atual do produto apareça mesmo se ela
+                  tiver sido inativada/renomeada no cadastro. */}
+              {(form.line && !lines.includes(form.line)
+                ? [form.line, ...lines]
+                : lines
+              ).map((l) => <option key={l} value={l}>{l}</option>)}
+            </select>
           </div>
 
           <div>

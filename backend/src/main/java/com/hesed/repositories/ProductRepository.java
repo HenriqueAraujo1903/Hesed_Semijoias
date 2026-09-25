@@ -26,11 +26,13 @@ public interface ProductRepository extends JpaRepository<Product, UUID> {
 
     @Query("SELECT p FROM Product p WHERE " +
            "(:category IS NULL OR p.category = :category) AND " +
+           "(:line IS NULL OR p.line = :line) AND " +
            "(:stockStatus IS NULL OR p.stockStatus = :stockStatus) AND " +
            "(:search IS NULL OR (LOWER(p.name) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
            "OR LOWER(p.sku) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))) " +
            "ORDER BY p.createdAt DESC")
     List<Product> findFiltered(@Param("category") String category,
+                               @Param("line") String line,
                                @Param("stockStatus") String stockStatus,
                                @Param("search") String search);
 

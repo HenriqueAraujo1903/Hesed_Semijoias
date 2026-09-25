@@ -25,6 +25,10 @@ public class ProductRequest {
 
     private String category = "Brinco";
 
+    /** Linha do produto (opcional). Alimentada pelo cadastro de Linhas. */
+    @Size(max = 50, message = "Linha deve ter no máximo 50 caracteres")
+    private String line;
+
     /** Foto principal (capa). Opcional se imageUrls for informado. */
     private String imageUrl;
 

@@ -19,10 +19,13 @@ public class ProductController {
 
     private final ProductService productService;
     private final CategoryService categoryService;
+    private final com.hesed.services.LineService lineService;
 
-    public ProductController(ProductService productService, CategoryService categoryService) {
+    public ProductController(ProductService productService, CategoryService categoryService,
+                             com.hesed.services.LineService lineService) {
         this.productService = productService;
         this.categoryService = categoryService;
+        this.lineService = lineService;
     }
 
     /** Nomes das categorias ativas (fonte dos seletores/filtros). Público. */
@@ -31,12 +34,19 @@ public class ProductController {
         return ResponseEntity.ok(categoryService.activeNames());
     }
 
+    /** Nomes das linhas ativas (fonte do filtro de linha do catálogo). Público. */
+    @GetMapping("/lines")
+    public ResponseEntity<List<String>> lines() {
+        return ResponseEntity.ok(lineService.activeNames());
+    }
+
     @GetMapping
     public ResponseEntity<List<PublicProductResponse>> getAll(
             @RequestParam(required = false) String category,
+            @RequestParam(required = false) String line,
             @RequestParam(required = false) String stockStatus,
             @RequestParam(required = false) String search) {
-        return ResponseEntity.ok(productService.findAllPublic(category, stockStatus, search));
+        return ResponseEntity.ok(productService.findAllPublic(category, line, stockStatus, search));
     }
 
     @GetMapping("/catalog")

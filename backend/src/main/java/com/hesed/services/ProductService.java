@@ -23,30 +23,35 @@ public class ProductService {
     private final ProductRepository productRepository;
     private final SupplierRepository supplierRepository;
     private final PromotionRepository promotionRepository;
+    private final LineService lineService;
 
     public ProductService(ProductRepository productRepository,
                           SupplierRepository supplierRepository,
-                          PromotionRepository promotionRepository) {
+                          PromotionRepository promotionRepository,
+                          LineService lineService) {
         this.productRepository = productRepository;
         this.supplierRepository = supplierRepository;
         this.promotionRepository = promotionRepository;
+        this.lineService = lineService;
     }
 
     // ---- Visão PÚBLICA (catálogo, sem auth): não expõe custo/estoque/fornecedor ----
 
-    public List<PublicProductResponse> findAllPublic(String category, String stockStatus, String search) {
+    public List<PublicProductResponse> findAllPublic(String category, String line, String stockStatus, String search) {
         Map<UUID, Promotion> promoByProduct = activePromotionsByProduct();
-        return productRepository.findFiltered(category, stockStatus, search)
+        java.util.Set<String> luxoNames = lineService.luxoNames();
+        return productRepository.findFiltered(category, line, stockStatus, search)
                 .stream()
-                .map(p -> PublicProductResponse.from(p, promoByProduct.get(p.getId())))
+                .map(p -> PublicProductResponse.from(p, promoByProduct.get(p.getId()), luxoNames))
                 .toList();
     }
 
     public List<PublicProductResponse> findForCatalog() {
         Map<UUID, Promotion> promoByProduct = activePromotionsByProduct();
+        java.util.Set<String> luxoNames = lineService.luxoNames();
         return productRepository.findAllForCatalog()
                 .stream()
-                .map(p -> PublicProductResponse.from(p, promoByProduct.get(p.getId())))
+                .map(p -> PublicProductResponse.from(p, promoByProduct.get(p.getId()), luxoNames))
                 .toList();
     }
 
@@ -69,7 +74,7 @@ public class ProductService {
     // ---- Visão ADMIN (autenticada): dados completos, incluindo custo/estoque ----
 
     public List<ProductResponse> findAllAdmin(String category, String stockStatus, String search) {
-        return productRepository.findFiltered(category, stockStatus, search)
+        return productRepository.findFiltered(category, null, stockStatus, search)
                 .stream()
                 .map(ProductResponse::from)
                 .toList();
@@ -83,7 +88,7 @@ public class ProductService {
 
     /** Usado internamente pelo import CSV para checar existência por SKU. */
     public boolean existsAnyBySearch(String search) {
-        return !productRepository.findFiltered(null, null, search).isEmpty();
+        return !productRepository.findFiltered(null, null, null, search).isEmpty();
     }
 
     @Transactional
@@ -97,6 +102,7 @@ public class ProductService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .category(request.getCategory())
+                .line(trimToNull(request.getLine()))
                 .supplierPrice(request.getSupplierPrice())
                 .costPrice(request.getCostPrice())
                 .salePrice(request.getSalePrice())
@@ -122,6 +128,7 @@ public class ProductService {
         product.setName(request.getName());
         product.setDescription(request.getDescription());
         product.setCategory(request.getCategory());
+        product.setLine(trimToNull(request.getLine()));
         product.setSupplierPrice(request.getSupplierPrice());
         product.setCostPrice(request.getCostPrice());
         product.setSalePrice(request.getSalePrice());
@@ -149,6 +156,8 @@ public class ProductService {
         if (existing != null) {
             existing.setName(request.getName());
             existing.setCategory(request.getCategory());
+            // Só sobrescreve a linha se o request trouxer (evita apagar em reimport sem a coluna).
+            if (request.getLine() != null) existing.setLine(trimToNull(request.getLine()));
             if (request.getSupplierPrice() != null) existing.setSupplierPrice(request.getSupplierPrice());
             existing.setCostPrice(request.getCostPrice());
             existing.setSalePrice(request.getSalePrice());
@@ -165,6 +174,7 @@ public class ProductService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .category(request.getCategory())
+                .line(trimToNull(request.getLine()))
                 .supplierPrice(request.getSupplierPrice())
                 .costPrice(request.getCostPrice())
                 .salePrice(request.getSalePrice())
@@ -177,6 +187,13 @@ public class ProductService {
     }
 
     // ---- helpers ----
+
+    /** Normaliza string: trim; vazio/nulo → null. */
+    private String trimToNull(String s) {
+        if (s == null) return null;
+        String t = s.trim();
+        return t.isEmpty() ? null : t;
+    }
 
     /**
      * Normaliza a galeria de imagens: prioriza imageUrls; se ausente, usa imageUrl

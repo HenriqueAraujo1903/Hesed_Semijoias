@@ -36,6 +36,15 @@ public class Product {
     @Builder.Default
     private String category = "Brinco";
 
+    /**
+     * Linha do produto (ex.: Kids, Pet, Inverno, Verão). Texto livre opcional,
+     * sem FK — espelha o modelo de {@code category} (Opção A). A fonte das
+     * opções é o cadastro de Linhas (entidade {@link Line}); o flag de luxo é
+     * derivado cruzando esta linha com as Lines marcadas como luxo.
+     */
+    @Column(name = "line", length = 50)
+    private String line;
+
     /** Foto principal (capa). Mantida por retrocompatibilidade; espelha a 1ª de imageUrls. */
     @Column(name = "image_url", length = 500)
     private String imageUrl;

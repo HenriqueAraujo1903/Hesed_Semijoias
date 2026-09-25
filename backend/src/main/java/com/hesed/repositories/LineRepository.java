@@ -15,4 +15,7 @@ public interface LineRepository extends JpaRepository<Line, UUID> {
 
     /** Só as ativas, ordenadas — usadas nos seletores públicos/filtros. */
     List<Line> findByActiveTrueOrderBySortOrderAscNameAsc();
+
+    /** Linhas ativas marcadas como luxo — para a seção de luxo do catálogo. */
+    List<Line> findByLuxoTrueAndActiveTrueOrderBySortOrderAscNameAsc();
 }

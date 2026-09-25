@@ -28,6 +28,8 @@ public class PublicProductResponse {
     private String name;
     private String description;
     private String category;
+    private String line;                // linha do produto (texto), quando informada
+    private boolean luxo;               // derivado: a linha do produto é de luxo
     private String imageUrl;
     private List<String> imageUrls;
     private BigDecimal salePrice;       // preço cheio (referência)
@@ -40,21 +42,29 @@ public class PublicProductResponse {
 
     /** Sem promoção: effectivePrice = salePrice. */
     public static PublicProductResponse from(Product p) {
-        return from(p, null);
+        return from(p, null, null);
+    }
+
+    public static PublicProductResponse from(Product p, Promotion promo) {
+        return from(p, promo, null);
     }
 
     /**
-     * Com a promoção ativa resolvida (ou null). O cálculo do preço efetivo é o
-     * MESMO usado ao registrar o pedido (OrderService), garantindo que o cliente
-     * pague exatamente o que vê no catálogo.
+     * Com a promoção ativa resolvida (ou null) e o conjunto de nomes de linhas
+     * de luxo (ou null). O cálculo do preço efetivo é o MESMO usado ao registrar
+     * o pedido (OrderService), garantindo que o cliente pague exatamente o que
+     * vê no catálogo. O flag {@code luxo} é derivado: verdadeiro quando a linha
+     * do produto está entre as linhas marcadas como luxo.
      */
-    public static PublicProductResponse from(Product p, Promotion promo) {
+    public static PublicProductResponse from(Product p, Promotion promo, java.util.Set<String> luxoLineNames) {
         PublicProductResponse r = new PublicProductResponse();
         r.setId(p.getId());
         r.setSku(p.getSku());
         r.setName(p.getName());
         r.setDescription(p.getDescription());
         r.setCategory(p.getCategory());
+        r.setLine(p.getLine());
+        r.setLuxo(p.getLine() != null && luxoLineNames != null && luxoLineNames.contains(p.getLine()));
         r.setImageUrl(p.getImageUrl());
         r.setImageUrls(p.getImageUrls());
         boolean onDemand = Boolean.TRUE.equals(p.getOnDemand());

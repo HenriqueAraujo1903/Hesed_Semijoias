@@ -16,6 +16,7 @@ public class ProductResponse {
     private String name;
     private String description;
     private String category;
+    private String line;
     private String imageUrl;
     private List<String> imageUrls;
     private BigDecimal supplierPrice;
@@ -44,6 +45,7 @@ public class ProductResponse {
         r.setName(p.getName());
         r.setDescription(p.getDescription());
         r.setCategory(p.getCategory());
+        r.setLine(p.getLine());
         r.setImageUrl(p.getImageUrl());
         r.setImageUrls(p.getImageUrls());
         r.setSupplierPrice(p.getSupplierPrice());
