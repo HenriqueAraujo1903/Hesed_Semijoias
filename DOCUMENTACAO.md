@@ -2,7 +2,7 @@
 
 > **Arquivo único de contexto.** Toda a documentação do projeto (arquitetura, features, deploy, fluxo de trabalho, QA e contexto entre sessões) vive aqui. Não há outros arquivos de doc — se precisar de contexto, é este.
 >
-> **Última atualização:** 24/09/2026
+> **Última atualização:** 25/09/2026
 > **Status:** 🟢 Em produção e estável em https://hesedsemijoias.online
 
 ---
@@ -202,7 +202,8 @@ Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, R
 - **Promoções:** CRUD + carrossel público.
 - **Consignação — Fase 1:** lotes com revendedoras. Abrir **reserva** estoque (disponível→reservado, movimento RESERVA); acerto por quantidade vendida; fechar **consome** os vendidos (SAIDA, sem voltar ao disponível), **devolve** o resto (LIBERACAO), gera venda canal **CONSIGNADO** na receita (sem dupla baixa) e apura comissão = totalSold × commissionRate (editável por lote, default da revendedora); cancelar libera todo o reservado.
 - **Consignação — Fase 2 (Dashboard de Revendedoras):** KPIs (total vendido, comissão paga, líquido, taxa de venda + peças consignadas/vendidas/devolvidas + consignações abertas), ranking por revendedora e tabela de consignações em aberto. KPIs/ranking consideram lotes **fechados** cujo `closedAt` caiu no período; os abertos são sempre "agora" (com valor potencial).
-- **Dashboards:** Vendas, Engajamento, Estoque, Promoções, Revendedoras — todos com filtro de período compartilhado (atalhos + intervalo customizado).
+- **Dashboards:** Vendas, Engajamento, Estoque, Promoções, Revendedoras — todos com filtro de período compartilhado (atalhos + intervalo customizado). **Financeiro** (novo) usa horizonte (3/6/12 meses) no lugar do filtro de período, por ser projeção.
+- **Dashboard Financeiro (`/dashboards/financeiro`, ADMIN):** apresenta o **presente** e projeta o **futuro factual** (só o que já está lançado — não é previsão estatística de vendas). *Agora:* saldo de caixa do mês corrente (entradas/saídas), resultado do mês (DRE), a receber em aberto (liquidações de cartão PENDENTE), a pagar em aberto (parcelas PENDENTE, com destaque do que está em atraso) e a posição líquida em aberto. *Caixa realizado:* barras de entradas vs saídas dos últimos 6 meses. *Projeção:* mês a mês, recebíveis a repassar vs contas a pagar a vencer + saldo projetado acumulado (tabela + gráfico). Backend: `GET /api/admin/finance/forecast?months=` (`FinanceForecastResponse`) reaproveita `cashFlow`/`incomeStatement` e novas somas de repositório (`PaymentSettlementRepository.sumPendingBetween/sumAllPending`, `ExpenseInstallmentRepository.sumPendingDueBetween/sumAllPending`) — sem duplicar lógica nem alterar schema.
 - **Metas mensais:** metas de receita/pedidos com herança e trava de alteração (justificativa + auditoria); progresso na Visão Geral.
 - **Financeiro (módulo, aba própria):** quatro áreas —
   - **Fluxo de caixa:** extrato consolidado por período unindo, sem duplicar dados, os recebimentos (pela **data de repasse**), as parcelas de despesa pagas e os lançamentos manuais; KPIs de entradas/saídas/saldo. Como o caixa é dirigido pelas liquidações de `Payment`, pedidos confirmados **anteriores** ao módulo financeiro (sem pagamento registrado) foram trazidos ao caixa por um **backfill idempotente** no `DataInitializer` (ver §9).
@@ -309,7 +310,12 @@ DELETE FROM products WHERE sku LIKE 'QA-%';
 | `dev` | sincronizada | Trabalhar aqui |
 | `homolog` | sincronizada | — |
 
-> As 3 branches estão alinhadas em `79d8e58`. Últimas levas: imagem padrão de produto sem foto (`267f649`), **módulo financeiro** (`7c1017c`), **data de nascimento + notificações de aniversário** (`e8c764f` feature + `26128f0` QA) e **backfill de pagamento p/ vendas antigas no fluxo de caixa** (`79d8e58`).
+> As 3 branches estão alinhadas em `d98827a`. Últimas levas: **módulo financeiro** (`7c1017c`), **data de nascimento + notificações de aniversário** (`e8c764f`), **backfill de pagamento p/ vendas antigas no fluxo de caixa** (`79d8e58`) e **Dashboard Financeiro** (`d98827a`).
+
+### Dashboard Financeiro (`d98827a`) — deploy 25/09/2026
+Novo dashboard em Dashboards → **Financeiro** (`/dashboards/financeiro`, ADMIN), sem alteração de schema. Foco: apresentar o **presente** (saldo de caixa do mês, resultado do mês/DRE, a receber e a pagar em aberto, posição líquida) e projetar o **futuro factual** — o que já está lançado, mês a mês: recebíveis de cartão a repassar (liquidações PENDENTE) vs. parcelas de despesa a vencer, com saldo projetado acumulado. Não é previsão estatística de vendas (opção A acordada). Backend: `GET /api/admin/finance/forecast?months=` → `FinanceForecastResponse` (bloco presente + `history` 6 meses de caixa realizado + `forecast` N meses). `FinanceService.forecast(1..24)` reaproveita `cashFlow`/`incomeStatement` e novas queries de soma pendente (`PaymentSettlementRepository.sumPendingBetween/sumAllPending`, `ExpenseInstallmentRepository.sumPendingDueBetween/sumAllPending`). Frontend: `pages/dashboards/FinanceDashboardPage.tsx` (KpiCard compartilhado + gráficos SVG no padrão dos demais dashboards; seletor de horizonte 3/6/12 meses). Validado em dev e homolog (RBAC 403 sem login; horizonte respeitado). Deploy com backup `hesed_db_pre_dashfinanceiro_20260924_235952.sql.gz`, rebuild Docker + reload Nginx; smoke test HTTPS OK (forecast 200, rota SPA 200).
+
+> **⚠️ Lição de deploy (25/09):** ao reaproveitar um terminal de background para `docker compose up -d --build`, o output pode vir do cache do deploy anterior e mascarar que o rebuild não rodou (o container continua "Up N minutes" antigo, endpoint novo dá 404). **Sempre confirmar o rebuild pelo timestamp de criação do container** (`docker ps --format "{{.CreatedAt}}"`) e por um smoke test do endpoint/asset novo — não confiar só no texto "Recreated/Started".
 
 ### Backfill de pagamento p/ pedidos antigos no fluxo de caixa (`79d8e58`) — deploy 24/09/2026
 Correção sem alteração de schema. O **fluxo de caixa** é dirigido pelas liquidações de `Payment`/`PaymentSettlement`, que só nascem no registro (manual) de pagamento — então pedidos já `CONFIRMADO` **antes** do módulo financeiro ficaram sem pagamento e **não apareciam no caixa** (o DRE já os via, pois lê direto dos pedidos confirmados por competência).
