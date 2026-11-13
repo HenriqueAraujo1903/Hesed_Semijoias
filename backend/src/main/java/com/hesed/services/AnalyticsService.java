@@ -492,7 +492,55 @@ public class AnalyticsService {
         f.setOrderToSale(rate(sales, orders));
         resp.setFunnel(f);
 
+        // Distribuição por hora do dia (0..23, horário de Brasília) e por turno.
+        long[] visitsByHour = new long[24];
+        long[] selectionsByHour = new long[24];
+        for (Object[] r : catalogEventRepository.hourlyByType(fromDt, toDt)) {
+            if (r[0] == null) continue;
+            int hour = Integer.parseInt(r[0].toString().trim());
+            if (hour < 0 || hour > 23) continue;
+            String type = (String) r[1];
+            long count = toLong(r[2]);
+            if ("VIEW".equals(type)) visitsByHour[hour] += count;
+            else if ("SELECT".equals(type)) selectionsByHour[hour] += count;
+        }
+        List<EngagementAnalyticsResponse.HourPoint> byHour = new java.util.ArrayList<>(24);
+        for (int h = 0; h < 24; h++) {
+            EngagementAnalyticsResponse.HourPoint hp = new EngagementAnalyticsResponse.HourPoint();
+            hp.setHour(h);
+            hp.setVisits(visitsByHour[h]);
+            hp.setSelections(selectionsByHour[h]);
+            byHour.add(hp);
+        }
+        resp.setByHour(byHour);
+        resp.setByShift(buildShifts(visitsByHour, selectionsByHour));
+
         return resp;
+    }
+
+    /** Turnos do dia (horário de Brasília): Madrugada 0–5, Manhã 6–11, Tarde 12–17, Noite 18–23. */
+    private List<EngagementAnalyticsResponse.ShiftPoint> buildShifts(long[] visitsByHour, long[] selectionsByHour) {
+        String[][] defs = {
+                {"MADRUGADA", "Madrugada", "00h–05h", "0", "5"},
+                {"MANHA", "Manhã", "06h–11h", "6", "11"},
+                {"TARDE", "Tarde", "12h–17h", "12", "17"},
+                {"NOITE", "Noite", "18h–23h", "18", "23"},
+        };
+        List<EngagementAnalyticsResponse.ShiftPoint> shifts = new java.util.ArrayList<>(4);
+        for (String[] d : defs) {
+            int start = Integer.parseInt(d[3]);
+            int end = Integer.parseInt(d[4]);
+            long v = 0, s = 0;
+            for (int h = start; h <= end; h++) { v += visitsByHour[h]; s += selectionsByHour[h]; }
+            EngagementAnalyticsResponse.ShiftPoint sp = new EngagementAnalyticsResponse.ShiftPoint();
+            sp.setShift(d[0]);
+            sp.setLabel(d[1]);
+            sp.setRange(d[2]);
+            sp.setVisits(v);
+            sp.setSelections(s);
+            shifts.add(sp);
+        }
+        return shifts;
     }
 
     /** Taxa percentual de num/den, protegida contra divisão por zero. */

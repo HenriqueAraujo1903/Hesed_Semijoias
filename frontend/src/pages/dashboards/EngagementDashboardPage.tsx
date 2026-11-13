@@ -12,13 +12,21 @@ interface Kpis {
 }
 interface DayPoint { period: string; visits: number; selections: number; }
 interface SelectedProduct { sku: string; name: string; category: string; selections: number; uniqueSessions: number; }
+interface HourPoint { hour: number; visits: number; selections: number; }
+interface ShiftPoint { shift: string; label: string; range: string; visits: number; selections: number; }
 interface Funnel {
   visits: number; selections: number; orders: number; sales: number;
   visitToSelection: number; selectionToOrder: number; orderToSale: number;
 }
 interface Engagement {
   kpis: Kpis; timeSeries: DayPoint[]; topSelected: SelectedProduct[]; funnel: Funnel;
+  byHour: HourPoint[]; byShift: ShiftPoint[];
 }
+
+// Turnos: mapeia cada turno às horas que abrange (para o filtro "por turno").
+const SHIFT_HOURS: Record<string, [number, number]> = {
+  MADRUGADA: [0, 5], MANHA: [6, 11], TARDE: [12, 17], NOITE: [18, 23],
+};
 
 export default function EngagementDashboardPage() {
   const [data, setData] = useState<Engagement | null>(null);
@@ -103,6 +111,9 @@ export default function EngagementDashboardPage() {
             <EngagementTimeSeries data={data.timeSeries} />
           </div>
 
+          {/* Acessos por horário (turno + hora do dia) */}
+          <HourlyAccessSection byHour={data.byHour} byShift={data.byShift} />
+
           {/* Desejados vs vendidos */}
           <div className="card p-5">
             <h2 className="font-serif text-lg font-semibold text-charcoal-800 dark:text-cream-200 mb-1">Mais desejados vs. vendidos</h2>
@@ -145,6 +156,150 @@ function FunnelChart({ funnel }: { funnel: Funnel }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ─── Acessos por horário: cartões de turno + filtro + gráfico por hora ───────
+function HourlyAccessSection({ byHour, byShift }: { byHour: HourPoint[]; byShift: ShiftPoint[] }) {
+  // Filtro local (afeta só esta seção): 'all' | turno | faixa custom [de, até].
+  const [mode, setMode] = useState<'all' | 'shift' | 'range'>('all');
+  const [shift, setShift] = useState<string>('MANHA');
+  const [rangeStart, setRangeStart] = useState(8);
+  const [rangeEnd, setRangeEnd] = useState(18);
+
+  const hours = byHour ?? [];
+  const totalVisits = hours.reduce((s, h) => s + h.visits, 0);
+
+  // Turno mais forte (por visitas) — destaque.
+  const topShift = (byShift ?? []).reduce<ShiftPoint | null>(
+    (best, s) => (!best || s.visits > best.visits ? s : best), null);
+
+  // Faixa de horas visível conforme o filtro.
+  const [lo, hi] = mode === 'shift'
+    ? SHIFT_HOURS[shift]
+    : mode === 'range'
+      ? [Math.min(rangeStart, rangeEnd), Math.max(rangeStart, rangeEnd)]
+      : [0, 23];
+  const visibleHours = hours.filter((h) => h.hour >= lo && h.hour <= hi);
+  const filteredVisits = visibleHours.reduce((s, h) => s + h.visits, 0);
+  const filteredSelections = visibleHours.reduce((s, h) => s + h.selections, 0);
+
+  return (
+    <div className="card p-5">
+      <div className="flex flex-col gap-1 mb-4">
+        <h2 className="font-serif text-lg font-semibold text-charcoal-800 dark:text-cream-200">Acessos por horário</h2>
+        <p className="text-xs text-charcoal-400">
+          Em que momento do dia as clientes acessam o catálogo (horário de Brasília). Use para programar posts e promoções.
+        </p>
+      </div>
+
+      {/* Cartões de turno */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        {(byShift ?? []).map((s) => {
+          const pct = totalVisits > 0 ? Math.round((s.visits / totalVisits) * 100) : 0;
+          const isTop = topShift?.shift === s.shift && s.visits > 0;
+          return (
+            <div key={s.shift}
+              className={`rounded-2xl border p-4 transition-colors ${
+                isTop
+                  ? 'border-gold-300/60 bg-gold-50 dark:bg-gold-900/20 dark:border-gold-800/40'
+                  : 'border-charcoal-100 dark:border-charcoal-700 bg-white dark:bg-charcoal-800'
+              }`}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-charcoal-500 dark:text-charcoal-400">{s.label}</span>
+                {isTop && <span className="text-[9px] uppercase tracking-wide font-semibold text-gold">Pico</span>}
+              </div>
+              <p className="mt-1 font-serif text-2xl font-semibold text-charcoal-800 dark:text-cream-200">{NUM.format(s.visits)}</p>
+              <p className="text-[11px] text-charcoal-400 dark:text-charcoal-500">{s.range} · {pct}% das visitas</p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Filtro (afeta só esta seção) */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="flex rounded-lg border border-charcoal-200 dark:border-charcoal-600 overflow-hidden">
+          {([['all', 'Dia todo'], ['shift', 'Por turno'], ['range', 'Faixa de horário']] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setMode(k)}
+              className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                mode === k ? 'bg-gold text-white' : 'text-charcoal-500 dark:text-charcoal-400 hover:bg-cream-100 dark:hover:bg-charcoal-700'
+              }`}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'shift' && (
+          <select value={shift} onChange={(e) => setShift(e.target.value)} className="input-field py-1.5 text-sm w-auto">
+            {(byShift ?? []).map((s) => <option key={s.shift} value={s.shift}>{s.label} ({s.range})</option>)}
+          </select>
+        )}
+
+        {mode === 'range' && (
+          <div className="flex items-center gap-2 text-sm text-charcoal-500 dark:text-charcoal-400">
+            <span>das</span>
+            <select value={rangeStart} onChange={(e) => setRangeStart(parseInt(e.target.value, 10))} className="input-field py-1.5 text-sm w-auto">
+              {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}h</option>)}
+            </select>
+            <span>às</span>
+            <select value={rangeEnd} onChange={(e) => setRangeEnd(parseInt(e.target.value, 10))} className="input-field py-1.5 text-sm w-auto">
+              {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, '0')}h</option>)}
+            </select>
+          </div>
+        )}
+
+        {mode !== 'all' && (
+          <span className="text-xs text-charcoal-400 dark:text-charcoal-500 ml-auto">
+            {NUM.format(filteredVisits)} visitas · {NUM.format(filteredSelections)} seleções no recorte
+          </span>
+        )}
+      </div>
+
+      {/* Gráfico por hora do dia */}
+      <HourlyChart hours={hours} lo={lo} hi={hi} />
+    </div>
+  );
+}
+
+// Barras por hora (0..23). Horas fora do recorte ficam esmaecidas.
+function HourlyChart({ hours, lo, hi }: { hours: HourPoint[]; lo: number; hi: number }) {
+  if (hours.length === 0 || hours.every((h) => h.visits === 0 && h.selections === 0)) return <EmptyChart />;
+  const max = Math.max(...hours.map((h) => Math.max(h.visits, h.selections)), 1);
+  return (
+    <div>
+      <div className="overflow-x-auto pb-1">
+        <div style={{ minWidth: '640px' }}>
+          <div className="flex items-end gap-1 h-44">
+            {hours.map((h) => {
+              const inRange = h.hour >= lo && h.hour <= hi;
+              return (
+                <div key={h.hour} className={`flex-1 h-full flex flex-col items-center justify-end gap-0.5 group relative min-w-[18px] transition-opacity ${inRange ? '' : 'opacity-25'}`}>
+                  <div className="absolute -top-10 hidden group-hover:block bg-charcoal-800 text-white text-[10px] rounded px-2 py-1 whitespace-nowrap z-10">
+                    {String(h.hour).padStart(2, '0')}h · {h.visits} visitas · {h.selections} seleções
+                  </div>
+                  <div className="w-full flex items-end justify-center gap-0.5 h-full">
+                    <div className="w-1/2 max-w-[10px] rounded-t bg-blue-400/80" style={{ height: `${(h.visits / max) * 100}%` }} />
+                    <div className="w-1/2 max-w-[10px] rounded-t bg-violet-400/80" style={{ height: `${(h.selections / max) * 100}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex gap-1 mt-2">
+            {hours.map((h) => (
+              <div key={h.hour} className="flex-1 text-center min-w-[18px]">
+                <span className={`text-[8px] ${h.hour % 2 === 0 ? 'text-charcoal-400' : 'text-transparent'}`}>{String(h.hour).padStart(2, '0')}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="flex gap-4 mt-3 text-xs">
+        <span className="flex items-center gap-1.5 text-charcoal-500"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400/80" /> Visitas</span>
+        <span className="flex items-center gap-1.5 text-charcoal-500"><span className="h-2.5 w-2.5 rounded-sm bg-violet-400/80" /> Seleções</span>
+        <span className="ml-auto text-charcoal-300">horas em Brasília · role para ver todas →</span>
+      </div>
     </div>
   );
 }

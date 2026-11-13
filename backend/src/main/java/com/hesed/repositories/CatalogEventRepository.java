@@ -45,4 +45,23 @@ public interface CatalogEventRepository extends JpaRepository<CatalogEvent, UUID
            "ORDER BY COUNT(e.id) DESC")
     List<Object[]> topSelectedProducts(@Param("from") LocalDateTime from,
                                        @Param("to") LocalDateTime to);
+
+    /**
+     * Distribuição por HORA DO DIA (0..23) e tipo, no horário de Brasília.
+     * A coluna created_at é gravada em UTC (timestamp sem fuso); convertemos
+     * para America/Sao_Paulo antes de extrair a hora, para que os turnos
+     * reflitam o horário real das clientes (trata inclusive horário de verão
+     * histórico). Query nativa porque JPQL não suporta AT TIME ZONE.
+     * Retorna: [hora (texto '00'..'23'), tipo, total].
+     */
+    @Query(value =
+           "SELECT to_char((created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'HH24') AS hora, " +
+           "type, COUNT(id) " +
+           "FROM catalog_events " +
+           "WHERE created_at >= :from AND created_at <= :to " +
+           "GROUP BY hora, type " +
+           "ORDER BY hora ASC",
+           nativeQuery = true)
+    List<Object[]> hourlyByType(@Param("from") LocalDateTime from,
+                                @Param("to") LocalDateTime to);
 }
