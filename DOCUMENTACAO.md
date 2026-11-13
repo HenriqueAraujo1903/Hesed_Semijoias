@@ -2,7 +2,7 @@
 
 > **Arquivo único de contexto.** Toda a documentação do projeto (arquitetura, features, deploy, fluxo de trabalho, QA e contexto entre sessões) vive aqui. Não há outros arquivos de doc — se precisar de contexto, é este.
 >
-> **Última atualização:** 13/11/2026 (melhorias de catálogo em produção)
+> **Última atualização:** 13/11/2026 (Black Friday: selo de desconto + catálogo escuro fixo em produção)
 > **Status:** 🟢 Em produção e estável em https://hesedsemijoias.online
 
 ---
@@ -342,7 +342,18 @@ SELECT count(*) FROM orders o WHERE NOT EXISTS (SELECT 1 FROM order_items i WHER
 | `homolog` | = `main` | — |
 | `dev` | = `main` | Trabalhar aqui |
 
-> As 3 branches estão alinhadas em `e27b197` (deploy de 13/11/2026). Últimas levas: **melhorias de catálogo** (`42173d1` + `e27b197`), **isolamento da VPS compartilhada + limpeza** (`2c361c8`), **remoção de senhas da doc** (`a9f8370`) e **acessos por horário** (`c82fb36` + correção de fuso `7d91282`). Backups pré-deploy: `/root/backups/hesed_db_pre_melhoriascatalogo_20261113_213536.sql.gz` (melhorias de catálogo) e `/root/backups/hesed_db_pre_horario_20261113_162420.sql.gz` (acessos por horário).
+> As 3 branches estão alinhadas (deploy de 13/11/2026). Últimas levas: **Black Friday no catálogo** (`1e7da20` + `b9bccfc` + `907779b`), **melhorias de catálogo** (`42173d1` + `e27b197`), **isolamento da VPS compartilhada + limpeza** (`2c361c8`), **remoção de senhas da doc** (`a9f8370`) e **acessos por horário** (`c82fb36` + correção de fuso `7d91282`). Backups pré-deploy: `/root/backups/hesed_db_pre_blackfriday_20261113_231024.sql.gz` (Black Friday), `/root/backups/hesed_db_pre_melhoriascatalogo_20261113_213536.sql.gz` (melhorias de catálogo) e `/root/backups/hesed_db_pre_horario_20261113_162420.sql.gz` (acessos por horário).
+
+### Black Friday no catálogo: selo de desconto + modo escuro fixo (`1e7da20` + `b9bccfc` + `907779b`) — deploy 13/11/2026
+Mudança **só de frontend** (sem backend/schema).
+- **Selo de % de desconto** nos cards: pílula vermelha no canto inferior esquerdo da foto (`-18%`), além de um chip ao lado do preço riscado (só a partir de telas `sm`; no celular o chip empurrava o botão "Selecionar"). Na Linha Luxo vira um selo dourado discreto; o modal mostra "% OFF". O percentual vem da promoção; em promoções de **preço fixo** (o catálogo público devolve `discountPercent: null` nesses casos) é calculado de `salePrice` × `effectivePrice` (`discountPct()` em `CatalogoPage.tsx`). Descontos < 1% e peças **esgotadas** (não sob encomenda) não exibem selo.
+- **Catálogo fixo em modo escuro** (`/catalogo`): não altera nem grava a preferência de tema do usuário (o painel admin segue a escolha de cada um); o botão de tema some no catálogo. O `ThemeProvider` aplica o tema efetivo por rota (`useLayoutEffect`).
+- **Sem lampejo claro no celular:** `public/theme-init.js` (externo e síncrono no `<head>`) aplica `dark` antes da primeira pintura. Tem que ser arquivo externo porque a CSP do Nginx é `script-src 'self'` (script inline seria bloqueado). Medido em build de produção com CPU 6x mais lenta: a 1ª pintura saía clara (~0,8 s) antes da correção.
+- **Como ENCERRAR a campanha:** em `frontend/public/theme-init.js` mude `FORCE_DARK_CATALOG` para `false` (é o único interruptor; o React lê `window.__FORCE_DARK_CATALOG__`) e faça o deploy do frontend. Testado: com `false` o catálogo volta a respeitar a preferência clara/escura. Usuários com o PWA instalado podem demorar a receber a atualização.
+
+**QA (homolog, navegador real + suítes):** 66 checagens E2E de navegador (selo correto nos 139 produtos contra um oráculo independente; casos de borda 15%, 90%, 12,5%→13%, <1% sem selo, esgotado sem selo; Linha Luxo; modal; sacola com preço promocional; CTA do WhatsApp; tema com preferência clara/escura/vazia, navegação interna, preservação da preferência do admin; 1ª pintura escura; mobile 390) + `qa_seguranca` 306, `qa_homolog` 399, `qa_leva_config` 233 — 0 falhas. A inspeção visual achou 3 defeitos que foram corrigidos antes do deploy (lampejo claro, chip empurrando o botão, selo em peça esgotada).
+**Achado pré-existente (não corrigido):** no celular (2 colunas) o botão "Selecionar" já fica colado/cortado na borda direita do card em produção (73 de 86 cards no teste) — preço e botão disputam a mesma linha.
+**Deploy (VPS compartilhada com o ChurchStage):** backup `hesed_db_pre_blackfriday_20261113_231024.sql.gz`; rebuild **somente do `frontend`** com `docker compose up -d --build --no-deps frontend` (backend, banco, Nginx e ChurchStage não foram recriados — timestamps conferidos) + `nginx -t` e `nginx -s reload` (nunca restart). Smoke test HTTPS: catálogo/login/API 200, `theme-init.js` 200 (`application/javascript`), bundle novo servido, sem vazamento de custo/estoque; ChurchStage idêntico antes/depois (200 / www 301). Navegador real em produção: 13/13 (escuro com preferência clara, sem erro de CSP, 1ª pintura escura em desktop e celular lento).
 
 ### Melhorias de catálogo (`42173d1` + `e27b197`) — deploy 13/11/2026
 Quatro melhorias no catálogo público (`CatalogoPage.tsx`) e uma mudança mínima no backend, sem alteração de schema.
