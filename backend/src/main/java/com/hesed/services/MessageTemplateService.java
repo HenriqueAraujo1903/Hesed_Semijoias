@@ -30,10 +30,6 @@ public class MessageTemplateService {
                 .toList();
     }
 
-    public MessageTemplateResponse findByKey(String key) {
-        return MessageTemplateResponse.from(getOrThrow(key));
-    }
-
     @Transactional
     public MessageTemplateResponse update(String key, MessageTemplateRequest request) {
         MessageTemplate t = getOrThrow(key);

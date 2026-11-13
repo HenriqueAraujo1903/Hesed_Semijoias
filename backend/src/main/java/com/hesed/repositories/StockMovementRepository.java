@@ -14,8 +14,6 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, UU
 
     List<StockMovement> findByProductIdOrderByCreatedAtDesc(UUID productId);
 
-    List<StockMovement> findTop100ByOrderByCreatedAtDesc();
-
     /**
      * Movimentações dentro de um intervalo (inclusivo), com o produto carregado
      * (evita LAZY/N+1 no dashboard). Ordena da mais recente para a mais antiga.

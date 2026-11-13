@@ -11,9 +11,6 @@ import java.util.List;
 import java.util.UUID;
 
 public interface ConsignmentRepository extends JpaRepository<Consignment, UUID> {
-    List<Consignment> findByStatusOrderByOpenedAtDesc(String status);
-    List<Consignment> findAllByOrderByOpenedAtDesc();
-
     @Query("SELECT DISTINCT c FROM Consignment c LEFT JOIN FETCH c.consignee " +
         "WHERE (:status IS NULL OR c.status = :status) ORDER BY c.openedAt DESC")
     List<Consignment> findFiltered(@Param("status") String status);

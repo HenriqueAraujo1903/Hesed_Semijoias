@@ -11,8 +11,6 @@ import java.util.UUID;
 
 public interface ExpenseInstallmentRepository extends JpaRepository<ExpenseInstallment, UUID> {
 
-    List<ExpenseInstallment> findByExpenseIdOrderByInstallmentNumberAsc(UUID expenseId);
-
     /**
      * Parcelas com vencimento no período, ordenadas por vencimento. Usado para
      * a agenda de contas a pagar (mês a mês). Traz a despesa/categoria/fornecedor.
@@ -23,11 +21,6 @@ public interface ExpenseInstallmentRepository extends JpaRepository<ExpenseInsta
            "WHERE i.dueDate >= :from AND i.dueDate <= :to " +
            "ORDER BY i.dueDate ASC")
     List<ExpenseInstallment> findDueBetween(@Param("from") LocalDate from, @Param("to") LocalDate to);
-
-    /** Total de parcelas PAGAS (por paidAt) no período — saída de caixa efetiva. */
-    @Query("SELECT COALESCE(SUM(i.amount),0) FROM ExpenseInstallment i " +
-           "WHERE i.status = 'PAGO' AND i.paidAt >= :from AND i.paidAt <= :to")
-    java.math.BigDecimal sumPaidInRange(@Param("from") LocalDate from, @Param("to") LocalDate to);
 
     /** Total ainda em aberto (PENDENTE) com vencimento até a data informada. */
     @Query("SELECT COALESCE(SUM(i.amount),0) FROM ExpenseInstallment i " +

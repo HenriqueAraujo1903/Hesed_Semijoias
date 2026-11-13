@@ -101,10 +101,6 @@ public class CsvImportService {
         return URI.create(csvUrl);
     }
 
-    public Map<String, Object> importFromCsvContent(String csvContent) {
-        return parseCsvAndUpsert(csvContent);
-    }
-
     private Map<String, Object> parseCsvAndUpsert(String csvText) {
         int created = 0;
         int updated = 0;

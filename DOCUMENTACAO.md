@@ -226,10 +226,20 @@ Menu (DashboardLayout): Visão Geral, Dashboards, Pedidos, Estoque, Cadastros, R
 ## 7. Infraestrutura e deploy
 
 ### Containers (`docker-compose.yml`)
-`hesed-postgres` (16-alpine, volume `postgres_data`, não exposto) · `hesed-backend` (Spring, profile prod, volume `uploads_data`, healthcheck em `/api/products/catalog`) · `hesed-frontend` (React+Nginx interno) · `hesed-nginx` (portas 80/443, proxy + SSL) · `hesed-certbot` (renova Let's Encrypt a cada 12h).
+`hesed-postgres` (16-alpine, volume `postgres_data`, não exposto) · `hesed-backend` (Spring, profile prod, volume `uploads_data`, healthcheck em `/api/products/catalog`) · `hesed-frontend` (React+Nginx interno) · `hesed-nginx` (portas 80/443, proxy + SSL).
+**SSL:** emissão inicial via `init-ssl.sh`; renovação pelo cron da VPS (`/root/renew-certs.sh`, 03:17 e 15:17 UTC), que roda `certbot/certbot` avulso nos volumes `certbot_*` e recarrega o Nginx. Não existe mais container `hesed-certbot`.
+
+### VPS compartilhada com o ChurchStage
+A VPS também hospeda o **ChurchStage** (`/opt/churchstage`, deploy por `deploy/update.sh`). Regras para os dois não conflitarem:
+- **Um único Nginx** (`hesed-nginx`) atende os dois domínios. O bloco do ChurchStage fica entre `# >>> CHURCHSTAGE` e `# <<< CHURCHSTAGE` no `nginx/nginx.conf` **deste repositório** (o script `deploy/nginx/apply.sh` do ChurchStage troca só esse trecho).
+- **Redes isoladas:** `hesed_semijoias_default` só tem containers do Hesed. A rede de borda `vps_edge` (externa, criada uma vez com `docker network create vps_edge`) tem só o `hesed-nginx` e o backend/frontend do ChurchStage. Assim o ChurchStage não enxerga o `postgres`/`backend`/`frontend` do Hesed.
+- **Upstreams pelo nome do container** (`hesed-backend`, `hesed-frontend`), nunca pelo nome do serviço: os dois projetos têm serviços `backend`/`frontend`, e com o nome do serviço o Nginx chegou a alternar entre eles (tela piscando/logout em loop, nov/2026).
+- **Domínio canônico** `hesedsemijoias.online` (sem www): `www` redireciona 301. As imagens são gravadas com URL absoluta nesse host e a CSP só libera `img-src 'self'`.
+- Certificados dos dois domínios no mesmo volume (`hesed_semijoias_certbot_certs`), renovados pelo mesmo cron.
 
 ### Nginx (`nginx/nginx.conf`)
 `server_tokens off`, gzip, `client_max_body_size 10M`. HTTP→HTTPS (com ACME webroot). HSTS, X-Frame-Options, nosniff, Referrer-Policy e **CSP** restritiva. Rate limit `5r/m` no login. Proxy `/api/` e `/uploads/` → backend, `/` → frontend; força `proxy_cookie_flags jwt HttpOnly SameSite=Strict`.
+**Atenção ao editar na VPS:** o arquivo é montado sozinho no container (bind mount de arquivo). Edite sempre no mesmo inode (`cat novo > nginx.conf`), nunca com `sed -i`/`mv`, senão o container continua lendo a versão antiga. Depois: `docker exec hesed-nginx nginx -t && docker exec hesed-nginx nginx -s reload`.
 
 ### Variáveis (`.env` na VPS — ver `.env.example`)
 `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`, `JWT_SECRET` (`openssl rand -base64 64`), `JWT_EXPIRATION_MS`, `CORS_ALLOWED_ORIGINS`, `UPLOAD_BASE_URL`. Em prod, `COOKIE_SECURE=true` (default do profile). O `.env` nunca vai para o Git.
@@ -250,6 +260,9 @@ ssh root@103.199.184.97 'cd /root/Hesed_Semijoias && git pull origin main'
 # 4. Se o rebuild recriou o container frontend/backend, RECARREGAR o nginx externo
 #    (senão ele mantém o upstream no IP antigo do container e devolve 502):
 #    ssh root@103.199.184.97 'docker exec hesed-nginx nginx -s reload'
+#    Se o deploy ALTEROU nginx/nginx.conf, o git grava um arquivo novo (inode novo)
+#    e o container não o enxerga: recriar o Nginx (queda de ~2s nos dois sites):
+#    ssh root@103.199.184.97 'cd /root/Hesed_Semijoias && docker compose up -d --force-recreate nginx'
 
 # 5. Aguardar backend healthy e fazer smoke test HTTPS:
 #    catálogo público 200, login admin 200, endpoint/asset novo respondendo, schema migrado.

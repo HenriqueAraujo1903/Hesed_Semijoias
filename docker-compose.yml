@@ -74,19 +74,25 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - certbot_certs:/etc/letsencrypt:ro
       - certbot_webroot:/var/www/certbot:ro
-
-  # ============ Certbot (SSL Let's Encrypt) ============
-  certbot:
-    image: certbot/certbot:latest
-    container_name: hesed-certbot
-    volumes:
-      - certbot_certs:/etc/letsencrypt
-      - certbot_webroot:/var/www/certbot
-    # Renovação automática: verifica a cada 12h e renova se necessário
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done'"
+    # SSL: a emissão inicial é feita pelo init-ssl.sh e a renovação pelo cron
+    # da VPS (/root/renew-certs.sh, 2x/dia), que roda o certbot/certbot em um
+    # container avulso nos volumes acima e recarrega este Nginx.
+    # Redes: "default" = rede interna do Hesed (só containers do Hesed);
+    # "edge" = rede de borda compartilhada com o ChurchStage. Só o Nginx entra
+    # nela, então o ChurchStage não enxerga o banco nem os serviços do Hesed.
+    networks:
+      - default
+      - edge
 
 volumes:
   postgres_data:
   uploads_data:
   certbot_certs:
   certbot_webroot:
+
+networks:
+  # Rede de borda da VPS (Nginx do Hesed + backend/frontend do ChurchStage).
+  # Externa: criada uma única vez na VPS com `docker network create vps_edge`.
+  edge:
+    name: vps_edge
+    external: true
