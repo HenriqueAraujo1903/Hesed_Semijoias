@@ -338,13 +338,13 @@ SELECT count(*) FROM orders o WHERE NOT EXISTS (SELECT 1 FROM order_items i WHER
 ### Branches
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `a9f8370` | No ar em https://hesedsemijoias.online |
-| `homolog` | = `dev` | Acessos por horário homologado (QA 13/11), aguardando deploy |
-| `dev` | = `homolog` | Trabalhar aqui |
+| `main` (produção) | = `homolog` = `dev` | No ar em https://hesedsemijoias.online |
+| `homolog` | = `main` | — |
+| `dev` | = `main` | Trabalhar aqui |
 
-> Últimas levas: **isolamento da VPS compartilhada + limpeza** (`2c361c8`, no ar), **remoção de senhas da doc** (`a9f8370`, no ar) e **acessos por horário** (`c82fb36` + correção de fuso `7d91282`, homologado). Ao fazer o deploy, alinhar `main` com `homolog` e atualizar esta tabela.
+> As 3 branches estão alinhadas (deploy de 13/11/2026). Últimas levas: **isolamento da VPS compartilhada + limpeza** (`2c361c8`), **remoção de senhas da doc** (`a9f8370`) e **acessos por horário** (`c82fb36` + correção de fuso `7d91282`). Backup pré-deploy: `/root/backups/hesed_db_pre_horario_20261113_162420.sql.gz`.
 
-### Acessos ao catálogo por horário (`c82fb36` + `7d91282`) — homologado 13/11/2026
+### Acessos ao catálogo por horário (`c82fb36` + `7d91282`) — deploy 13/11/2026
 Dashboard de Engajamento ganha a seção **Acessos por horário**: cartões por turno (Madrugada 0–5h, Manhã 6–11h, Tarde 12–17h, Noite 18–23h, com destaque no pico), filtro local (dia todo / por turno / faixa de horário) e gráfico de barras por hora. O `/api/admin/analytics/engagement` passa a devolver `byHour` (0..23) e `byShift`, sempre no **horário de Brasília**. O `created_at` dos eventos é gravado no fuso do JVM (UTC na VPS, `America/Sao_Paulo` em dev/homolog): o banco agrupa por hora cheia (`date_trunc`) e o service converte de `ZoneId.systemDefault()` para `America/Sao_Paulo`. A 1ª versão assumia UTC e saía 3h adiantada em dev/homolog (corrigido em `7d91282`). Obs.: a série **por dia** do mesmo dashboard (`dailyByType`) ainda agrupa pelo fuso do JVM — em produção os dias são em UTC (eventos depois das 21h de Brasília caem no dia seguinte).
 
 ### Isolamento da VPS compartilhada + limpeza (`2c361c8`) — 11–13/11/2026
