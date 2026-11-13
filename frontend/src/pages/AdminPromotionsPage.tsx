@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
+import BannerUploader from '../components/BannerUploader';
 import { PRODUCT_PLACEHOLDER, handleImageError } from '../utils/image';
 
 interface Promotion {
@@ -304,6 +305,9 @@ function PromotionModal({ promotion, products, onClose, onSaved }: {
               placeholder="Ex: Válido até domingo"
               className="input-field" />
           </div>
+
+          {/* Banner do carrossel */}
+          <BannerUploader value={form.bannerUrl} onChange={(url) => setForm({ ...form, bannerUrl: url })} />
 
           {/* Discount + Promo Price */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
