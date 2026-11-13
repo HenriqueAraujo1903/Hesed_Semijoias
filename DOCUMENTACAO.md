@@ -272,7 +272,7 @@ ssh root@103.199.184.97 'cd /root/Hesed_Semijoias && git pull origin main'
 ### Acesso e credenciais
 - **SSH:** `ssh root@103.199.184.97` (= `srv1939516.hstgr.cloud`).
 - **Domínio:** hesedsemijoias.online (HTTPS Let's Encrypt, renovação automática).
-- **Admin produção:** `suhsilvarodrigues@gmail.com` / `Su!190717` · `henriquecorreadearaujo@gmail.com` / `Pai912510!`
+- **Admin produção:** `suhsilvarodrigues@gmail.com` · `henriquecorreadearaujo@gmail.com`. **Senhas nunca neste arquivo** (o repositório é público): ficam só no gerenciador de senhas do dono.
 - **Migração de schema:** `ddl-auto: update` aplica alterações aditivas no boot; dados preservados. Após deploy, confirmar o schema novo no banco.
 
 ---
