@@ -493,12 +493,14 @@ public class AnalyticsService {
         resp.setFunnel(f);
 
         // Distribuição por hora do dia (0..23, horário de Brasília) e por turno.
+        // O banco devolve horas cheias no fuso em que o created_at foi gravado
+        // (o do JVM); aqui cada hora é convertida para Brasília.
         long[] visitsByHour = new long[24];
         long[] selectionsByHour = new long[24];
-        for (Object[] r : catalogEventRepository.hourlyByType(fromDt, toDt)) {
-            if (r[0] == null) continue;
-            int hour = Integer.parseInt(r[0].toString().trim());
-            if (hour < 0 || hour > 23) continue;
+        for (Object[] r : catalogEventRepository.hourlyBucketsByType(fromDt, toDt)) {
+            LocalDateTime bucket = toLocalDateTime(r[0]);
+            if (bucket == null) continue;
+            int hour = brasiliaHour(bucket, java.time.ZoneId.systemDefault());
             String type = (String) r[1];
             long count = toLong(r[2]);
             if ("VIEW".equals(type)) visitsByHour[hour] += count;
@@ -562,6 +564,27 @@ public class AnalyticsService {
         if (o == null) return 0L;
         if (o instanceof Number n) return n.longValue();
         return Long.parseLong(o.toString());
+    }
+
+    private static final java.time.ZoneId BRASILIA = java.time.ZoneId.of("America/Sao_Paulo");
+
+    /**
+     * Hora (0..23) no horário de Brasília de uma hora cheia gravada no fuso
+     * {@code storedZone} (o fuso do JVM que gravou o created_at). Usa as regras
+     * de fuso do Java, então respeita horário de verão histórico.
+     */
+    static int brasiliaHour(LocalDateTime storedBucket, java.time.ZoneId storedZone) {
+        return storedBucket.atZone(storedZone).withZoneSameInstant(BRASILIA).getHour();
+    }
+
+    /** Converte o timestamp vindo de query nativa (Timestamp/LocalDateTime) para LocalDateTime. */
+    private static LocalDateTime toLocalDateTime(Object o) {
+        if (o == null) return null;
+        if (o instanceof LocalDateTime ldt) return ldt;
+        if (o instanceof java.sql.Timestamp ts) return ts.toLocalDateTime();
+        if (o instanceof java.time.OffsetDateTime odt) return odt.toLocalDateTime();
+        if (o instanceof java.time.Instant i) return LocalDateTime.ofInstant(i, java.time.ZoneId.systemDefault());
+        return LocalDateTime.parse(o.toString().trim().replace(' ', 'T'));
     }
 
     private static BigDecimal scale(BigDecimal v) {

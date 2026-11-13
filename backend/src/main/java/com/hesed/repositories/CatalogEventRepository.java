@@ -47,21 +47,20 @@ public interface CatalogEventRepository extends JpaRepository<CatalogEvent, UUID
                                        @Param("to") LocalDateTime to);
 
     /**
-     * Distribuição por HORA DO DIA (0..23) e tipo, no horário de Brasília.
-     * A coluna created_at é gravada em UTC (timestamp sem fuso); convertemos
-     * para America/Sao_Paulo antes de extrair a hora, para que os turnos
-     * reflitam o horário real das clientes (trata inclusive horário de verão
-     * histórico). Query nativa porque JPQL não suporta AT TIME ZONE.
-     * Retorna: [hora (texto '00'..'23'), tipo, total].
+     * Eventos agrupados por HORA CHEIA (date_trunc) e tipo, no horário em que
+     * foram gravados. O created_at é um timestamp sem fuso, gravado no fuso do
+     * JVM (UTC na VPS, America/Sao_Paulo em dev/homolog), então a conversão
+     * para o horário de Brasília é feita no service, a partir de
+     * ZoneId.systemDefault(), e fica correta em qualquer ambiente.
+     * Query nativa porque JPQL não tem date_trunc.
+     * Retorna: [hora cheia (timestamp), tipo, total].
      */
     @Query(value =
-           "SELECT to_char((created_at AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo'), 'HH24') AS hora, " +
-           "type, COUNT(id) " +
+           "SELECT date_trunc('hour', created_at) AS hora, type, COUNT(id) " +
            "FROM catalog_events " +
            "WHERE created_at >= :from AND created_at <= :to " +
-           "GROUP BY hora, type " +
-           "ORDER BY hora ASC",
+           "GROUP BY hora, type",
            nativeQuery = true)
-    List<Object[]> hourlyByType(@Param("from") LocalDateTime from,
-                                @Param("to") LocalDateTime to);
+    List<Object[]> hourlyBucketsByType(@Param("from") LocalDateTime from,
+                                       @Param("to") LocalDateTime to);
 }
