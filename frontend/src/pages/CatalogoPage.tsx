@@ -22,10 +22,86 @@ interface Product {
   imageUrl: string | null;
   imageUrls: string[] | null;
   description?: string | null;
+  createdAt?: string | null; // data de cadastro (ISO) — base da pílula "Lançamentos"
 }
 
 const WHATSAPP_NUMBER = '5551983396457';
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+
+// Pílula "Lançamentos": peças cadastradas nos últimos N dias, limitadas às NEW_ARRIVALS_MAX mais recentes.
+const NEW_ARRIVALS = 'Lançamentos';
+const NEW_ARRIVALS_DAYS = 15;
+const NEW_ARRIVALS_MAX = 50;
+
+function isNewArrival(p: Product): boolean {
+  if (!p.createdAt || p.stockStatus === 'ESGOTADO') return false;
+  const created = new Date(p.createdAt).getTime();
+  if (Number.isNaN(created)) return false;
+  return Date.now() - created <= NEW_ARRIVALS_DAYS * 24 * 60 * 60 * 1000;
+}
+
+// Data prevista de entrega: hoje + N dias úteis (sábado e domingo não contam).
+function estimatedDeliveryDate(businessDays: number): string {
+  const d = new Date();
+  let left = businessDays;
+  while (left > 0) {
+    d.setDate(d.getDate() + 1);
+    const day = d.getDay();
+    if (day !== 0 && day !== 6) left--;
+  }
+  return d.toLocaleDateString('pt-BR');
+}
+
+// Compra direta de uma peça pelo WhatsApp. Registra o pedido (sem bloquear) e abre o chat.
+// Um orderNumber novo por compra individual, para não misturar com a sacola.
+let lastBuyClick = 0;
+function buyOnWhatsApp(product: Product) {
+  if (product.stockStatus === 'ESGOTADO' && !product.onDemand) return;
+  // Evita pedidos duplicados por duplo clique.
+  const now = Date.now();
+  if (now - lastBuyClick < 2000) return;
+  lastBuyClick = now;
+  const orderNumber = generateOrderNumber();
+  let msg = `Olá! Vi o produto *${product.name}* (Ref: ${product.sku}) no catálogo online e gostaria de finalizar a compra.\n\n*Nº do Pedido:* ${orderNumber}\n*Valor:* ${BRL.format(product.effectivePrice)}`;
+  if (product.onDemand) {
+    msg += product.leadTimeDays
+      ? `\n*Sob encomenda* — previsão de entrega: ${estimatedDeliveryDate(product.leadTimeDays)} (até ${product.leadTimeDays} dias úteis)`
+      : '\n*Sob encomenda*';
+  }
+
+  trackCatalogEvent('SELECT', product.id);
+  axios.post('/api/orders', { productIds: [product.id], orderNumber }).catch((err) => {
+    console.error('Falha ao registrar o pedido (o WhatsApp foi aberto normalmente):', err);
+  });
+  // Síncrono, para não ser bloqueado como popup.
+  window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// Faixa fina de confiança, sempre visível no topo.
+function TrustStrip({ dark }: { dark: boolean }) {
+  const items = [
+    'Banho garantido (Ouro 18K · Prata 1000 · Ródio)',
+    'Compra 100% segura',
+    'Atendimento humanizado no WhatsApp',
+    'Envio para todo o Brasil',
+  ];
+  return (
+    <div className={`border-b transition-colors duration-500 ${
+      dark ? 'bg-[#0E0C0A] border-[#C8A96E]/15' : 'bg-[#FDFBF7] dark:bg-[#141210] border-[#F0E4CC]/60 dark:border-[#292620]'
+    }`}>
+      <ul className="max-w-6xl mx-auto px-4 py-1.5 flex items-center gap-x-5 overflow-x-auto scrollbar-hide md:flex-wrap md:justify-center whitespace-nowrap text-[11px] tracking-wide text-[#96784A] dark:text-[#C9B892]">
+        {items.map((t) => (
+          <li key={t} className="flex items-center gap-1.5 shrink-0">
+            <svg className="w-3 h-3 text-[#C8A96E]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3} aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            {t}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 function generateOrderNumber(): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -76,7 +152,20 @@ export default function CatalogoPage() {
       .catch(() => setLineNames([]));
   }, []);
 
-  const categories = useMemo(() => ['Todos', ...categoryNames], [categoryNames]);
+  // Lançamentos: peças cadastradas nos últimos NEW_ARRIVALS_DAYS dias, mais recentes primeiro.
+  const newArrivals = useMemo(
+    () => products
+      .filter(isNewArrival)
+      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+      .slice(0, NEW_ARRIVALS_MAX),
+    [products]
+  );
+
+  // A pílula só aparece quando há novidades; "Lançamentos" é um modo de exibição, não uma categoria real.
+  const categories = useMemo(
+    () => [...(newArrivals.length > 0 ? [NEW_ARRIVALS] : []), 'Todos', ...categoryNames],
+    [categoryNames, newArrivals.length]
+  );
   const lines = useMemo(() => ['Todas', ...lineNames], [lineNames]);
 
   // Produtos de luxo (linha marcada como luxo) — usados no modo luxo.
@@ -101,11 +190,14 @@ export default function CatalogoPage() {
         (activeLine === 'Todas' || p.line === activeLine)
       );
     }
+    if (activeCategory === NEW_ARRIVALS) {
+      return newArrivals.filter((p) => activeLine === 'Todas' || p.line === activeLine);
+    }
     return products.filter((p) =>
       (activeCategory === 'Todos' || p.category === activeCategory) &&
       (activeLine === 'Todas' || p.line === activeLine)
     );
-  }, [products, activeCategory, activeLine, luxoMode, luxoProducts]);
+  }, [products, activeCategory, activeLine, luxoMode, luxoProducts, newArrivals]);
 
   function expandCartThenCollapse() {
     setCartExpanded(true);
@@ -156,8 +248,9 @@ export default function CatalogoPage() {
     }`}>
 
       {/* ═══════════ STICKY NAV — acesso persistente à Linha Luxo ═══════════ */}
+      <div className="sticky top-0 z-40">
       {luxoProducts.length > 0 && (
-        <div className={`sticky top-0 z-40 backdrop-blur-md border-b transition-colors duration-500 ${
+        <div className={`backdrop-blur-md border-b transition-colors duration-500 ${
           luxoMode
             ? 'bg-[#141210]/90 border-[#C8A96E]/25'
             : 'bg-[#FDFBF7]/85 dark:bg-[#141210]/85 border-[#F0E4CC]/60 dark:border-[#292620]'
@@ -192,6 +285,9 @@ export default function CatalogoPage() {
           </div>
         </div>
       )}
+      {/* Faixa de confiança fina e persistente */}
+      <TrustStrip dark={luxoMode} />
+      </div>
 
       {/* ═══════════ HERO (scrolls with page) ═══════════ */}
       <section className={`relative border-b transition-colors duration-500 ${
@@ -470,6 +566,11 @@ export default function CatalogoPage() {
                     </h3>
                     
                     <p className="text-[10px] text-[#A8A5A0] dark:text-[#5C584F] mb-1 font-mono">Ref: {p.sku}</p>
+                    {p.description?.trim() && (
+                      <p className="text-xs text-[#7A766F] dark:text-[#A8A5A0] leading-snug line-clamp-2 mb-2">
+                        {p.description}
+                      </p>
+                    )}
                     {isOnDemand && (
                       <p className="text-[10px] text-[#96784A] dark:text-[#D4B87A] mb-3 flex items-center gap-1">
                         <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1073,7 +1174,9 @@ function ProductDetailModal({ product, isSelected, onClose, onToggle }: {
                 </svg>
                 <span>
                   <strong>Sob encomenda.</strong>{' '}
-                  {product.leadTimeDays ? `Entrega em até ${product.leadTimeDays} dias úteis.` : 'Feito especialmente para você.'}
+                  {product.leadTimeDays
+                    ? `Entrega em até ${product.leadTimeDays} dias úteis (previsão: ${estimatedDeliveryDate(product.leadTimeDays)}).`
+                    : 'Feito especialmente para você.'}
                 </span>
               </div>
             )}
@@ -1115,6 +1218,17 @@ function ProductDetailModal({ product, isSelected, onClose, onToggle }: {
                   }`}
                 >
                   {isSelected ? '✓ Adicionado — remover' : 'Selecionar peça'}
+                </button>
+              )}
+              {!isEsgotado && (
+                <button
+                  onClick={() => buyOnWhatsApp(product)}
+                  className="mt-2.5 w-full rounded-xl bg-[#25D366] py-3.5 text-sm font-semibold text-white shadow-lg shadow-[#25D366]/25 transition-all duration-200 hover:bg-[#20BD5A] active:scale-[0.98] flex items-center justify-center gap-2"
+                >
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                  </svg>
+                  Comprar pelo WhatsApp
                 </button>
               )}
             </div>

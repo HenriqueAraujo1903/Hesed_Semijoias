@@ -39,6 +39,7 @@ public class PublicProductResponse {
     private String stockStatus;
     private boolean onDemand;           // sob encomenda: comprável mesmo sem estoque
     private Integer leadTimeDays;       // prazo de entrega estimado (dias úteis), quando sob encomenda
+    private java.time.LocalDateTime createdAt; // data de cadastro (usada na pílula "Lançamentos")
 
     /** Sem promoção: effectivePrice = salePrice. */
     public static PublicProductResponse from(Product p) {
@@ -70,6 +71,7 @@ public class PublicProductResponse {
         boolean onDemand = Boolean.TRUE.equals(p.getOnDemand());
         r.setOnDemand(onDemand);
         r.setLeadTimeDays(p.getLeadTimeDays());
+        r.setCreatedAt(p.getCreatedAt());
         // Sob encomenda é sempre comprável: nunca expõe ESGOTADO ao catálogo.
         r.setStockStatus(onDemand ? "DISPONIVEL" : p.getStockStatus());
 
