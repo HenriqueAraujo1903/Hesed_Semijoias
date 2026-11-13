@@ -2,7 +2,7 @@
 
 > **Arquivo único de contexto.** Toda a documentação do projeto (arquitetura, features, deploy, fluxo de trabalho, QA e contexto entre sessões) vive aqui. Não há outros arquivos de doc — se precisar de contexto, é este.
 >
-> **Última atualização:** 13/11/2026 (isolamento da VPS compartilhada + acessos por horário homologado)
+> **Última atualização:** 13/11/2026 (melhorias de catálogo em produção)
 > **Status:** 🟢 Em produção e estável em https://hesedsemijoias.online
 
 ---
@@ -342,7 +342,18 @@ SELECT count(*) FROM orders o WHERE NOT EXISTS (SELECT 1 FROM order_items i WHER
 | `homolog` | = `main` | — |
 | `dev` | = `main` | Trabalhar aqui |
 
-> As 3 branches estão alinhadas (deploy de 13/11/2026). Últimas levas: **isolamento da VPS compartilhada + limpeza** (`2c361c8`), **remoção de senhas da doc** (`a9f8370`) e **acessos por horário** (`c82fb36` + correção de fuso `7d91282`). Backup pré-deploy: `/root/backups/hesed_db_pre_horario_20261113_162420.sql.gz`.
+> As 3 branches estão alinhadas em `e27b197` (deploy de 13/11/2026). Últimas levas: **melhorias de catálogo** (`42173d1` + `e27b197`), **isolamento da VPS compartilhada + limpeza** (`2c361c8`), **remoção de senhas da doc** (`a9f8370`) e **acessos por horário** (`c82fb36` + correção de fuso `7d91282`). Backups pré-deploy: `/root/backups/hesed_db_pre_melhoriascatalogo_20261113_213536.sql.gz` (melhorias de catálogo) e `/root/backups/hesed_db_pre_horario_20261113_162420.sql.gz` (acessos por horário).
+
+### Melhorias de catálogo (`42173d1` + `e27b197`) — deploy 13/11/2026
+Quatro melhorias no catálogo público (`CatalogoPage.tsx`) e uma mudança mínima no backend, sem alteração de schema.
+- **CTA "Comprar pelo WhatsApp"** (verde `#25D366`) no modal da peça: gera um `orderNumber` novo por compra individual, registra o pedido (`POST /api/orders` com 1 produto, não bloqueante) e abre o `wa.me` de forma síncrona; telemetria `SELECT`; trava de duplo clique (2s). Esgotado (não sob encomenda) não mostra o botão. Sob encomenda inclui na mensagem a **data prevista** (hoje + `leadTimeDays` dias úteis, sem sábado/domingo; feriados não são considerados), também exibida no modal.
+- **Descrição no card** da grade normal (`line-clamp-2`, só se houver texto; modo luxo fica sem).
+- **Pílula "Lançamentos"** (antes de "Todos"): peças cadastradas nos últimos **15 dias**, limitadas às **50** mais recentes, sem esgotados; só aparece se houver novidade. Constantes `NEW_ARRIVALS_DAYS` / `NEW_ARRIVALS_MAX`. Backend: `PublicProductResponse` passou a expor `createdAt`.
+- **Faixa de confiança** fina e fixa (sticky) no topo, com versão escura no modo luxo e rolagem horizontal no mobile.
+
+**QA:** unitários 136, qa_homolog 399, qa_leva_config 233, qa_seguranca 306, qa_estoque_dev 262, qa_metas 270, qa_notificacoes 34, qa_financeiro 562, qa_logo_assets 14 — 0 falhas. `createdAt` foi removido da lista de campos proibidos do `qa_seguranca` (S1), pois agora é público de propósito (por isso 311 → 306 checagens). Teste focado: pedido individual 201 com total igual ao preço do catálogo. Deploy com backup `hesed_db_pre_melhoriascatalogo_20261113_213536.sql.gz`, rebuild de backend e frontend (confirmado por timestamp dos containers) + reload do Nginx; smoke test HTTPS OK (catálogo 200 com 110 produtos, `createdAt` em todos, sem vazamento de custo/estoque, bundle novo servido).
+
+**Dev espelhado da produção (13/11):** o catálogo do banco `hesed_db` foi substituído por uma cópia das tabelas de catálogo de produção (produtos, fotos, categorias, linhas, promoções e fornecedores), sem clientes/pedidos/finanças. As URLs das fotos são absolutas (`hesedsemijoias.online/uploads/...`), então o dev lê as imagens direto da produção.
 
 ### Acessos ao catálogo por horário (`c82fb36` + `7d91282`) — deploy 13/11/2026
 Dashboard de Engajamento ganha a seção **Acessos por horário**: cartões por turno (Madrugada 0–5h, Manhã 6–11h, Tarde 12–17h, Noite 18–23h, com destaque no pico), filtro local (dia todo / por turno / faixa de horário) e gráfico de barras por hora. O `/api/admin/analytics/engagement` passa a devolver `byHour` (0..23) e `byShift`, sempre no **horário de Brasília**. O `created_at` dos eventos é gravado no fuso do JVM (UTC na VPS, `America/Sao_Paulo` em dev/homolog): o banco agrupa por hora cheia (`date_trunc`) e o service converte de `ZoneId.systemDefault()` para `America/Sao_Paulo`. A 1ª versão assumia UTC e saía 3h adiantada em dev/homolog (corrigido em `7d91282`). Obs.: a série **por dia** do mesmo dashboard (`dailyByType`) ainda agrupa pelo fuso do JVM — em produção os dias são em UTC (eventos depois das 21h de Brasília caem no dia seguinte).
