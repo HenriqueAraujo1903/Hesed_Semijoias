@@ -6,10 +6,14 @@ type Theme = 'light' | 'dark';
 /**
  * Campanha (Black Friday): fixa o catálogo público (/catalogo) no modo escuro.
  * Não altera nem grava a preferência de tema salva — o painel admin continua
- * usando a escolha de cada usuário. Para encerrar a campanha, basta
- * colocar false aqui.
+ * usando a escolha de cada usuário.
+ *
+ * O interruptor fica em UM só lugar: public/theme-init.js (FORCE_DARK_CATALOG),
+ * que também aplica o tema antes da primeira pintura. Para encerrar a campanha,
+ * mude para false lá. Se o script não carregar, o padrão é manter o escuro.
  */
-export const FORCE_DARK_CATALOG = true;
+export const FORCE_DARK_CATALOG =
+  typeof window === 'undefined' || (window as unknown as { __FORCE_DARK_CATALOG__?: boolean }).__FORCE_DARK_CATALOG__ !== false;
 
 interface ThemeContextType {
   theme: Theme;
