@@ -130,7 +130,8 @@ def s1_vazamento_catalogo():
 
     sensiveis = ["costPrice", "supplierPrice", "stockQuantity", "lowStockThreshold",
                  "supplierId", "supplierName", "purchaseDate", "warrantyMonths",
-                 "warrantyExpiresAt", "createdAt", "updatedAt", "status"]
+                 "warrantyExpiresAt", "updatedAt", "status"]
+    # createdAt é exposto de propósito (pílula "Lançamentos" do catálogo) — decisão do dono.
     publicos_ok = ["id", "sku", "name", "salePrice", "stockStatus", "category"]
 
     for endpoint in ["/api/products/catalog", "/api/products",
