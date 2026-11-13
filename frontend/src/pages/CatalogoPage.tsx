@@ -32,6 +32,8 @@ const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 // em promoções de preço fixo, calcula a partir do preço cheio e do preço efetivo.
 function discountPct(p: Product): number | null {
   if (!p.onSale) return null;
+  // Peça esgotada (e não sob encomenda) não pode ser comprada: não anuncia desconto.
+  if (p.stockStatus === 'ESGOTADO' && !p.onDemand) return null;
   const pct = p.discountPercent != null
     ? Math.round(p.discountPercent)
     : (p.salePrice > 0 && p.effectivePrice < p.salePrice
@@ -606,7 +608,7 @@ export default function CatalogoPage() {
                           <span className="flex items-center gap-1.5 text-[11px] text-[#A8A5A0] dark:text-[#5C584F]">
                             <span className="line-through">{BRL.format(p.salePrice)}</span>
                             {discountPct(p) != null && (
-                              <span className="rounded bg-red-600/90 px-1.5 py-px text-[10px] font-bold text-white no-underline">-{discountPct(p)}%</span>
+                              <span className="hidden rounded bg-red-600/90 px-1.5 py-px text-[10px] font-bold text-white no-underline sm:inline">-{discountPct(p)}%</span>
                             )}
                           </span>
                         )}
