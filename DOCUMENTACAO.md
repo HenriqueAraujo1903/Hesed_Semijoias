@@ -2,7 +2,7 @@
 
 > **Arquivo único de contexto.** Toda a documentação do projeto (arquitetura, features, deploy, fluxo de trabalho, QA e contexto entre sessões) vive aqui. Não há outros arquivos de doc — se precisar de contexto, é este.
 >
-> **Última atualização:** 25/09/2026 (3ª leva do dia)
+> **Última atualização:** 13/11/2026 (isolamento da VPS compartilhada + acessos por horário homologado)
 > **Status:** 🟢 Em produção e estável em https://hesedsemijoias.online
 
 ---
@@ -301,34 +301,54 @@ Parametrização: `QA_BASE`, `QA_ADMIN_EMAIL`, `QA_ADMIN_PASS` (e `QA_DB` no lev
 - **RD:** coerência de KPIs/ranking/abertos, sell-through, ordenação desc, `net = total − comissão`, período futuro zera fechados mantendo abertos.
 - **EN (encoding UTF-8):** regressão do bug do aviso WhatsApp. Verifica que as respostas JSON declaram `Content-Type: application/json;charset=UTF-8` e que um template com emojis (✨ 💛 🛍️ 💰 🥰) e acentos faz roundtrip idêntico pela API (salvar → reler sem corromper).
 
-### Última bateria completa (homolog): **1.611 casos, 0 falhas** (+ `qa_financeiro` **562** + `qa_notificacoes` **34**, 0 falhas)
+### Última bateria completa (homolog, 13/11/2026, commit `7d91282`): **2.207 casos, 0 falhas**
+unit 136 · qa_leva_config 233 · qa_homolog 399 · qa_estoque_dev 262 · qa_metas 270 · qa_notificacoes 34 · qa_financeiro 562 · qa_seguranca 311 · qa_logo_assets 14. Mais um E2E avulso (não versionado) dos **acessos por horário**: 21/21 com o JVM em `America/Sao_Paulo` e em UTC (como a VPS).
+
+### Bateria anterior (homolog): **1.611 casos, 0 falhas** (+ `qa_financeiro` **562** + `qa_notificacoes` **34**, 0 falhas)
 unit 136 (inclui `CategoryServiceTest`: nome único, exclusão bloqueada em uso, exclusão ok sem vínculo) · qa_leva_config 233 (com CG/RD/EN) · qa_homolog 399 · qa_estoque_dev 262 · qa_seguranca 311 · qa_metas 270. Para o módulo financeiro, `qa_financeiro.py` roda **562** casos (regressão do `qa_homolog` + suítes financeiras), 0 falhas. Para a leva de notificações, `qa_notificacoes.py` roda **34** casos (data de nascimento + aniversário), 0 falhas.
 
 Testes unitários cobrem também o **impacto da precificação**: `OrderServiceTest` (snapshot de preço no pedido — unitPrice=venda, costPrice=custo, effectivePrice com override; venda CONSIGNADO usa o preço do lote) e `AnalyticsServiceTest.sales`/`stock` (margem = receita − custo, marginPercent; valor de estoque a custo e a venda). Como o backend só lê custo/venda finais, esses testes travam os pontos financeiros/estoque contra regressão.
 
 **Limpeza de resíduos QA em homolog** (produtos retidos por FK de pedido são comportamento correto; para zerar antes do veredito):
 ```sql
--- remove pedidos que referenciam produtos QA e depois os produtos
-DELETE FROM stock_movements WHERE order_id IN (SELECT DISTINCT oi.order_id FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE p.sku LIKE 'QA-%');
-DELETE FROM order_items WHERE order_id IN (SELECT DISTINCT oi.order_id FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE p.sku LIKE 'QA-%');
-DELETE FROM orders WHERE id IN (SELECT DISTINCT oi.order_id FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE p.sku LIKE 'QA-%');
+-- Rodar tudo numa ÚNICA sessão psql (a tabela temporária vive só nela).
+-- Os pedidos QA são separados ANTES de apagar os itens: a versão antiga apagava
+-- order_items primeiro e a subconsulta de orders voltava vazia, deixando pedidos
+-- órfãos (sem itens) — 229 acumulados até nov/2026, removidos em 13/11.
+BEGIN;
+CREATE TEMP TABLE qa_orders AS
+  SELECT DISTINCT oi.order_id AS id FROM order_items oi JOIN products p ON p.id=oi.product_id WHERE p.sku LIKE 'QA-%';
+DELETE FROM payment_settlements WHERE payment_id IN (SELECT id FROM payments WHERE order_id IN (SELECT id FROM qa_orders));
+DELETE FROM payments WHERE order_id IN (SELECT id FROM qa_orders);
+DELETE FROM stock_movements WHERE order_id IN (SELECT id FROM qa_orders);
+DELETE FROM order_items WHERE order_id IN (SELECT id FROM qa_orders);
+DELETE FROM orders WHERE id IN (SELECT id FROM qa_orders);
 DELETE FROM stock_movements WHERE product_id IN (SELECT id FROM products WHERE sku LIKE 'QA-%');
 DELETE FROM product_images WHERE product_id IN (SELECT id FROM products WHERE sku LIKE 'QA-%');
 DELETE FROM products WHERE sku LIKE 'QA-%';
+COMMIT;
+-- Conferência: deve dar 0
+SELECT count(*) FROM orders o WHERE NOT EXISTS (SELECT 1 FROM order_items i WHERE i.order_id=o.id);
 ```
 
 ---
 
 ## 9. Estado atual e histórico
 
-### Branches (todas alinhadas)
+### Branches
 | Branch | Commit | Situação |
 |--------|--------|----------|
-| `main` (produção) | `e072c02` | No ar em https://hesedsemijoias.online |
-| `dev` | sincronizada | Trabalhar aqui |
-| `homolog` | sincronizada | — |
+| `main` (produção) | `a9f8370` | No ar em https://hesedsemijoias.online |
+| `homolog` | = `dev` | Acessos por horário homologado (QA 13/11), aguardando deploy |
+| `dev` | = `homolog` | Trabalhar aqui |
 
-> As 3 branches estão alinhadas em `e072c02`. Últimas levas: **backfill de pagamento** (`79d8e58`), **Dashboard Financeiro** (`d98827a`), **cadastro de linhas** (`87b1ab3`) e **linha no produto + filtro + modo luxo no catálogo** (`e072c02`).
+> Últimas levas: **isolamento da VPS compartilhada + limpeza** (`2c361c8`, no ar), **remoção de senhas da doc** (`a9f8370`, no ar) e **acessos por horário** (`c82fb36` + correção de fuso `7d91282`, homologado). Ao fazer o deploy, alinhar `main` com `homolog` e atualizar esta tabela.
+
+### Acessos ao catálogo por horário (`c82fb36` + `7d91282`) — homologado 13/11/2026
+Dashboard de Engajamento ganha a seção **Acessos por horário**: cartões por turno (Madrugada 0–5h, Manhã 6–11h, Tarde 12–17h, Noite 18–23h, com destaque no pico), filtro local (dia todo / por turno / faixa de horário) e gráfico de barras por hora. O `/api/admin/analytics/engagement` passa a devolver `byHour` (0..23) e `byShift`, sempre no **horário de Brasília**. O `created_at` dos eventos é gravado no fuso do JVM (UTC na VPS, `America/Sao_Paulo` em dev/homolog): o banco agrupa por hora cheia (`date_trunc`) e o service converte de `ZoneId.systemDefault()` para `America/Sao_Paulo`. A 1ª versão assumia UTC e saía 3h adiantada em dev/homolog (corrigido em `7d91282`). Obs.: a série **por dia** do mesmo dashboard (`dailyByType`) ainda agrupa pelo fuso do JVM — em produção os dias são em UTC (eventos depois das 21h de Brasília caem no dia seguinte).
+
+### Isolamento da VPS compartilhada + limpeza (`2c361c8`) — 11–13/11/2026
+Tela piscando/logout em loop e fotos sumidas após o deploy do ChurchStage na mesma VPS. Causas e correções: upstreams do Nginx pelo nome do serviço (alternava com o ChurchStage) → nome do container; acesso por `www` bloqueava as fotos pela CSP → `www` redireciona para o domínio canônico; ChurchStage dentro da rede interna do Hesed → rede de borda `vps_edge` (ver §7 "VPS compartilhada com o ChurchStage"). Limpeza: arquivos do Railway, dependência `serve`, métodos sem uso, serviço `certbot` do compose.
 
 ### Linha no produto + filtro + modo Luxo no catálogo (`e072c02`) — deploy 25/09/2026
 Pluga o cadastro de Linhas nos produtos e no catálogo. **(1)** `Product.line` (texto opcional, sem FK, espelha `category`); seletor **Linha** no cadastro de produto (admin), persistido em create/update/upsert e aceito no import CSV (coluna "linha"/"line" opcional). **(2)** Catálogo público ganha **filtro por linha** (`?line=` + 2ª fileira de pílulas) e o `PublicProductResponse` passa a expor `line` e `luxo`. **(3)** **Modo Luxo:** barra sticky no topo do catálogo com botão "✦ Linha Luxo" que transforma o catálogo numa **vitrine premium** (fundo escuro/dourado, serif, respiro, cards editoriais com moldura hairline; footer escuro coeso; 2 colunas no mobile) exibindo só os produtos de linhas luxo, com filtros próprios de categoria/linha do acervo luxo. Produtos luxo também aparecem na grade normal com selo. O flag `luxo` é **derivado** (`LineService.luxoNames()` cruzado com `product.line`), não persistido no produto.
