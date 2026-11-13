@@ -28,6 +28,18 @@ interface Product {
 const WHATSAPP_NUMBER = '5551983396457';
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
+// Percentual de desconto para exibir (inteiro). Usa o % da promoção quando existe;
+// em promoções de preço fixo, calcula a partir do preço cheio e do preço efetivo.
+function discountPct(p: Product): number | null {
+  if (!p.onSale) return null;
+  const pct = p.discountPercent != null
+    ? Math.round(p.discountPercent)
+    : (p.salePrice > 0 && p.effectivePrice < p.salePrice
+        ? Math.round((1 - p.effectivePrice / p.salePrice) * 100)
+        : 0);
+  return pct >= 1 ? pct : null;
+}
+
 // Pílula "Lançamentos": peças cadastradas nos últimos N dias, limitadas às NEW_ARRIVALS_MAX mais recentes.
 const NEW_ARRIVALS = 'Lançamentos';
 const NEW_ARRIVALS_DAYS = 15;
@@ -110,7 +122,7 @@ function generateOrderNumber(): string {
 }
 
 export default function CatalogoPage() {
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark, toggleTheme, themeLocked } = useTheme();
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<Product[]>([]);
   const [detailProduct, setDetailProduct] = useState<Product | null>(null);
@@ -312,6 +324,7 @@ export default function CatalogoPage() {
               Atendimento via WhatsApp
             </a>
             <div className="flex items-center gap-3">
+              {!themeLocked && (
               <button
                 onClick={toggleTheme}
                 className="flex items-center justify-center w-8 h-8 rounded-full text-[#A8A5A0] dark:text-[#5C584F] hover:text-[#C8A96E] transition-colors"
@@ -327,6 +340,7 @@ export default function CatalogoPage() {
                   </svg>
                 )}
               </button>
+              )}
               {selected.length > 0 && (
                 <div className="flex items-center gap-1.5 bg-[#C8A96E] px-3 py-1.5 rounded-full">
                   <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -543,6 +557,11 @@ export default function CatalogoPage() {
                     {!isEsgotado && (
                       <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     )}
+                    {discountPct(p) != null && (
+                      <div className="absolute bottom-2 left-2 z-10 rounded-full bg-red-600 px-2.5 py-1 text-xs font-bold tracking-wide text-white shadow-lg ring-1 ring-white/20">
+                        -{discountPct(p)}%
+                      </div>
+                    )}
                     {photoCount > 1 && (
                       <div className="absolute bottom-2 right-2 z-10 flex items-center gap-1 rounded-full bg-black/55 px-2 py-1 text-[10px] font-medium text-white backdrop-blur-sm">
                         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -584,8 +603,11 @@ export default function CatalogoPage() {
                     <div className="flex items-center justify-between">
                       <span className="flex flex-col leading-tight">
                         {p.onSale && (
-                          <span className="text-[11px] text-[#A8A5A0] dark:text-[#5C584F] line-through">
-                            {BRL.format(p.salePrice)}
+                          <span className="flex items-center gap-1.5 text-[11px] text-[#A8A5A0] dark:text-[#5C584F]">
+                            <span className="line-through">{BRL.format(p.salePrice)}</span>
+                            {discountPct(p) != null && (
+                              <span className="rounded bg-red-600/90 px-1.5 py-px text-[10px] font-bold text-white no-underline">-{discountPct(p)}%</span>
+                            )}
                           </span>
                         )}
                         <span className={`font-serif text-xl font-semibold ${p.onSale ? 'text-[#C8A96E]' : 'text-[#292620] dark:text-[#F5F0EA]'}`}>
@@ -876,7 +898,12 @@ function LuxuryGrid({ products, selectedIds, onToggle, onDetail }: {
 
               <div className="flex flex-col items-center leading-tight">
                 {p.onSale && (
-                  <span className="text-[11px] sm:text-xs text-[#6B6459] line-through">{BRL.format(p.salePrice)}</span>
+                  <span className="flex items-center gap-2 text-[11px] sm:text-xs text-[#6B6459]">
+                    <span className="line-through">{BRL.format(p.salePrice)}</span>
+                    {discountPct(p) != null && (
+                      <span className="rounded-sm border border-[#C8A96E]/50 px-1.5 py-px text-[10px] font-semibold tracking-wider text-[#E2CFA3]">-{discountPct(p)}%</span>
+                    )}
+                  </span>
                 )}
                 <span className="font-serif text-lg sm:text-2xl text-[#E2CFA3] tracking-wide">
                   {BRL.format(p.effectivePrice)}
@@ -1197,9 +1224,9 @@ function ProductDetailModal({ product, isSelected, onClose, onToggle }: {
                 <span className={`font-serif text-3xl font-bold ${product.onSale ? 'text-[#C8A96E]' : 'text-[#292620] dark:text-[#F5F0EA]'}`}>
                   {BRL.format(product.effectivePrice)}
                 </span>
-                {product.onSale && product.discountPercent != null && (
+                {discountPct(product) != null && (
                   <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
-                    {product.discountPercent}% OFF
+                    {discountPct(product)}% OFF
                   </span>
                 )}
               </div>

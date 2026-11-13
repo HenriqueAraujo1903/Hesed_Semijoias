@@ -1,11 +1,22 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useLayoutEffect, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 
 type Theme = 'light' | 'dark';
+
+/**
+ * Campanha (Black Friday): fixa o catálogo público (/catalogo) no modo escuro.
+ * Não altera nem grava a preferência de tema salva — o painel admin continua
+ * usando a escolha de cada usuário. Para encerrar a campanha, basta
+ * colocar false aqui.
+ */
+export const FORCE_DARK_CATALOG = true;
 
 interface ThemeContextType {
   theme: Theme;
   toggleTheme: () => void;
   isDark: boolean;
+  /** true quando o tema está travado pela campanha (o botão de alternar deve ser ocultado). */
+  themeLocked: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextType | null>(null);
@@ -21,20 +32,26 @@ function getInitialTheme(): Theme {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const { pathname } = useLocation();
 
-  useEffect(() => {
+  const themeLocked = FORCE_DARK_CATALOG && pathname.startsWith('/catalogo');
+  const effectiveTheme: Theme = themeLocked ? 'dark' : theme;
+
+  // useLayoutEffect: aplica a classe antes da primeira pintura (evita piscar claro→escuro).
+  useLayoutEffect(() => {
     const root = document.documentElement;
     root.classList.remove('light', 'dark');
-    root.classList.add(theme);
-    localStorage.setItem('hesed-theme', theme);
-  }, [theme]);
+    root.classList.add(effectiveTheme);
+    // Com o tema travado não gravamos nada: a preferência do usuário é preservada.
+    if (!themeLocked) localStorage.setItem('hesed-theme', theme);
+  }, [effectiveTheme, themeLocked, theme]);
 
   const toggleTheme = useCallback(() => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   }, []);
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, isDark: theme === 'dark' }}>
+    <ThemeContext.Provider value={{ theme: effectiveTheme, toggleTheme, isDark: effectiveTheme === 'dark', themeLocked }}>
       {children}
     </ThemeContext.Provider>
   );
