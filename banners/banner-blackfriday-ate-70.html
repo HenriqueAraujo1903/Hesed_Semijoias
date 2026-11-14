@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<!--
+  Banner Black Friday — HESED Semijoias (1200x1200).
+  Para mudar o percentual, edite o texto dentro de <span class="pct">.
+  Para gerar o PNG: renderizar esta página em 1200x1200 (ver banners/README no chat).
+  Zona segura: o carrossel corta para 3:4 em telas médias, então todo o texto fica no miolo (900px centrais).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,700;1,500&family=Inter:wght@500;600;700&display=swap" rel="stylesheet" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 1200px; background: #141210; }
+  .banner {
+    position: relative; width: 1200px; height: 1200px; overflow: hidden;
+    background:
+      radial-gradient(ellipse 70% 45% at 50% 38%, rgba(200,169,110,0.20) 0%, rgba(200,169,110,0.05) 45%, transparent 70%),
+      radial-gradient(ellipse 90% 60% at 50% 100%, rgba(150,120,74,0.18) 0%, transparent 60%),
+      linear-gradient(180deg, #1C1A16 0%, #141210 55%, #0E0C0A 100%);
+    font-family: 'Inter', sans-serif; color: #E2CFA3;
+  }
+  .frame { position: absolute; inset: 44px; border: 2px solid rgba(200,169,110,0.55); border-radius: 6px; }
+  .frame.inner { inset: 64px; border-width: 1px; border-color: rgba(200,169,110,0.22); }
+  .corner { position: absolute; color: #C8A96E; font-size: 34px; line-height: 1; }
+  .c1 { top: 84px; left: 92px; } .c2 { top: 84px; right: 92px; }
+  .c3 { bottom: 84px; left: 92px; } .c4 { bottom: 84px; right: 92px; }
+
+  .content { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; }
+  .logo { margin-top: 112px; height: 170px; width: auto; filter: drop-shadow(0 0 22px rgba(200,169,110,0.35)); }
+
+  .eyebrow { margin-top: 44px; display: flex; align-items: center; gap: 26px; font-weight: 600; font-size: 34px; letter-spacing: 0.52em; text-indent: 0.52em; color: #E2CFA3; }
+  .eyebrow::before, .eyebrow::after { content: ''; display: block; width: 70px; height: 1.5px; background: linear-gradient(90deg, transparent, #C8A96E); }
+  .eyebrow::after { transform: scaleX(-1); }
+
+  .ate { margin-top: 38px; font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500; font-size: 104px; line-height: 1; color: #E2CFA3; letter-spacing: 0.04em; }
+  .pct {
+    margin-top: -26px; font-family: 'Cormorant Garamond', serif; font-weight: 700; font-size: 470px; line-height: 0.92; letter-spacing: -0.02em;
+    font-variant-numeric: lining-nums; font-feature-settings: 'lnum' 1;
+    background: linear-gradient(180deg, #F6E8C3 0%, #E2CFA3 28%, #C8A96E 58%, #96784A 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 6px 30px rgba(200,169,110,0.30));
+  }
+  .off { margin-top: -6px; display: flex; align-items: center; gap: 30px; font-weight: 700; font-size: 78px; letter-spacing: 0.42em; text-indent: 0.42em; color: #F5F0EA; }
+  .off::before, .off::after { content: ''; display: block; width: 90px; height: 2px; background: linear-gradient(90deg, transparent, #C8A96E); }
+  .off::after { transform: scaleX(-1); }
+  .sub { margin-top: 34px; font-family: 'Cormorant Garamond', serif; font-style: italic; font-weight: 500; font-size: 54px; color: #C9B892; letter-spacing: 0.02em; }
+</style>
+</head>
+<body>
+<div class="banner">
+  <div class="frame"></div><div class="frame inner"></div>
+  <span class="corner c1">✦</span><span class="corner c2">✦</span><span class="corner c3">✦</span><span class="corner c4">✦</span>
+  <div class="content">
+    <img class="logo" src="logo-dark.png" alt="HESED Semijoias" />
+    <div class="eyebrow">BLACK FRIDAY</div>
+    <div class="ate">até</div>
+    <div class="pct">70%</div>
+    <div class="off">OFF</div>
+    <div class="sub">em peças selecionadas</div>
+  </div>
+</div>
+</body>
+</html>
