@@ -18,18 +18,18 @@ export default function StockPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-800">Estoque</h1>
-        <p className="mt-1 text-sm text-stone-500">Produtos, reposição e controle de garantia num só lugar.</p>
+        <h1 className="text-2xl font-semibold text-stone-800 dark:text-cream-200">Estoque</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-charcoal-300">Produtos, reposição e controle de garantia num só lugar.</p>
       </div>
 
       {/* Sub-abas */}
-      <div className="flex gap-1 border-b border-stone-200">
+      <div className="flex gap-1 border-b border-stone-200 dark:border-charcoal-600">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`relative px-4 py-2.5 text-sm font-medium transition-colors ${
-              tab === t.key ? 'text-gold' : 'text-stone-500 hover:text-stone-700'
+              tab === t.key ? 'text-gold' : 'text-stone-500 dark:text-charcoal-300 hover:text-stone-700 dark:hover:text-charcoal-100'
             }`}
           >
             {t.label}
@@ -90,7 +90,7 @@ function PurchasesTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-stone-500">
+        <p className="text-sm text-stone-500 dark:text-charcoal-300">
           Entradas de compra: dão entrada no estoque e geram uma conta a pagar ao fornecedor.
         </p>
         <button onClick={() => setShowForm(true)}
@@ -104,42 +104,42 @@ function PurchasesTab() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-gold border-t-transparent" />
         </div>
       ) : batches.length === 0 ? (
-        <div className="rounded-2xl border border-stone-200 bg-white py-16 text-center shadow-sm">
-          <p className="text-sm text-stone-400">Nenhuma compra registrada ainda.</p>
+        <div className="rounded-2xl border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 py-16 text-center shadow-sm">
+          <p className="text-sm text-stone-400 dark:text-charcoal-300">Nenhuma compra registrada ainda.</p>
         </div>
       ) : (
         <div className="space-y-3">
           {batches.map((b) => {
             const isOpen = expanded === b.id;
             return (
-              <div key={b.id} className="rounded-2xl border border-stone-200 bg-white shadow-sm overflow-hidden">
+              <div key={b.id} className="rounded-2xl border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 shadow-sm overflow-hidden">
                 <button onClick={() => setExpanded(isOpen ? null : b.id)}
-                  className="w-full flex items-center gap-4 p-4 text-left hover:bg-stone-50 transition-colors">
+                  className="w-full flex items-center gap-4 p-4 text-left hover:bg-stone-50 dark:hover:bg-charcoal-700/50 transition-colors">
                   <div className="flex-1 min-w-0">
-                    <span className="text-sm font-semibold text-stone-800">{b.supplierName}</span>
-                    <p className="text-xs text-stone-400 mt-0.5">
+                    <span className="text-sm font-semibold text-stone-800 dark:text-cream-200">{b.supplierName}</span>
+                    <p className="text-xs text-stone-400 dark:text-charcoal-300 mt-0.5">
                       {BRL_DATE(b.purchaseDate)} • {b.items.length} {b.items.length === 1 ? 'item' : 'itens'}
                       {b.installmentsCount > 1 ? ` • ${b.installmentsCount}x` : ''}
                     </p>
                   </div>
-                  <span className="text-sm font-semibold text-stone-800">{BRL.format(b.totalAmount)}</span>
-                  <svg className={`h-4 w-4 text-stone-300 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <span className="text-sm font-semibold text-stone-800 dark:text-cream-200">{BRL.format(b.totalAmount)}</span>
+                  <svg className={`h-4 w-4 text-stone-300 dark:text-charcoal-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
                   </svg>
                 </button>
                 {isOpen && (
-                  <div className="border-t border-stone-100 px-4 py-3 bg-stone-50/50 space-y-1.5">
+                  <div className="border-t border-stone-100 dark:border-charcoal-700 px-4 py-3 bg-stone-50/50 dark:bg-charcoal-700/30 space-y-1.5">
                     {b.items.map((it) => (
                       <div key={it.id} className="flex items-center gap-2 text-sm">
-                        <span className="text-stone-700">{it.productName}</span>
-                        <span className="text-xs text-stone-400 font-mono">{it.productSku}</span>
-                        {it.createdProduct && <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">novo</span>}
-                        <span className="ml-auto text-xs text-stone-500">{it.quantity} × {BRL.format(it.unitCost)}</span>
-                        <span className="w-24 text-right font-medium text-stone-700">{BRL.format(it.subtotal)}</span>
+                        <span className="text-stone-700 dark:text-charcoal-100">{it.productName}</span>
+                        <span className="text-xs text-stone-400 dark:text-charcoal-300 font-mono">{it.productSku}</span>
+                        {it.createdProduct && <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full">novo</span>}
+                        <span className="ml-auto text-xs text-stone-500 dark:text-charcoal-300">{it.quantity} × {BRL.format(it.unitCost)}</span>
+                        <span className="w-24 text-right font-medium text-stone-700 dark:text-charcoal-100">{BRL.format(it.subtotal)}</span>
                       </div>
                     ))}
-                    {b.notes && <p className="pt-2 text-xs text-stone-500">{b.notes}</p>}
-                    {b.expenseId && <p className="pt-1 text-[11px] text-stone-400">Conta a pagar gerada — veja em Financeiro › Contas a Pagar.</p>}
+                    {b.notes && <p className="pt-2 text-xs text-stone-500 dark:text-charcoal-300">{b.notes}</p>}
+                    {b.expenseId && <p className="pt-1 text-[11px] text-stone-400 dark:text-charcoal-300">Conta a pagar gerada — veja em Financeiro › Contas a Pagar.</p>}
                   </div>
                 )}
               </div>
@@ -295,15 +295,15 @@ function PurchaseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     }
   }
 
-  const fieldLabel = 'block text-xs font-medium text-stone-600 mb-1 uppercase tracking-wide';
-  const input = 'w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none';
+  const fieldLabel = 'block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1 uppercase tracking-wide';
+  const input = 'w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-stone-800">Entrada de compra</h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600">✕</button>
+      <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-charcoal-800 shadow-xl">
+        <div className="flex items-center justify-between border-b border-stone-100 dark:border-charcoal-700 px-6 py-4">
+          <h2 className="text-base font-semibold text-stone-800 dark:text-cream-200">Entrada de compra</h2>
+          <button onClick={onClose} className="text-stone-400 dark:text-charcoal-300 hover:text-stone-600 dark:hover:text-charcoal-100">✕</button>
         </div>
 
         <div className="px-6 py-5 space-y-5">
@@ -325,19 +325,19 @@ function PurchaseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           <div className="space-y-3">
             <label className={fieldLabel}>Itens da compra</label>
             {items.map((it, idx) => (
-              <div key={idx} className="rounded-lg border border-stone-200 p-3 space-y-2">
+              <div key={idx} className="rounded-lg border border-stone-200 dark:border-charcoal-600 p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <div className="flex gap-1">
                     <button type="button" onClick={() => updateItem(idx, { mode: 'existente' })}
-                      className={`rounded px-2 py-1 text-xs font-medium ${it.mode === 'existente' ? 'bg-gold text-white' : 'bg-stone-100 text-stone-500'}`}>
+                      className={`rounded px-2 py-1 text-xs font-medium ${it.mode === 'existente' ? 'bg-gold text-white' : 'bg-stone-100 dark:bg-charcoal-700 text-stone-500 dark:text-charcoal-300'}`}>
                       Existente
                     </button>
                     <button type="button" onClick={() => updateItem(idx, { mode: 'novo' })}
-                      className={`rounded px-2 py-1 text-xs font-medium ${it.mode === 'novo' ? 'bg-gold text-white' : 'bg-stone-100 text-stone-500'}`}>
+                      className={`rounded px-2 py-1 text-xs font-medium ${it.mode === 'novo' ? 'bg-gold text-white' : 'bg-stone-100 dark:bg-charcoal-700 text-stone-500 dark:text-charcoal-300'}`}>
                       Novo
                     </button>
                   </div>
-                  <button type="button" onClick={() => removeItem(idx)} className="ml-auto text-stone-300 hover:text-red-500" title="Remover item">✕</button>
+                  <button type="button" onClick={() => removeItem(idx)} className="ml-auto text-stone-300 dark:text-charcoal-400 hover:text-red-500" title="Remover item">✕</button>
                 </div>
 
                 {it.mode === 'existente' ? (
@@ -348,11 +348,11 @@ function PurchaseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
                     </select>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <span className="block text-[10px] text-stone-400 uppercase mb-0.5">Custo unitário (R$)</span>
+                        <span className="block text-[10px] text-stone-400 dark:text-charcoal-300 uppercase mb-0.5">Custo unitário (R$)</span>
                         <input type="number" step="0.01" min="0" value={it.unitCost} onChange={(e) => updateItem(idx, { unitCost: e.target.value })} className={input} />
                       </div>
                       <div>
-                        <span className="block text-[10px] text-stone-400 uppercase mb-0.5">Quantidade</span>
+                        <span className="block text-[10px] text-stone-400 dark:text-charcoal-300 uppercase mb-0.5">Quantidade</span>
                         <input type="number" min="1" value={it.quantity} onChange={(e) => updateItem(idx, { quantity: e.target.value })} className={input} />
                       </div>
                     </div>
@@ -371,30 +371,30 @@ function PurchaseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
                         fornecedor → custo (metade) → venda (pelo lucro). Todos editáveis. */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <div>
-                        <span className="block text-[10px] text-stone-400 uppercase mb-0.5">Preço fornecedor</span>
+                        <span className="block text-[10px] text-stone-400 dark:text-charcoal-300 uppercase mb-0.5">Preço fornecedor</span>
                         <input type="number" step="0.01" min="0" value={it.supplierPrice} onChange={(e) => onSupplierPrice(idx, e.target.value, it)} className={input} />
                       </div>
                       <div>
-                        <span className="block text-[10px] text-stone-400 uppercase mb-0.5">Custo (R$)</span>
+                        <span className="block text-[10px] text-stone-400 dark:text-charcoal-300 uppercase mb-0.5">Custo (R$)</span>
                         <input type="number" step="0.01" min="0" value={it.unitCost} onChange={(e) => onCost(idx, e.target.value, it)} className={input} />
                       </div>
                       <div>
-                        <span className="block text-[10px] text-stone-400 uppercase mb-0.5">Lucro (%)</span>
+                        <span className="block text-[10px] text-stone-400 dark:text-charcoal-300 uppercase mb-0.5">Lucro (%)</span>
                         <input type="number" step="0.1" min="0" max="99" value={it.profitPercent} onChange={(e) => onProfit(idx, e.target.value, it)} className={input} />
                       </div>
                       <div>
-                        <span className="block text-[10px] text-stone-400 uppercase mb-0.5">Venda (R$)</span>
+                        <span className="block text-[10px] text-stone-400 dark:text-charcoal-300 uppercase mb-0.5">Venda (R$)</span>
                         <input type="number" step="0.01" min="0" value={it.salePrice} onChange={(e) => onSale(idx, e.target.value, it)} className={input} />
                       </div>
                     </div>
                     <div>
-                      <span className="block text-[10px] text-stone-400 uppercase mb-0.5">Quantidade</span>
+                      <span className="block text-[10px] text-stone-400 dark:text-charcoal-300 uppercase mb-0.5">Quantidade</span>
                       <input type="number" min="1" value={it.quantity} onChange={(e) => updateItem(idx, { quantity: e.target.value })} className={`${input} w-24`} />
                     </div>
                   </>
                 )}
-                <div className="text-right text-xs text-stone-500">
-                  Subtotal: <span className="font-medium text-stone-700">{BRL.format((parseFloat(it.unitCost) || 0) * (parseInt(it.quantity, 10) || 0))}</span>
+                <div className="text-right text-xs text-stone-500 dark:text-charcoal-300">
+                  Subtotal: <span className="font-medium text-stone-700 dark:text-charcoal-100">{BRL.format((parseFloat(it.unitCost) || 0) * (parseInt(it.quantity, 10) || 0))}</span>
                 </div>
               </div>
             ))}
@@ -402,20 +402,20 @@ function PurchaseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           </div>
 
           {/* Pagamento ao fornecedor */}
-          <div className="rounded-lg border border-stone-200 p-3 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">Pagamento ao fornecedor</p>
+          <div className="rounded-lg border border-stone-200 dark:border-charcoal-600 p-3 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-charcoal-300">Pagamento ao fornecedor</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <span className="block text-[10px] text-stone-400 uppercase mb-0.5">Parcelas</span>
+                <span className="block text-[10px] text-stone-400 dark:text-charcoal-300 uppercase mb-0.5">Parcelas</span>
                 <input type="number" min="1" value={installments} onChange={(e) => setInstallments(e.target.value)} className={input} />
               </div>
               <div>
-                <span className="block text-[10px] text-stone-400 uppercase mb-0.5">1º vencimento</span>
+                <span className="block text-[10px] text-stone-400 dark:text-charcoal-300 uppercase mb-0.5">1º vencimento</span>
                 <input type="date" value={firstDueDate} onChange={(e) => setFirstDueDate(e.target.value)} className={input} />
               </div>
             </div>
             {nParc > 1 && total > 0 && (
-              <p className="text-xs text-stone-500">{nParc}x de aproximadamente <span className="font-medium">{BRL.format(total / nParc)}</span> (uma por mês).</p>
+              <p className="text-xs text-stone-500 dark:text-charcoal-300">{nParc}x de aproximadamente <span className="font-medium">{BRL.format(total / nParc)}</span> (uma por mês).</p>
             )}
           </div>
 
@@ -424,16 +424,16 @@ function PurchaseModal({ onClose, onSaved }: { onClose: () => void; onSaved: () 
             <input value={notes} onChange={(e) => setNotes(e.target.value)} className={input} />
           </div>
 
-          <div className="flex items-center justify-between border-t border-stone-100 pt-3">
-            <span className="text-sm text-stone-500">Total da compra</span>
-            <span className="text-lg font-semibold text-stone-800">{BRL.format(total)}</span>
+          <div className="flex items-center justify-between border-t border-stone-100 dark:border-charcoal-700 pt-3">
+            <span className="text-sm text-stone-500 dark:text-charcoal-300">Total da compra</span>
+            <span className="text-lg font-semibold text-stone-800 dark:text-cream-200">{BRL.format(total)}</span>
           </div>
 
-          {error && <p className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-600">{error}</p>}
+          {error && <p className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-stone-100 px-6 py-4">
-          <button onClick={onClose} className="rounded-lg border border-stone-200 px-4 py-2 text-sm text-stone-500">Cancelar</button>
+        <div className="flex justify-end gap-2 border-t border-stone-100 dark:border-charcoal-700 px-6 py-4">
+          <button onClick={onClose} className="rounded-lg border border-stone-200 dark:border-charcoal-600 px-4 py-2 text-sm text-stone-500 dark:text-charcoal-300">Cancelar</button>
           <button onClick={save} disabled={loading} className="rounded-lg bg-gold px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
             {loading ? 'Salvando...' : 'Registrar compra'}
           </button>
@@ -511,24 +511,24 @@ function StockAlertsTab({ tab }: { tab: 'reposicao' | 'garantia' }) {
   return (
     <div className="space-y-4">
       {tab === 'reposicao' && (
-        <section className="rounded-2xl border border-stone-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4">
-            <h2 className="text-sm font-semibold text-stone-800">Reposição — estoque baixo ou esgotado</h2>
-            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">{low.length}</span>
+        <section className="rounded-2xl border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 shadow-sm">
+          <div className="flex items-center justify-between border-b border-stone-100 dark:border-charcoal-700 px-5 py-4">
+            <h2 className="text-sm font-semibold text-stone-800 dark:text-cream-200">Reposição — estoque baixo ou esgotado</h2>
+            <span className="rounded-full bg-amber-100 dark:bg-amber-900/30 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">{low.length}</span>
           </div>
           {low.length === 0 ? (
-            <p className="px-5 py-8 text-center text-sm text-stone-400">Tudo em ordem — nenhum item precisando de reposição.</p>
+            <p className="px-5 py-8 text-center text-sm text-stone-400 dark:text-charcoal-300">Tudo em ordem — nenhum item precisando de reposição.</p>
           ) : (
-            <div className="divide-y divide-stone-50">
+            <div className="divide-y divide-stone-50 dark:divide-charcoal-700">
               {low.map((p) => (
                 <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                   <div className="min-w-0">
-                    <p className="font-medium text-stone-800 truncate">{p.name}</p>
-                    <p className="font-mono text-xs text-stone-400">{p.sku}{p.supplierName ? ` · ${p.supplierName}` : ''}</p>
+                    <p className="font-medium text-stone-800 dark:text-cream-200 truncate">{p.name}</p>
+                    <p className="font-mono text-xs text-stone-400 dark:text-charcoal-300">{p.sku}{p.supplierName ? ` · ${p.supplierName}` : ''}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                      p.stockStatus === 'ESGOTADO' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'
+                      p.stockStatus === 'ESGOTADO' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
                     }`}>
                       {p.stockQuantity} un · {p.stockStatus}
                     </span>
@@ -552,7 +552,7 @@ function StockAlertsTab({ tab }: { tab: 'reposicao' | 'garantia' }) {
           </section>
           <WarrantyCard title="Garantia vigente (no prazo)" rows={warranty.active} tone="emerald" />
           {warranty.expired.length === 0 && warranty.expiring.length === 0 && warranty.active.length === 0 && (
-            <p className="rounded-2xl border-2 border-dashed border-stone-200 bg-white py-10 text-center text-sm text-stone-400">
+            <p className="rounded-2xl border-2 border-dashed border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 py-10 text-center text-sm text-stone-400 dark:text-charcoal-300">
               Nenhum produto com data de compra lançada ainda. Informe a data de compra no cadastro do produto para acompanhar a garantia.
             </p>
           )}
@@ -571,29 +571,29 @@ function StockAlertsTab({ tab }: { tab: 'reposicao' | 'garantia' }) {
 }
 
 function WarrantyCard({ title, rows, tone }: { title: string; rows: WarrantyRow[]; tone: 'red' | 'amber' | 'emerald' }) {
-  const badgeClass = tone === 'red' ? 'bg-red-100 text-red-600'
-    : tone === 'amber' ? 'bg-amber-100 text-amber-700'
-    : 'bg-emerald-100 text-emerald-700';
+  const badgeClass = tone === 'red' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+    : tone === 'amber' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+    : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300';
   const dateClass = tone === 'red' ? 'text-red-500 font-medium'
-    : tone === 'amber' ? 'text-amber-600 font-medium'
-    : 'text-emerald-600 font-medium';
+    : tone === 'amber' ? 'text-amber-600 dark:text-amber-400 font-medium'
+    : 'text-emerald-600 dark:text-emerald-400 font-medium';
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4">
-        <h2 className="text-sm font-semibold text-stone-800">{title}</h2>
+    <div className="rounded-2xl border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 shadow-sm">
+      <div className="flex items-center justify-between border-b border-stone-100 dark:border-charcoal-700 px-5 py-4">
+        <h2 className="text-sm font-semibold text-stone-800 dark:text-cream-200">{title}</h2>
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${badgeClass}`}>{rows.length}</span>
       </div>
       {rows.length === 0 ? (
-        <p className="px-5 py-8 text-center text-sm text-stone-400">Nenhum item.</p>
+        <p className="px-5 py-8 text-center text-sm text-stone-400 dark:text-charcoal-300">Nenhum item.</p>
       ) : (
-        <div className="divide-y divide-stone-50">
+        <div className="divide-y divide-stone-50 dark:divide-charcoal-700">
           {rows.map((r) => (
             <div key={r.id} className="flex items-center justify-between gap-3 px-5 py-3">
               <div className="min-w-0">
-                <p className="font-medium text-stone-800 truncate">{r.name}</p>
-                <p className="font-mono text-xs text-stone-400">{r.sku}</p>
+                <p className="font-medium text-stone-800 dark:text-cream-200 truncate">{r.name}</p>
+                <p className="font-mono text-xs text-stone-400 dark:text-charcoal-300">{r.sku}</p>
               </div>
-              <div className="text-right text-xs text-stone-500">
+              <div className="text-right text-xs text-stone-500 dark:text-charcoal-300">
                 <p>compra: {BRL_DATE(r.purchaseDate)}</p>
                 <p className={dateClass}>
                   vence: {BRL_DATE(r.warrantyExpiresAt)}
@@ -642,46 +642,46 @@ function StockAdjustModal({ product, onClose, onSaved }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
+      <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-charcoal-800 shadow-xl">
+        <div className="flex items-center justify-between border-b border-stone-100 dark:border-charcoal-700 px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-stone-800">Ajustar estoque</h2>
-            <p className="text-xs text-stone-400">{product.name} · atual: {product.stockQuantity} un</p>
+            <h2 className="text-base font-semibold text-stone-800 dark:text-cream-200">Ajustar estoque</h2>
+            <p className="text-xs text-stone-400 dark:text-charcoal-300">{product.name} · atual: {product.stockQuantity} un</p>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600">✕</button>
+          <button onClick={onClose} className="text-stone-400 dark:text-charcoal-300 hover:text-stone-600 dark:hover:text-charcoal-100">✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
           <div className="flex gap-2">
             <button type="button" onClick={() => setMode('ENTRADA')}
               className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                mode === 'ENTRADA' ? 'bg-gold text-white' : 'bg-stone-100 text-stone-600'
+                mode === 'ENTRADA' ? 'bg-gold text-white' : 'bg-stone-100 dark:bg-charcoal-700 text-stone-600 dark:text-charcoal-200'
               }`}>Entrada (somar)</button>
             <button type="button" onClick={() => setMode('AJUSTE')}
               className={`flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                mode === 'AJUSTE' ? 'bg-gold text-white' : 'bg-stone-100 text-stone-600'
+                mode === 'AJUSTE' ? 'bg-gold text-white' : 'bg-stone-100 dark:bg-charcoal-700 text-stone-600 dark:text-charcoal-200'
               }`}>Ajuste (definir total)</button>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">
+            <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">
               {mode === 'ENTRADA' ? 'Quantidade a adicionar' : 'Nova quantidade total'}
             </label>
             <input required type="number" step="1" min="0" value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+              className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Motivo</label>
+            <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Motivo</label>
             <input value={reason} onChange={(e) => setReason(e.target.value)}
               placeholder={mode === 'ENTRADA' ? 'compra fornecedor' : 'correção de inventário'}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+              className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
           </div>
 
-          {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-600">{error}</div>}
+          {error && <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 text-xs text-red-600 dark:text-red-400">{error}</div>}
 
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-stone-500">Cancelar</button>
+            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-stone-500 dark:text-charcoal-300">Cancelar</button>
             <button type="submit" disabled={loading}
               className="rounded-lg bg-gold px-5 py-2 text-sm font-semibold text-white hover:bg-gold-dark disabled:opacity-50 transition">
               {loading ? 'Salvando...' : 'Aplicar'}
@@ -689,21 +689,21 @@ function StockAdjustModal({ product, onClose, onSaved }: {
           </div>
 
           {/* Histórico de movimentação */}
-          <div className="border-t border-stone-100 pt-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 mb-2">Histórico</p>
+          <div className="border-t border-stone-100 dark:border-charcoal-700 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-charcoal-300 mb-2">Histórico</p>
             {movements.length === 0 ? (
-              <p className="text-xs text-stone-400">Sem movimentações registradas.</p>
+              <p className="text-xs text-stone-400 dark:text-charcoal-300">Sem movimentações registradas.</p>
             ) : (
               <div className="max-h-40 space-y-1.5 overflow-y-auto">
                 {movements.map((m) => (
                   <div key={m.id} className="flex items-center justify-between text-xs">
-                    <span className="text-stone-500">
-                      <span className={`font-medium ${m.delta >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    <span className="text-stone-500 dark:text-charcoal-300">
+                      <span className={`font-medium ${m.delta >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
                         {m.delta >= 0 ? '+' : ''}{m.delta}
                       </span>
                       {' '}· {m.type} {m.reason ? `· ${m.reason}` : ''}
                     </span>
-                    <span className="text-stone-400">→ {m.resultingQuantity}</span>
+                    <span className="text-stone-400 dark:text-charcoal-300">→ {m.resultingQuantity}</span>
                   </div>
                 ))}
               </div>

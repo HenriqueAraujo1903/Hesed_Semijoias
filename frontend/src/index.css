@@ -17,6 +17,25 @@
     background-color: #1C1A16;
   }
 
+  /* Base escura para campos de formulário sem classe própria: sem isso o navegador
+     usa fundo branco e texto preto. Classes específicas (input-field, dark:bg-*)
+     têm maior especificidade e continuam prevalecendo. */
+  .dark input:not([type='checkbox']):not([type='radio']):not([type='file']):not([type='range']):not([type='color']),
+  .dark select,
+  .dark textarea {
+    background-color: #1C1A16;
+    color: #E8E7E5;
+    color-scheme: dark;
+  }
+  .dark input[type='checkbox'],
+  .dark input[type='radio'] {
+    color-scheme: dark;
+    accent-color: #C8A96E;
+  }
+  .dark input::placeholder,
+  .dark textarea::placeholder {
+    color: #7A766F;
+  }
   h1, h2, h3 {
     font-family: 'Cormorant Garamond', Georgia, serif;
     color: #292620;

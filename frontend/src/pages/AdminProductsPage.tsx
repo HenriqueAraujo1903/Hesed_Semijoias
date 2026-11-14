@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../services/api';
+import { useFeedback } from '../components/Feedback';
 
 interface Product {
   id: string;
@@ -39,6 +40,7 @@ const STOCK_OPTIONS = [
 ];
 
 export function ProductsManager() {
+  const fb = useFeedback();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -76,12 +78,13 @@ export function ProductsManager() {
   }, []);
 
   async function handleDelete(id: string) {
-    if (!confirm('Excluir este produto?')) return;
+    if (!(await fb.confirm({ message: 'Excluir este produto?', danger: true, confirmLabel: 'Excluir' }))) return;
     try {
       await api.delete(`/admin/products/${id}`);
+      fb.success('Excluído com sucesso.');
       load();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Erro ao excluir');
+      fb.error(e.response?.data?.error || 'Erro ao excluir');
     }
   }
 
@@ -99,8 +102,8 @@ export function ProductsManager() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-stone-800">Admin — Produtos</h1>
-          <p className="mt-1 text-sm text-stone-500">Gerencie catálogo, imagens e estoque.</p>
+          <h1 className="text-2xl font-semibold text-stone-800 dark:text-cream-200">Admin — Produtos</h1>
+          <p className="mt-1 text-sm text-stone-500 dark:text-charcoal-300">Gerencie catálogo, imagens e estoque.</p>
         </div>
         <button
           onClick={openCreate}
@@ -117,15 +120,15 @@ export function ProductsManager() {
           placeholder="Buscar por nome ou SKU..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 rounded-lg border border-stone-200 bg-white py-2 px-3 text-sm focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
+          className="flex-1 rounded-lg border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-900 py-2 px-3 text-sm focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
         />
         <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}
-          className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm">
+          className="rounded-lg border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-900 px-3 py-2 text-sm">
           <option value="">Todas categorias</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={stockFilter} onChange={(e) => setStockFilter(e.target.value)}
-          className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm">
+          className="rounded-lg border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-900 px-3 py-2 text-sm">
           <option value="">Todos estoques</option>
           {STOCK_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
@@ -137,36 +140,36 @@ export function ProductsManager() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-gold border-t-transparent" />
         </div>
       ) : products.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-stone-200 bg-white py-16 text-center">
-          <p className="text-sm text-stone-500">Nenhum produto cadastrado.</p>
+        <div className="rounded-2xl border-2 border-dashed border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 py-16 text-center">
+          <p className="text-sm text-stone-500 dark:text-charcoal-300">Nenhum produto cadastrado.</p>
         </div>
       ) : (
         <>
           {/* Tabela (desktop) */}
-          <div className="hidden md:block overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+          <div className="hidden md:block overflow-hidden rounded-2xl border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 shadow-sm">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-stone-100 text-sm">
-                <thead className="bg-stone-50">
+              <table className="min-w-full divide-y divide-stone-100 dark:divide-charcoal-700 text-sm">
+                <thead className="bg-stone-50 dark:bg-charcoal-700/50">
                   <tr>
                     {['SKU', 'Nome', 'Categoria', 'Custo', 'Venda', 'Estoque', 'Ações'].map((col) => (
-                      <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500">{col === 'Estoque' ? 'Estoque (qtd)' : col}</th>
+                      <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-charcoal-300">{col === 'Estoque' ? 'Estoque (qtd)' : col}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-50">
+                <tbody className="divide-y divide-stone-50 dark:divide-charcoal-700">
                   {products.map((p) => (
-                    <tr key={p.id} className="hover:bg-stone-50 transition-colors">
-                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-medium text-stone-800">{p.sku}</td>
-                      <td className="max-w-xs truncate px-4 py-3 font-medium text-stone-700">{p.name}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-xs text-stone-500">{p.category}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-stone-500">{BRL.format(p.costPrice)}</td>
-                      <td className="whitespace-nowrap px-4 py-3 font-medium text-stone-800">{BRL.format(p.salePrice)}</td>
+                    <tr key={p.id} className="hover:bg-stone-50 dark:hover:bg-charcoal-700/50 transition-colors">
+                      <td className="whitespace-nowrap px-4 py-3 font-mono text-xs font-medium text-stone-800 dark:text-cream-200">{p.sku}</td>
+                      <td className="max-w-xs truncate px-4 py-3 font-medium text-stone-700 dark:text-charcoal-100">{p.name}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-xs text-stone-500 dark:text-charcoal-300">{p.category}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-stone-500 dark:text-charcoal-300">{BRL.format(p.costPrice)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 font-medium text-stone-800 dark:text-cream-200">{BRL.format(p.salePrice)}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-xs">
-                        <span className="font-medium text-stone-700">{p.stockQuantity ?? 0}</span>
+                        <span className="font-medium text-stone-700 dark:text-charcoal-100">{p.stockQuantity ?? 0}</span>
                         <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          p.stockStatus === 'ESGOTADO' ? 'bg-red-100 text-red-600'
-                          : p.stockStatus === 'BAIXO' ? 'bg-amber-100 text-amber-700'
-                          : 'bg-emerald-100 text-emerald-700'
+                          p.stockStatus === 'ESGOTADO' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                          : p.stockStatus === 'BAIXO' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                          : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
                         }`}>{p.stockStatus}</span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3">
@@ -185,24 +188,24 @@ export function ProductsManager() {
           {/* Cards (mobile) */}
           <div className="md:hidden space-y-3">
             {products.map((p) => (
-              <div key={p.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+              <div key={p.id} className="rounded-2xl border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 p-4 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium text-stone-800 truncate">{p.name}</p>
-                    <p className="font-mono text-xs text-stone-400 mt-0.5">{p.sku}</p>
+                    <p className="font-medium text-stone-800 dark:text-cream-200 truncate">{p.name}</p>
+                    <p className="font-mono text-xs text-stone-400 dark:text-charcoal-300 mt-0.5">{p.sku}</p>
                   </div>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    p.stockStatus === 'ESGOTADO' ? 'bg-red-100 text-red-600'
-                    : p.stockStatus === 'BAIXO' ? 'bg-amber-100 text-amber-700'
-                    : 'bg-emerald-100 text-emerald-700'
+                    p.stockStatus === 'ESGOTADO' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                    : p.stockStatus === 'BAIXO' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+                    : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
                   }`}>{p.stockQuantity ?? 0} · {p.stockStatus}</span>
                 </div>
                 <div className="mt-3 flex items-center gap-4 text-sm">
-                  <span className="text-stone-400 text-xs uppercase tracking-wide">{p.category}</span>
-                  <span className="text-stone-500">Custo: {BRL.format(p.costPrice)}</span>
-                  <span className="font-semibold text-stone-800">{BRL.format(p.salePrice)}</span>
+                  <span className="text-stone-400 dark:text-charcoal-300 text-xs uppercase tracking-wide">{p.category}</span>
+                  <span className="text-stone-500 dark:text-charcoal-300">Custo: {BRL.format(p.costPrice)}</span>
+                  <span className="font-semibold text-stone-800 dark:text-cream-200">{BRL.format(p.salePrice)}</span>
                 </div>
-                <div className="mt-3 flex gap-4 border-t border-stone-100 pt-3">
+                <div className="mt-3 flex gap-4 border-t border-stone-100 dark:border-charcoal-700 pt-3">
                   <button onClick={() => openEdit(p)} className="text-sm text-gold font-medium">Editar</button>
                   <button onClick={() => handleDelete(p.id)} className="text-sm text-red-500 font-medium">Excluir</button>
                 </div>
@@ -216,7 +219,7 @@ export function ProductsManager() {
         <ProductModal
           product={editProduct}
           onClose={() => setShowModal(false)}
-          onSaved={() => { setShowModal(false); load(); }}
+          onSaved={() => { setShowModal(false); fb.success('Produto salvo com sucesso.'); load(); }}
         />
       )}
     </div>
@@ -303,17 +306,17 @@ function GalleryUploader({ images, onChange }: {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <label className="block text-xs font-medium text-stone-600 uppercase tracking-wide">
+        <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 uppercase tracking-wide">
           Fotos do produto
         </label>
-        <span className="text-[11px] text-stone-400">{images.length}/{MAX_IMAGES} — a 1ª é a capa</span>
+        <span className="text-[11px] text-stone-400 dark:text-charcoal-300">{images.length}/{MAX_IMAGES} — a 1ª é a capa</span>
       </div>
 
       {images.length > 0 && (
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           {images.map((url, idx) => (
             <div key={`${url}-${idx}`}
-              className={`group relative aspect-square overflow-hidden rounded-lg border ${idx === 0 ? 'border-gold ring-1 ring-gold' : 'border-stone-200'}`}>
+              className={`group relative aspect-square overflow-hidden rounded-lg border ${idx === 0 ? 'border-gold ring-1 ring-gold' : 'border-stone-200 dark:border-charcoal-600'}`}>
               <img src={url} alt={`Foto ${idx + 1}`} className="h-full w-full object-cover" />
               {idx === 0 && (
                 <span className="absolute left-1 top-1 rounded bg-gold px-1.5 py-0.5 text-[9px] font-semibold text-white">Capa</span>
@@ -329,7 +332,7 @@ function GalleryUploader({ images, onChange }: {
                   className="text-white disabled:opacity-30 px-1 text-xs">›</button>
               </div>
               <button type="button" title="Remover" onClick={() => removeAt(idx)}
-                className="absolute right-1 top-1 rounded-full bg-white/80 px-1.5 text-xs text-red-500 opacity-0 transition group-hover:opacity-100 hover:bg-white">✕</button>
+                className="absolute right-1 top-1 rounded-full bg-white/80 dark:bg-charcoal-800/80 px-1.5 text-xs text-red-500 opacity-0 transition group-hover:opacity-100 hover:bg-white dark:hover:bg-charcoal-700">✕</button>
             </div>
           ))}
         </div>
@@ -340,18 +343,18 @@ function GalleryUploader({ images, onChange }: {
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
           onClick={() => inputRef.current?.click()}
-          className="relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-200 bg-stone-50 p-4 transition hover:border-gold hover:bg-gold-light"
+          className="relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-stone-200 dark:border-charcoal-600 bg-stone-50 dark:bg-charcoal-700/50 p-4 transition hover:border-gold hover:bg-gold-light"
         >
-          <div className="flex flex-col items-center gap-2 py-3 text-stone-400">
+          <div className="flex flex-col items-center gap-2 py-3 text-stone-400 dark:text-charcoal-300">
             <svg className="h-9 w-9" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
                 d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M13.5 12h.008v.008H13.5V12zm-3 6.75h10.5a2.25 2.25 0 002.25-2.25V6.75a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 6.75v10.5a2.25 2.25 0 002.25 2.25z" />
             </svg>
             <p className="text-xs">Clique ou arraste fotos aqui</p>
-            <p className="text-xs text-stone-300">JPG, PNG, WebP — máx 5 MB cada</p>
+            <p className="text-xs text-stone-300 dark:text-charcoal-400">JPG, PNG, WebP — máx 5 MB cada</p>
           </div>
           {uploading && (
-            <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/70">
+            <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/70 dark:bg-charcoal-800/70">
               <div className="h-6 w-6 animate-spin rounded-full border-4 border-gold border-t-transparent" />
             </div>
           )}
@@ -533,12 +536,12 @@ function ProductModal({ product, onClose, onSaved }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-stone-800">
+      <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-charcoal-800 shadow-xl">
+        <div className="flex items-center justify-between border-b border-stone-100 dark:border-charcoal-700 px-6 py-4">
+          <h2 className="text-base font-semibold text-stone-800 dark:text-cream-200">
             {isEdit ? 'Editar Produto' : 'Novo Produto'}
           </h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600">✕</button>
+          <button onClick={onClose} className="text-stone-400 dark:text-charcoal-300 hover:text-stone-600 dark:hover:text-charcoal-100">✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
@@ -547,14 +550,14 @@ function ProductModal({ product, onClose, onSaved }: {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">SKU *</label>
+              <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">SKU *</label>
               <input required disabled={isEdit} value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm font-mono disabled:bg-stone-50 focus:border-gold focus:outline-none" />
+                className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm font-mono disabled:bg-stone-50 dark:disabled:bg-charcoal-700/50 focus:border-gold focus:outline-none" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Categoria</label>
+              <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Categoria</label>
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none">
+                className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none">
                 <option value="" disabled>Selecione...</option>
                 {/* Garante que a categoria atual do produto apareça mesmo se ela
                     tiver sido inativada/renomeada no cadastro. */}
@@ -567,9 +570,9 @@ function ProductModal({ product, onClose, onSaved }: {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Linha</label>
+            <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Linha</label>
             <select value={form.line} onChange={(e) => setForm({ ...form, line: e.target.value })}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none">
+              className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none">
               <option value="">Nenhuma</option>
               {/* Garante que a linha atual do produto apareça mesmo se ela
                   tiver sido inativada/renomeada no cadastro. */}
@@ -581,86 +584,86 @@ function ProductModal({ product, onClose, onSaved }: {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Nome *</label>
+            <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Nome *</label>
             <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+              className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Descrição</label>
+            <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Descrição</label>
             <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
               placeholder="Detalhes do produto..."
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm resize-none focus:border-gold focus:outline-none" />
+              className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm resize-none focus:border-gold focus:outline-none" />
           </div>
 
           {/* Valores: fornecedor (tabela) / custo (pago) / % lucro / venda (cliente).
               Custo pago = fornecedor / 2; Venda = custo / (1 - lucro%/100). Editáveis. */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="flex flex-col">
-              <label className="flex-1 text-xs font-medium text-stone-600 mb-1 leading-tight">Preço fornecedor (R$)</label>
+              <label className="flex-1 text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1 leading-tight">Preço fornecedor (R$)</label>
               <input type="number" step="0.01" min="0" value={form.supplierPrice}
                 onChange={(e) => handleSupplierChange(e.target.value)}
                 placeholder="tabela"
-                className="mt-auto w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="mt-auto w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
             <div className="flex flex-col">
-              <label className="flex-1 text-xs font-medium text-stone-600 mb-1 leading-tight">Custo pago (R$) *</label>
+              <label className="flex-1 text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1 leading-tight">Custo pago (R$) *</label>
               <input required type="number" step="0.01" min="0" value={form.costPrice}
                 onChange={(e) => handleCostChange(e.target.value)}
-                className="mt-auto w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="mt-auto w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
             <div className="flex flex-col">
-              <label className="flex-1 text-xs font-medium text-stone-600 mb-1 leading-tight">% de lucro</label>
+              <label className="flex-1 text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1 leading-tight">% de lucro</label>
               <input type="number" step="0.1" min="0" max="99.9" value={form.profitPercent}
                 onChange={(e) => handleProfitChange(e.target.value)}
                 placeholder="85"
-                className="mt-auto w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="mt-auto w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
             <div className="flex flex-col">
-              <label className="flex-1 text-xs font-medium text-stone-600 mb-1 leading-tight">Venda (R$) *</label>
+              <label className="flex-1 text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1 leading-tight">Venda (R$) *</label>
               <input required type="number" step="0.01" min="0" value={form.salePrice}
                 onChange={(e) => handleSaleChange(e.target.value)}
-                className="mt-auto w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="mt-auto w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
           </div>
 
           {(purchaseVariation !== null || saleMargin !== null) && (
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-stone-500">
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-stone-500 dark:text-charcoal-300">
               {purchaseVariation !== null && (
                 purchaseVariation > 0 ? (
-                  <span>Acréscimo na compra: <strong className="text-red-500">+{purchaseVariation.toFixed(1)}%</strong> <span className="text-stone-400">(pagou acima da tabela)</span></span>
+                  <span>Acréscimo na compra: <strong className="text-red-500">+{purchaseVariation.toFixed(1)}%</strong> <span className="text-stone-400 dark:text-charcoal-300">(pagou acima da tabela)</span></span>
                 ) : purchaseVariation < 0 ? (
-                  <span>Desconto na compra: <strong className="text-emerald-600">{Math.abs(purchaseVariation).toFixed(1)}%</strong> <span className="text-stone-400">(pagou abaixo da tabela)</span></span>
+                  <span>Desconto na compra: <strong className="text-emerald-600 dark:text-emerald-400">{Math.abs(purchaseVariation).toFixed(1)}%</strong> <span className="text-stone-400 dark:text-charcoal-300">(pagou abaixo da tabela)</span></span>
                 ) : (
-                  <span>Compra: <strong className="text-stone-600">no preço de tabela</strong></span>
+                  <span>Compra: <strong className="text-stone-600 dark:text-charcoal-200">no preço de tabela</strong></span>
                 )
               )}
               {saleMargin !== null && (
-                <span>Margem na venda: <strong className={saleMargin >= 0 ? 'text-emerald-600' : 'text-red-500'}>{saleMargin.toFixed(1)}%</strong></span>
+                <span>Margem na venda: <strong className={saleMargin >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}>{saleMargin.toFixed(1)}%</strong></span>
               )}
             </div>
           )}
 
           {/* Sob encomenda */}
-          <div className="rounded-lg border border-stone-200 p-3">
+          <div className="rounded-lg border border-stone-200 dark:border-charcoal-600 p-3">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={form.onDemand}
                 onChange={(e) => setForm({ ...form, onDemand: e.target.checked })}
-                className="h-4 w-4 rounded border-stone-300 text-gold focus:ring-gold" />
-              <span className="text-sm font-medium text-stone-700">Produto sob encomenda</span>
+                className="h-4 w-4 rounded border-stone-300 dark:border-charcoal-500 text-gold focus:ring-gold" />
+              <span className="text-sm font-medium text-stone-700 dark:text-charcoal-100">Produto sob encomenda</span>
             </label>
-            <p className="mt-1 text-[11px] text-stone-500">
+            <p className="mt-1 text-[11px] text-stone-500 dark:text-charcoal-300">
               Anunciado no catálogo mesmo sem estoque. Não consome estoque nem entra nos alertas de reposição.
               O <strong>preço de custo</strong> é uma estimativa do que será pago ao fornecedor.
             </p>
             {form.onDemand && (
               <div className="mt-3">
-                <label className="block text-xs font-medium text-stone-600 mb-1">Prazo de entrega (dias úteis)</label>
+                <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Prazo de entrega (dias úteis)</label>
                 <input type="number" step="1" min="0" value={form.leadTimeDays}
                   onChange={(e) => setForm({ ...form, leadTimeDays: e.target.value })}
                   placeholder="Ex: 10"
-                  className="w-full sm:w-48 rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
-                <p className="mt-1 text-[10px] text-stone-400">Mostrado no catálogo como "Entrega em até X dias úteis".</p>
+                  className="w-full sm:w-48 rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                <p className="mt-1 text-[10px] text-stone-400 dark:text-charcoal-300">Mostrado no catálogo como "Entrega em até X dias úteis".</p>
               </div>
             )}
           </div>
@@ -670,25 +673,25 @@ function ProductModal({ product, onClose, onSaved }: {
           <>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Quantidade em estoque</label>
+              <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Quantidade em estoque</label>
               <input type="number" step="1" min="0" value={form.stockQuantity}
                 onChange={(e) => setForm({ ...form, stockQuantity: e.target.value })}
                 placeholder="0"
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Alerta de estoque baixo (≤)</label>
+              <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Alerta de estoque baixo (≤)</label>
               <input type="number" step="1" min="0" value={form.lowStockThreshold}
                 onChange={(e) => setForm({ ...form, lowStockThreshold: e.target.value })}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-stone-500">
+          <div className="flex items-center gap-2 text-[11px] text-stone-500 dark:text-charcoal-300">
             <span>Situação (automática):</span>
             <span className={`rounded-full px-2 py-0.5 font-medium ${
-              derivedStatus === 'ESGOTADO' ? 'bg-red-100 text-red-600'
-              : derivedStatus === 'BAIXO' ? 'bg-amber-100 text-amber-700'
-              : 'bg-emerald-100 text-emerald-700'
+              derivedStatus === 'ESGOTADO' ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+              : derivedStatus === 'BAIXO' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300'
+              : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
             }`}>{derivedStatus}</span>
           </div>
           </>
@@ -697,38 +700,38 @@ function ProductModal({ product, onClose, onSaved }: {
           {/* Fornecedor + garantia */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Fornecedor</label>
+              <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Fornecedor</label>
               <select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none">
+                className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none">
                 <option value="">— nenhum —</option>
                 {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Data da compra (garantia)</label>
+              <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Data da compra (garantia)</label>
               <input type="date" value={form.purchaseDate}
                 onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Garantia (meses)</label>
+              <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Garantia (meses)</label>
               <input type="number" step="1" min="0" value={form.warrantyMonths}
                 onChange={(e) => setForm({ ...form, warrantyMonths: e.target.value })}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
             {warrantyExpiry && (
-              <div className="flex items-end pb-2 text-[11px] text-stone-500">
-                Garantia até <strong className="ml-1 text-stone-700">{warrantyExpiry}</strong>
+              <div className="flex items-end pb-2 text-[11px] text-stone-500 dark:text-charcoal-300">
+                Garantia até <strong className="ml-1 text-stone-700 dark:text-charcoal-100">{warrantyExpiry}</strong>
               </div>
             )}
           </div>
 
-          {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-600">{error}</div>}
+          {error && <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 text-xs text-red-600 dark:text-red-400">{error}</div>}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-stone-500 hover:text-stone-700">Cancelar</button>
+            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-stone-500 dark:text-charcoal-300 hover:text-stone-700 dark:hover:text-charcoal-100">Cancelar</button>
             <button type="submit" disabled={loading}
               className="rounded-lg bg-gold px-5 py-2 text-sm font-semibold text-white hover:bg-gold-dark disabled:opacity-50 transition">
               {loading ? 'Salvando...' : isEdit ? 'Salvar' : 'Criar'}

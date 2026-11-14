@@ -19,12 +19,12 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-800">Configurações</h1>
-        <p className="mt-1 text-sm text-stone-500">Usuários do sistema, mensagens automáticas e ajustes gerais.</p>
+        <h1 className="text-2xl font-semibold text-stone-800 dark:text-cream-200">Configurações</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-charcoal-300">Usuários do sistema, mensagens automáticas e ajustes gerais.</p>
       </div>
 
       {/* Sub-abas */}
-      <div className="flex gap-2 border-b border-stone-200">
+      <div className="flex gap-2 border-b border-stone-200 dark:border-charcoal-600">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -32,7 +32,7 @@ export default function SettingsPage() {
             className={`-mb-px px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               tab === t.key
                 ? 'border-gold text-gold'
-                : 'border-transparent text-stone-500 hover:text-stone-700'
+                : 'border-transparent text-stone-500 dark:text-charcoal-300 hover:text-stone-700 dark:hover:text-charcoal-100'
             }`}
           >
             {t.label}
@@ -91,17 +91,17 @@ function MessagesSettings() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg bg-stone-50 border border-stone-200 p-4">
-        <p className="text-xs font-medium text-stone-600 mb-2">Variáveis disponíveis (use no texto):</p>
+      <div className="rounded-lg bg-stone-50 dark:bg-charcoal-700/50 border border-stone-200 dark:border-charcoal-600 p-4">
+        <p className="text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-2">Variáveis disponíveis (use no texto):</p>
         <div className="flex flex-wrap gap-2">
           {VARIABLES.map((v) => (
-            <span key={v.token} className="inline-flex items-center gap-1.5 rounded-md bg-white border border-stone-200 px-2 py-1 text-xs">
+            <span key={v.token} className="inline-flex items-center gap-1.5 rounded-md bg-white dark:bg-charcoal-800 border border-stone-200 dark:border-charcoal-600 px-2 py-1 text-xs">
               <code className="text-gold font-mono">{v.token}</code>
-              <span className="text-stone-400">{v.desc}</span>
+              <span className="text-stone-400 dark:text-charcoal-300">{v.desc}</span>
             </span>
           ))}
         </div>
-        <p className="mt-3 text-xs text-stone-400">
+        <p className="mt-3 text-xs text-stone-400 dark:text-charcoal-300">
           As mensagens de pedido são abertas no WhatsApp ao confirmar ou cancelar um pedido. A mensagem de <strong>aniversário</strong> é usada
           a partir do sino de notificações (usa apenas <code className="text-gold font-mono">{'{cliente}'}</code>). Desative para não usar aquele aviso.
           Você pode anexar uma imagem opcional (ex.: cuidados com a peça) — o link dela entra na mensagem e o WhatsApp mostra a prévia.
@@ -109,8 +109,8 @@ function MessagesSettings() {
       </div>
 
       {templates.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-stone-200 bg-white py-16 text-center">
-          <p className="text-sm text-stone-500">Nenhuma mensagem configurada.</p>
+        <div className="rounded-2xl border-2 border-dashed border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 py-16 text-center">
+          <p className="text-sm text-stone-500 dark:text-charcoal-300">Nenhuma mensagem configurada.</p>
         </div>
       ) : (
         templates.map((t) => (
@@ -173,18 +173,18 @@ function TemplateEditor({ template, onSaved }: { template: MessageTemplate; onSa
   }
 
   return (
-    <div className="rounded-2xl border border-stone-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 p-5 shadow-sm">
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-stone-800">{template.title}</h3>
+        <h3 className="text-sm font-semibold text-stone-800 dark:text-cream-200">{template.title}</h3>
         <label className="flex items-center gap-2 cursor-pointer">
-          <span className="text-xs text-stone-500">{active ? 'Ativa' : 'Inativa'}</span>
+          <span className="text-xs text-stone-500 dark:text-charcoal-300">{active ? 'Ativa' : 'Inativa'}</span>
           <button
             type="button"
             onClick={() => setActive((a) => !a)}
-            className={`relative h-5 w-9 rounded-full transition-colors ${active ? 'bg-gold' : 'bg-stone-300'}`}
+            className={`relative h-5 w-9 rounded-full transition-colors ${active ? 'bg-gold' : 'bg-stone-300 dark:bg-charcoal-500'}`}
             aria-pressed={active}
           >
-            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${active ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white dark:bg-charcoal-800 transition-transform ${active ? 'translate-x-4' : 'translate-x-0.5'}`} />
           </button>
         </label>
       </div>
@@ -193,29 +193,29 @@ function TemplateEditor({ template, onSaved }: { template: MessageTemplate; onSa
         value={body}
         onChange={(e) => setBody(e.target.value)}
         rows={5}
-        className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none resize-y font-mono"
+        className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none resize-y font-mono"
       />
 
       {/* Imagem opcional (ex.: cuidados com a peça) */}
       <div className="mt-3">
-        <p className="text-xs font-medium text-stone-600 mb-1.5">Imagem (opcional)</p>
+        <p className="text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1.5">Imagem (opcional)</p>
         {imageUrl ? (
           <div className="flex items-center gap-3">
             <img src={imageUrl} alt="Prévia da imagem da mensagem"
-              className="h-16 w-16 rounded-lg object-cover border border-stone-200" />
+              className="h-16 w-16 rounded-lg object-cover border border-stone-200 dark:border-charcoal-600" />
             <div className="flex flex-col gap-1">
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
                 disabled={uploading}
-                className="text-xs text-stone-600 hover:text-stone-800 underline disabled:opacity-40"
+                className="text-xs text-stone-600 dark:text-charcoal-200 hover:text-stone-800 dark:hover:text-cream-200 underline disabled:opacity-40"
               >
                 {uploading ? 'Enviando...' : 'Trocar imagem'}
               </button>
               <button
                 type="button"
                 onClick={() => setImageUrl(null)}
-                className="text-xs text-red-500 hover:text-red-600 underline"
+                className="text-xs text-red-500 hover:text-red-600 dark:hover:text-red-400 underline"
               >
                 Remover imagem
               </button>
@@ -226,7 +226,7 @@ function TemplateEditor({ template, onSaved }: { template: MessageTemplate; onSa
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
-            className="rounded-lg border border-dashed border-stone-300 px-4 py-2 text-xs text-stone-500 hover:border-gold hover:text-gold disabled:opacity-40 transition"
+            className="rounded-lg border border-dashed border-stone-300 dark:border-charcoal-500 px-4 py-2 text-xs text-stone-500 dark:text-charcoal-300 hover:border-gold hover:text-gold disabled:opacity-40 transition"
           >
             {uploading ? 'Enviando...' : '+ Anexar imagem'}
           </button>
@@ -238,7 +238,7 @@ function TemplateEditor({ template, onSaved }: { template: MessageTemplate; onSa
       {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
 
       <div className="mt-3 flex items-center justify-end gap-3">
-        {savedFlash && <span className="text-xs text-emerald-600">Salvo ✓</span>}
+        {savedFlash && <span className="text-xs text-emerald-600 dark:text-emerald-400">Salvo ✓</span>}
         <button
           onClick={handleSave}
           disabled={saving || uploading || !dirty}

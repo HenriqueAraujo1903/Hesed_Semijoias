@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
+import { useFeedback } from '../components/Feedback';
 
 interface Category {
   id: string;
@@ -10,6 +11,7 @@ interface Category {
 }
 
 export default function CategoriesPage() {
+  const fb = useFeedback();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -30,12 +32,13 @@ export default function CategoriesPage() {
   useEffect(() => { load(); }, [load]);
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Excluir a categoria ${name}?`)) return;
+    if (!(await fb.confirm({ message: `Excluir a categoria ${name}?`, danger: true, confirmLabel: 'Excluir' }))) return;
     try {
       await api.delete(`/admin/categories/${id}`);
+      fb.success('Excluído com sucesso.');
       load();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Erro ao excluir');
+      fb.error(e.response?.data?.error || 'Erro ao excluir');
     }
   }
 
@@ -45,7 +48,7 @@ export default function CategoriesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-stone-500">Categorias usadas nos produtos, filtros e no catálogo.</p>
+        <p className="text-sm text-stone-500 dark:text-charcoal-300">Categorias usadas nos produtos, filtros e no catálogo.</p>
         <button onClick={openCreate}
           className="inline-flex items-center gap-2 rounded-lg bg-gold px-4 py-2 text-sm font-semibold text-white hover:bg-gold-dark transition shadow-sm shrink-0">
           + Nova Categoria
@@ -57,30 +60,30 @@ export default function CategoriesPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-gold border-t-transparent" />
         </div>
       ) : categories.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-stone-200 bg-white py-16 text-center">
-          <p className="text-sm text-stone-500">Nenhuma categoria cadastrada.</p>
+        <div className="rounded-2xl border-2 border-dashed border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 py-16 text-center">
+          <p className="text-sm text-stone-500 dark:text-charcoal-300">Nenhuma categoria cadastrada.</p>
         </div>
       ) : (
         <>
           {/* Tabela (desktop) */}
-          <div className="hidden md:block overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+          <div className="hidden md:block overflow-hidden rounded-2xl border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 shadow-sm">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-stone-100 text-sm">
-                <thead className="bg-stone-50">
+              <table className="min-w-full divide-y divide-stone-100 dark:divide-charcoal-700 text-sm">
+                <thead className="bg-stone-50 dark:bg-charcoal-700/50">
                   <tr>
                     {['Nome', 'Ordem', 'Situação', 'Ações'].map((col) => (
-                      <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500">{col}</th>
+                      <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-charcoal-300">{col}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-50">
+                <tbody className="divide-y divide-stone-50 dark:divide-charcoal-700">
                   {categories.map((c) => (
-                    <tr key={c.id} className="hover:bg-stone-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-stone-800">{c.name}</td>
-                      <td className="px-4 py-3 text-stone-500">{c.sortOrder}</td>
+                    <tr key={c.id} className="hover:bg-stone-50 dark:hover:bg-charcoal-700/50 transition-colors">
+                      <td className="px-4 py-3 font-medium text-stone-800 dark:text-cream-200">{c.name}</td>
+                      <td className="px-4 py-3 text-stone-500 dark:text-charcoal-300">{c.sortOrder}</td>
                       <td className="px-4 py-3">
                         <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          c.active ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-200 text-stone-500'
+                          c.active ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-stone-200 dark:bg-charcoal-600 text-stone-500 dark:text-charcoal-300'
                         }`}>{c.active ? 'Ativa' : 'Inativa'}</span>
                       </td>
                       <td className="px-4 py-3">
@@ -99,15 +102,15 @@ export default function CategoriesPage() {
           {/* Cards (mobile) */}
           <div className="md:hidden space-y-3">
             {categories.map((c) => (
-              <div key={c.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+              <div key={c.id} className="rounded-2xl border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 p-4 shadow-sm">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium text-stone-800">{c.name}</p>
+                  <p className="font-medium text-stone-800 dark:text-cream-200">{c.name}</p>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    c.active ? 'bg-emerald-100 text-emerald-700' : 'bg-stone-200 text-stone-500'
+                    c.active ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300' : 'bg-stone-200 dark:bg-charcoal-600 text-stone-500 dark:text-charcoal-300'
                   }`}>{c.active ? 'Ativa' : 'Inativa'}</span>
                 </div>
-                <p className="mt-1 text-xs text-stone-400">Ordem: {c.sortOrder}</p>
-                <div className="mt-3 flex gap-4 border-t border-stone-100 pt-3">
+                <p className="mt-1 text-xs text-stone-400 dark:text-charcoal-300">Ordem: {c.sortOrder}</p>
+                <div className="mt-3 flex gap-4 border-t border-stone-100 dark:border-charcoal-700 pt-3">
                   <button onClick={() => openEdit(c)} className="text-sm text-gold font-medium">Editar</button>
                   <button onClick={() => handleDelete(c.id, c.name)} className="text-sm text-red-500 font-medium">Excluir</button>
                 </div>
@@ -121,7 +124,7 @@ export default function CategoriesPage() {
         <CategoryModal
           category={editTarget}
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); load(); }}
+          onSaved={() => { setShowForm(false); fb.success('Categoria salva com sucesso.'); load(); }}
         />
       )}
     </div>
@@ -167,42 +170,42 @@ function CategoryModal({ category, onClose, onSaved }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-stone-800">
+      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-charcoal-800 shadow-xl">
+        <div className="flex items-center justify-between border-b border-stone-100 dark:border-charcoal-700 px-6 py-4">
+          <h2 className="text-base font-semibold text-stone-800 dark:text-cream-200">
             {isEdit ? 'Editar Categoria' : 'Nova Categoria'}
           </h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600">✕</button>
+          <button onClick={onClose} className="text-stone-400 dark:text-charcoal-300 hover:text-stone-600 dark:hover:text-charcoal-100">✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Nome *</label>
+            <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Nome *</label>
             <input required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
               placeholder="Ex: Brinco, Colar, Anel..."
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+              className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-stone-600 mb-1">Ordem de exibição</label>
+              <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Ordem de exibição</label>
               <input type="number" step="1" min="0" value={form.sortOrder}
                 onChange={(e) => setForm({ ...form, sortOrder: e.target.value })}
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
             <div className="flex items-end pb-1">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.active}
                   onChange={(e) => setForm({ ...form, active: e.target.checked })}
-                  className="w-4 h-4 rounded border-stone-300 text-gold focus:ring-gold" />
-                <span className="text-sm text-stone-600">Ativa (aparece nos seletores)</span>
+                  className="w-4 h-4 rounded border-stone-300 dark:border-charcoal-500 text-gold focus:ring-gold" />
+                <span className="text-sm text-stone-600 dark:text-charcoal-200">Ativa (aparece nos seletores)</span>
               </label>
             </div>
           </div>
 
-          {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-600">{error}</div>}
+          {error && <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 text-xs text-red-600 dark:text-red-400">{error}</div>}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-stone-500">Cancelar</button>
+            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-stone-500 dark:text-charcoal-300">Cancelar</button>
             <button type="submit" disabled={loading}
               className="rounded-lg bg-gold px-5 py-2 text-sm font-semibold text-white hover:bg-gold-dark disabled:opacity-50 transition">
               {loading ? 'Salvando...' : isEdit ? 'Salvar' : 'Cadastrar'}

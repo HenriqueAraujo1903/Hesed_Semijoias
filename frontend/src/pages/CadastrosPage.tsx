@@ -19,12 +19,12 @@ export default function CadastrosPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-stone-800">Cadastros</h1>
-        <p className="mt-1 text-sm text-stone-500">Clientes, fornecedores, categorias e linhas da loja.</p>
+        <h1 className="text-2xl font-semibold text-stone-800 dark:text-cream-200">Cadastros</h1>
+        <p className="mt-1 text-sm text-stone-500 dark:text-charcoal-300">Clientes, fornecedores, categorias e linhas da loja.</p>
       </div>
 
       {/* Sub-abas */}
-      <div className="flex gap-2 border-b border-stone-200">
+      <div className="flex gap-2 border-b border-stone-200 dark:border-charcoal-600">
         {TABS.map((t) => (
           <button
             key={t.key}
@@ -32,7 +32,7 @@ export default function CadastrosPage() {
             className={`-mb-px px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
               tab === t.key
                 ? 'border-gold text-gold'
-                : 'border-transparent text-stone-500 hover:text-stone-700'
+                : 'border-transparent text-stone-500 dark:text-charcoal-300 hover:text-stone-700 dark:hover:text-charcoal-100'
             }`}
           >
             {t.label}

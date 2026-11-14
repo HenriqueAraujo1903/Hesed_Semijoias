@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
+import { useFeedback } from '../components/Feedback';
 import { BRL } from '../utils/format';
 
 // ─── Tipos ───────────────────────────────────────────────────────────────────
@@ -141,6 +142,7 @@ export default function FinancePage() {
 // ─── Aba: Fluxo de Caixa ──────────────────────────────────────────────────────
 
 function CashFlowTab() {
+  const fb = useFeedback();
   const [from, setFrom] = useState(firstDayOfMonth());
   const [to, setTo] = useState(lastDayOfMonth());
   const [data, setData] = useState<CashFlow | null>(null);
@@ -167,12 +169,13 @@ function CashFlowTab() {
   useEffect(() => { load(); }, [load]);
 
   async function deleteEntry(id: string) {
-    if (!window.confirm('Excluir este lançamento manual?')) return;
+    if (!(await fb.confirm({ message: 'Excluir este lançamento manual?', danger: true, confirmLabel: 'Excluir' }))) return;
     try {
       await api.delete(`/admin/finance/cash-entries/${id}`);
+      fb.success('Lançamento excluído.');
       await load();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Erro ao excluir lançamento');
+      fb.error(e.response?.data?.error || 'Erro ao excluir lançamento');
     }
   }
 
@@ -243,7 +246,7 @@ function CashFlowTab() {
       )}
 
       {showForm && (
-        <CashEntryModal onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); load(); }} />
+        <CashEntryModal onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); fb.success('Lançamento salvo com sucesso.'); load(); }} />
       )}
     </div>
   );
@@ -327,6 +330,7 @@ function CashEntryModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
 // ─── Aba: Contas a Pagar (despesas + parcelas) ────────────────────────────────
 
 function PayablesTab() {
+  const fb = useFeedback();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -354,19 +358,21 @@ function PayablesTab() {
       await api.patch(`/admin/finance/installments/${inst.id}/paid`, {
         paid, paidDate: paid ? new Date().toISOString().slice(0, 10) : null,
       });
+      fb.success(paid ? 'Parcela marcada como paga.' : 'Parcela reaberta.');
       await load();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Erro ao atualizar parcela');
+      fb.error(e.response?.data?.error || 'Erro ao atualizar parcela');
     }
   }
 
   async function deleteExpense(id: string) {
-    if (!window.confirm('Excluir esta despesa e todas as suas parcelas?')) return;
+    if (!(await fb.confirm({ title: 'Excluir despesa', message: 'Excluir esta despesa e todas as suas parcelas?', danger: true, confirmLabel: 'Excluir' }))) return;
     try {
       await api.delete(`/admin/finance/expenses/${id}`);
+      fb.success('Despesa excluída.');
       await load();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Erro ao excluir despesa');
+      fb.error(e.response?.data?.error || 'Erro ao excluir despesa');
     }
   }
 
@@ -473,7 +479,7 @@ function PayablesTab() {
       )}
 
       {showForm && (
-        <ExpenseModal onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); load(); }} />
+        <ExpenseModal onClose={() => setShowForm(false)} onSaved={() => { setShowForm(false); fb.success('Despesa salva com sucesso.'); load(); }} />
       )}
     </div>
   );

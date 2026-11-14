@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
+import { useFeedback } from '../components/Feedback';
 import { buildOrderMessage, sendWhatsAppViaWindow } from '../utils/whatsapp';
 
 interface OrderItem {
@@ -71,6 +72,7 @@ function creditFirstSettlementLabel(): string {
 }
 
 export default function OrdersPage() {
+  const fb = useFeedback();
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [summary, setSummary] = useState({ pendente: 0, confirmado: 0, cancelado: 0 });
@@ -146,9 +148,10 @@ export default function OrdersPage() {
     setActioningId(order.id);
     try {
       await api.patch(`/admin/orders/${order.id}/status`, { status });
+      fb.success('Pedido reaberto.');
       await load();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Erro ao atualizar o pedido');
+      fb.error(e.response?.data?.error || 'Erro ao atualizar o pedido');
     } finally {
       setActioningId(null);
     }
@@ -391,6 +394,7 @@ const PAYMENT_STATUS_META: Record<string, { label: string; badge: string }> = {
 };
 
 function PaymentModal({ order, onClose }: { order: Order; onClose: () => void }) {
+  const fb = useFeedback();
   const [summary, setSummary] = useState<PaymentSummary | null>(null);
   const [method, setMethod] = useState('PIX');
   const [grossAmount, setGrossAmount] = useState('');
@@ -435,12 +439,13 @@ function PaymentModal({ order, onClose }: { order: Order; onClose: () => void })
   }
 
   async function removePayment(id: string) {
-    if (!window.confirm('Remover este pagamento?')) return;
+    if (!(await fb.confirm({ message: 'Remover este pagamento?', danger: true, confirmLabel: 'Remover' }))) return;
     try {
       const res = await api.delete(`/admin/finance/payments/${id}`);
       setSummary(res.data);
+      fb.success('Pagamento removido.');
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Erro ao remover pagamento');
+      fb.error(e.response?.data?.error || 'Erro ao remover pagamento');
     }
   }
 
@@ -581,6 +586,7 @@ function OrderEditModal({ order, products, onClose, onSaved, onResolved }: {
   order: Order | null; products: Product[]; onClose: () => void; onSaved: () => void;
   onResolved: (status: 'CONFIRMADO' | 'CANCELADO', order: import('../utils/whatsapp').OrderLike, win: Window | null) => void;
 }) {
+  const fb = useFeedback();
   const isCreate = order === null;
   const [items, setItems] = useState<EditItem[]>(
     (order?.items ?? []).map((i) => ({
@@ -707,12 +713,14 @@ function OrderEditModal({ order, products, onClose, onSaved, onResolved }: {
     // informou nenhum pagamento aqui. Registrar não é obrigatório — pode ser
     // feito depois pelo botão "Pagamento" do pedido.
     if (resolve === 'CONFIRMADO' && !hasPayment) {
-      const ok = window.confirm(
-        'Confirmar a venda sem registrar o pagamento?\n\n' +
-        'Você pode informar uma ou mais formas de pagamento nos campos "Pagamento" acima, ' +
-        'ou registrar depois pelo botão "Pagamento" do pedido.\n\n' +
-        'Clique em OK para confirmar mesmo assim, ou Cancelar para voltar.'
-      );
+      const ok = await fb.confirm({
+        title: 'Confirmar sem registrar o pagamento?',
+        message:
+          'Você pode informar uma ou mais formas de pagamento nos campos "Pagamento" acima, ' +
+          'ou registrar depois pelo botão "Pagamento" do pedido.',
+        confirmLabel: 'Confirmar mesmo assim',
+        cancelLabel: 'Voltar',
+      });
       if (!ok) return;
     }
 
@@ -778,7 +786,7 @@ function OrderEditModal({ order, products, onClose, onSaved, onResolved }: {
           }
         }
         if (failed.length > 0) {
-          alert(
+          fb.error(
             'A venda foi confirmada, mas algumas formas de pagamento não puderam ser registradas:\n\n' +
             failed.join('\n') +
             '\n\nRegistre as pendentes pelo botão "Pagamento" do pedido.'

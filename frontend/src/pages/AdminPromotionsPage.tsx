@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
 import BannerUploader from '../components/BannerUploader';
+import { useFeedback } from '../components/Feedback';
 import { PRODUCT_PLACEHOLDER, handleImageError } from '../utils/image';
 
 interface Promotion {
@@ -32,6 +33,7 @@ interface Product {
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export default function AdminPromotionsPage() {
+  const fb = useFeedback();
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,12 +60,13 @@ export default function AdminPromotionsPage() {
   useEffect(() => { load(); }, [load]);
 
   async function handleDelete(id: string) {
-    if (!confirm('Excluir esta promoção?')) return;
+    if (!(await fb.confirm({ message: 'Excluir esta promoção?', danger: true, confirmLabel: 'Excluir' }))) return;
     try {
       await api.delete(`/admin/promotions/${id}`);
+      fb.success('Excluído com sucesso.');
       load();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Erro ao excluir');
+      fb.error(e.response?.data?.error || 'Erro ao excluir');
     }
   }
 
@@ -72,7 +75,7 @@ export default function AdminPromotionsPage() {
       await api.patch(`/admin/promotions/${id}/toggle`);
       load();
     } catch (e: any) {
-      alert(e.response?.data?.error || 'Erro ao alterar status');
+      fb.error(e.response?.data?.error || 'Erro ao alterar status');
     }
   }
 
@@ -177,7 +180,7 @@ export default function AdminPromotionsPage() {
           promotion={editTarget}
           products={products}
           onClose={() => setShowModal(false)}
-          onSaved={() => { setShowModal(false); load(); }}
+          onSaved={() => { setShowModal(false); fb.success('Promoção salva com sucesso.'); load(); }}
         />
       )}
     </div>

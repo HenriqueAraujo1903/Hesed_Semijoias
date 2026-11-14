@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../services/api';
+import { useFeedback } from '../components/Feedback';
 
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
 const PCT = new Intl.NumberFormat('pt-BR', { style: 'percent', minimumFractionDigits: 0, maximumFractionDigits: 1 });
@@ -46,16 +47,17 @@ interface Consignment {
 }
 
 const STATUS_STYLES: Record<string, string> = {
-  ABERTO: 'bg-amber-100 text-amber-700',
-  FECHADO: 'bg-emerald-100 text-emerald-700',
-  CANCELADO: 'bg-stone-200 text-stone-500',
+  ABERTO: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+  FECHADO: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+  CANCELADO: 'bg-stone-200 dark:bg-charcoal-600 text-stone-500 dark:text-charcoal-300',
 };
 
 function statusBadge(status: string) {
-  return STATUS_STYLES[status] ?? 'bg-stone-100 text-stone-600';
+  return STATUS_STYLES[status] ?? 'bg-stone-100 dark:bg-charcoal-700 text-stone-600 dark:text-charcoal-200';
 }
 
 export default function ConsignmentsPage() {
+  const fb = useFeedback();
   const [consignments, setConsignments] = useState<Consignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
@@ -82,8 +84,8 @@ export default function ConsignmentsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-stone-800">Consignações</h1>
-          <p className="mt-1 text-sm text-stone-500">
+          <h1 className="text-2xl font-semibold text-stone-800 dark:text-cream-200">Consignações</h1>
+          <p className="mt-1 text-sm text-stone-500 dark:text-charcoal-300">
             Lotes com revendedoras. Abrir reserva o estoque; fechar apura vendas e comissão.
           </p>
         </div>
@@ -102,7 +104,7 @@ export default function ConsignmentsPage() {
         ].map((f) => (
           <button key={f.v} onClick={() => setStatusFilter(f.v)}
             className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
-              statusFilter === f.v ? 'bg-gold text-white' : 'bg-white text-stone-600 border border-stone-200 hover:bg-stone-50'
+              statusFilter === f.v ? 'bg-gold text-white' : 'bg-white dark:bg-charcoal-800 text-stone-600 dark:text-charcoal-200 border border-stone-200 dark:border-charcoal-600 hover:bg-stone-50 dark:hover:bg-charcoal-700/50'
             }`}>
             {f.label}
           </button>
@@ -114,32 +116,32 @@ export default function ConsignmentsPage() {
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-gold border-t-transparent" />
         </div>
       ) : consignments.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-stone-200 bg-white py-16 text-center">
-          <p className="text-sm text-stone-500">Nenhum lote de consignação.</p>
+        <div className="rounded-2xl border-2 border-dashed border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 py-16 text-center">
+          <p className="text-sm text-stone-500 dark:text-charcoal-300">Nenhum lote de consignação.</p>
         </div>
       ) : (
         <>
           {/* Tabela (desktop) */}
-          <div className="hidden md:block overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm">
+          <div className="hidden md:block overflow-hidden rounded-2xl border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 shadow-sm">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-stone-100 text-sm">
-                <thead className="bg-stone-50">
+              <table className="min-w-full divide-y divide-stone-100 dark:divide-charcoal-700 text-sm">
+                <thead className="bg-stone-50 dark:bg-charcoal-700/50">
                   <tr>
                     {['Revendedora', 'Aberto em', 'Itens', 'Comissão', 'Vendido', 'Status', 'Ações'].map((col) => (
-                      <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500">{col}</th>
+                      <th key={col} className="whitespace-nowrap px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-stone-500 dark:text-charcoal-300">{col}</th>
                     ))}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-stone-50">
+                <tbody className="divide-y divide-stone-50 dark:divide-charcoal-700">
                   {consignments.map((c) => {
                     const totalPieces = c.items.reduce((s, i) => s + i.quantity, 0);
                     return (
-                      <tr key={c.id} className="hover:bg-stone-50 transition-colors">
-                        <td className="px-4 py-3 font-medium text-stone-800">{c.consigneeName}</td>
-                        <td className="px-4 py-3 text-stone-500">{new Date(c.openedAt).toLocaleDateString('pt-BR')}</td>
-                        <td className="px-4 py-3 text-stone-600">{c.items.length} produto(s) · {totalPieces} pç</td>
-                        <td className="px-4 py-3 text-stone-700">{c.commissionRate != null ? PCT.format(c.commissionRate) : '—'}</td>
-                        <td className="px-4 py-3 text-stone-700">{c.totalSold != null ? BRL.format(c.totalSold) : '—'}</td>
+                      <tr key={c.id} className="hover:bg-stone-50 dark:hover:bg-charcoal-700/50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-stone-800 dark:text-cream-200">{c.consigneeName}</td>
+                        <td className="px-4 py-3 text-stone-500 dark:text-charcoal-300">{new Date(c.openedAt).toLocaleDateString('pt-BR')}</td>
+                        <td className="px-4 py-3 text-stone-600 dark:text-charcoal-200">{c.items.length} produto(s) · {totalPieces} pç</td>
+                        <td className="px-4 py-3 text-stone-700 dark:text-charcoal-100">{c.commissionRate != null ? PCT.format(c.commissionRate) : '—'}</td>
+                        <td className="px-4 py-3 text-stone-700 dark:text-charcoal-100">{c.totalSold != null ? BRL.format(c.totalSold) : '—'}</td>
                         <td className="px-4 py-3">
                           <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(c.status)}`}>{c.status}</span>
                         </td>
@@ -159,13 +161,13 @@ export default function ConsignmentsPage() {
           {/* Cards (mobile) */}
           <div className="md:hidden space-y-3">
             {consignments.map((c) => (
-              <div key={c.id} className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
+              <div key={c.id} className="rounded-2xl border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 p-4 shadow-sm"
                    onClick={() => setDetailTarget(c)}>
                 <div className="flex items-start justify-between gap-3">
-                  <p className="font-medium text-stone-800 min-w-0 flex-1 truncate">{c.consigneeName}</p>
+                  <p className="font-medium text-stone-800 dark:text-cream-200 min-w-0 flex-1 truncate">{c.consigneeName}</p>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(c.status)}`}>{c.status}</span>
                 </div>
-                <div className="mt-2 space-y-1 text-sm text-stone-500">
+                <div className="mt-2 space-y-1 text-sm text-stone-500 dark:text-charcoal-300">
                   <p>{new Date(c.openedAt).toLocaleDateString('pt-BR')} · {c.items.length} produto(s)</p>
                   <p>Comissão {c.commissionRate != null ? PCT.format(c.commissionRate) : '—'}
                      {c.totalSold != null && ` · Vendido ${BRL.format(c.totalSold)}`}</p>
@@ -179,7 +181,7 @@ export default function ConsignmentsPage() {
       {showOpen && (
         <OpenConsignmentModal
           onClose={() => setShowOpen(false)}
-          onSaved={() => { setShowOpen(false); load(); }}
+          onSaved={() => { setShowOpen(false); fb.success('Lote aberto com sucesso.'); load(); }}
         />
       )}
 
@@ -305,56 +307,56 @@ function OpenConsignmentModal({ onClose, onSaved }: { onClose: () => void; onSav
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-stone-800">Novo Lote de Consignação</h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600">✕</button>
+      <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-charcoal-800 shadow-xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between border-b border-stone-100 dark:border-charcoal-700 px-6 py-4">
+          <h2 className="text-base font-semibold text-stone-800 dark:text-cream-200">Novo Lote de Consignação</h2>
+          <button onClick={onClose} className="text-stone-400 dark:text-charcoal-300 hover:text-stone-600 dark:hover:text-charcoal-100">✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5 overflow-y-auto overflow-x-hidden">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="min-w-0">
-              <label className="block text-xs font-medium text-stone-600 mb-1">Revendedora *</label>
+              <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Revendedora *</label>
               <select required value={consigneeId} onChange={(e) => handleConsignee(e.target.value)}
-                className="w-full truncate rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none">
+                className="w-full truncate rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none">
                 <option value="">Selecione...</option>
                 {consignees.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div className="min-w-0">
-              <label className="block text-xs font-medium text-stone-600 mb-1">Comissão do lote (%)</label>
+              <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Comissão do lote (%)</label>
               <input type="number" step="0.5" min="0" max="100" value={commission}
                 onChange={(e) => setCommission(e.target.value)} placeholder="Padrão da revendedora"
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Adicionar produto</label>
+            <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Adicionar produto</label>
             <div className="relative">
               <input type="text" value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
                 placeholder="Buscar por nome ou SKU..."
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+                className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
 
               {productSearch.trim() !== '' && (
-                <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-stone-200 bg-white shadow-lg">
+                <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-stone-200 dark:border-charcoal-600 bg-white dark:bg-charcoal-800 shadow-lg">
                   {searchResults.length === 0 ? (
-                    <p className="px-3 py-2.5 text-sm text-stone-400">Nenhum produto encontrado.</p>
+                    <p className="px-3 py-2.5 text-sm text-stone-400 dark:text-charcoal-300">Nenhum produto encontrado.</p>
                   ) : (
-                    <ul className="max-h-60 overflow-y-auto divide-y divide-stone-50">
+                    <ul className="max-h-60 overflow-y-auto divide-y divide-stone-50 dark:divide-charcoal-700">
                       {searchResults.map((p) => {
                         const out = p.stockQuantity < 1;
                         return (
                           <li key={p.id}>
                             <button type="button" disabled={out}
                               onClick={() => addProduct(p)}
-                              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-50">
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-stone-50 dark:hover:bg-charcoal-700/50 disabled:cursor-not-allowed disabled:opacity-50">
                               <span className="min-w-0 flex-1">
-                                <span className="block truncate text-sm text-stone-700">{p.name}</span>
-                                <span className="block text-[10px] text-stone-400">{p.sku}</span>
+                                <span className="block truncate text-sm text-stone-700 dark:text-charcoal-100">{p.name}</span>
+                                <span className="block text-[10px] text-stone-400 dark:text-charcoal-300">{p.sku}</span>
                               </span>
-                              <span className={`shrink-0 text-xs font-medium ${out ? 'text-red-400' : 'text-stone-500'}`}>
+                              <span className={`shrink-0 text-xs font-medium ${out ? 'text-red-400' : 'text-stone-500 dark:text-charcoal-300'}`}>
                                 {out ? 'Esgotado' : `${p.stockQuantity} disp.`}
                               </span>
                             </button>
@@ -369,25 +371,25 @@ function OpenConsignmentModal({ onClose, onSaved }: { onClose: () => void; onSav
           </div>
 
           {items.length > 0 && (
-            <div className="rounded-lg border border-stone-200 divide-y divide-stone-100">
+            <div className="rounded-lg border border-stone-200 dark:border-charcoal-600 divide-y divide-stone-100 dark:divide-charcoal-700">
               {items.map((it, idx) => (
                 <div key={it.productId} className="flex flex-wrap items-end gap-3 px-3 py-3">
                   {/* Nome ocupa a largura toda e trunca sem empurrar as colunas numéricas */}
                   <div className="w-full min-w-0">
-                    <p className="truncate text-sm font-medium text-stone-700" title={it.productLabel}>{it.productLabel}</p>
-                    <p className="text-[10px] text-stone-400">{it.maxAvailable} disponível(is)</p>
+                    <p className="truncate text-sm font-medium text-stone-700 dark:text-charcoal-100" title={it.productLabel}>{it.productLabel}</p>
+                    <p className="text-[10px] text-stone-400 dark:text-charcoal-300">{it.maxAvailable} disponível(is)</p>
                   </div>
                   <div className="w-20 shrink-0">
-                    <label className="block text-[10px] uppercase tracking-wide text-stone-400 mb-0.5">Qtd</label>
+                    <label className="block text-[10px] uppercase tracking-wide text-stone-400 dark:text-charcoal-300 mb-0.5">Qtd</label>
                     <input type="number" min="1" max={it.maxAvailable} value={it.quantity}
                       onChange={(e) => updateItem(idx, { quantity: e.target.value })}
-                      className="w-full rounded-lg border border-stone-200 px-2 py-1.5 text-sm focus:border-gold focus:outline-none" />
+                      className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-2 py-1.5 text-sm focus:border-gold focus:outline-none" />
                   </div>
                   <div className="w-32 shrink-0">
-                    <label className="block text-[10px] uppercase tracking-wide text-stone-400 mb-0.5">Preço venda (R$)</label>
+                    <label className="block text-[10px] uppercase tracking-wide text-stone-400 dark:text-charcoal-300 mb-0.5">Preço venda (R$)</label>
                     <input type="number" step="0.01" min="0" value={it.unitSalePrice}
                       onChange={(e) => updateItem(idx, { unitSalePrice: e.target.value })}
-                      className="w-full rounded-lg border border-stone-200 px-2 py-1.5 text-sm focus:border-gold focus:outline-none" />
+                      className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-2 py-1.5 text-sm focus:border-gold focus:outline-none" />
                   </div>
                   <button type="button" onClick={() => removeItem(idx)}
                     className="ml-auto shrink-0 pb-1.5 text-xs text-red-500 hover:underline">Remover</button>
@@ -397,15 +399,15 @@ function OpenConsignmentModal({ onClose, onSaved }: { onClose: () => void; onSav
           )}
 
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Observações</label>
+            <label className="block text-xs font-medium text-stone-600 dark:text-charcoal-200 mb-1">Observações</label>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2}
-              className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
+              className="w-full rounded-lg border border-stone-200 dark:border-charcoal-600 px-3 py-2 text-sm focus:border-gold focus:outline-none" />
           </div>
 
-          {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-600">{error}</div>}
+          {error && <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 text-xs text-red-600 dark:text-red-400">{error}</div>}
 
           <div className="flex justify-end gap-2 pt-2">
-            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-stone-500">Cancelar</button>
+            <button type="button" onClick={onClose} className="rounded-lg px-4 py-2 text-sm text-stone-500 dark:text-charcoal-300">Cancelar</button>
             <button type="submit" disabled={loading}
               className="rounded-lg bg-gold px-5 py-2 text-sm font-semibold text-white hover:bg-gold-dark disabled:opacity-50 transition">
               {loading ? 'Abrindo...' : 'Abrir Lote'}
@@ -424,6 +426,7 @@ function OpenConsignmentModal({ onClose, onSaved }: { onClose: () => void; onSav
 function ConsignmentDetailModal({ consignmentId, onClose, onChanged }: {
   consignmentId: string; onClose: () => void; onChanged: () => void;
 }) {
+  const fb = useFeedback();
   const [c, setC] = useState<Consignment | null>(null);
   const [sold, setSold] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
@@ -488,20 +491,22 @@ function ConsignmentDetailModal({ consignmentId, onClose, onChanged }: {
 
   async function handleClose() {
     const v = validate(); if (v) { setError(v); return; }
-    if (!confirm('Fechar o lote? Isso baixa os vendidos, devolve o restante ao estoque e gera a venda consignada.')) return;
+    if (!(await fb.confirm({ title: 'Fechar o lote?', message: 'Isso baixa os vendidos, devolve o restante ao estoque e gera a venda consignada.', confirmLabel: 'Fechar lote' }))) return;
     setError(null); setBusy(true);
     try {
       await api.post(`/admin/consignments/${consignmentId}/close`, settlePayload());
+      fb.success('Lote fechado com sucesso.');
       await load(); onChanged();
     } catch (e: any) { setError(e.response?.data?.error || 'Erro ao fechar o lote'); }
     finally { setBusy(false); }
   }
 
   async function handleCancel() {
-    if (!confirm('Cancelar o lote? Todo o estoque reservado volta ao disponível.')) return;
+    if (!(await fb.confirm({ title: 'Cancelar o lote?', message: 'Todo o estoque reservado volta ao disponível.', confirmLabel: 'Cancelar lote', cancelLabel: 'Voltar', danger: true }))) return;
     setError(null); setBusy(true);
     try {
       await api.post(`/admin/consignments/${consignmentId}/cancel`);
+      fb.success('Lote cancelado.');
       await load(); onChanged();
     } catch (e: any) { setError(e.response?.data?.error || 'Erro ao cancelar'); }
     finally { setBusy(false); }
@@ -509,16 +514,16 @@ function ConsignmentDetailModal({ consignmentId, onClose, onChanged }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between border-b border-stone-100 px-6 py-4">
+      <div className="w-full max-w-2xl rounded-2xl bg-white dark:bg-charcoal-800 shadow-xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between border-b border-stone-100 dark:border-charcoal-700 px-6 py-4">
           <div>
-            <h2 className="text-base font-semibold text-stone-800">
+            <h2 className="text-base font-semibold text-stone-800 dark:text-cream-200">
               {c ? c.consigneeName : 'Lote'}
               {c && <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-medium ${statusBadge(c.status)}`}>{c.status}</span>}
             </h2>
-            {c && <p className="text-xs text-stone-400">Comissão do lote: {c.commissionRate != null ? PCT.format(c.commissionRate) : '—'}</p>}
+            {c && <p className="text-xs text-stone-400 dark:text-charcoal-300">Comissão do lote: {c.commissionRate != null ? PCT.format(c.commissionRate) : '—'}</p>}
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600">✕</button>
+          <button onClick={onClose} className="text-stone-400 dark:text-charcoal-300 hover:text-stone-600 dark:hover:text-charcoal-100">✕</button>
         </div>
 
         {loading || !c ? (
@@ -527,8 +532,8 @@ function ConsignmentDetailModal({ consignmentId, onClose, onChanged }: {
           </div>
         ) : (
           <div className="space-y-4 px-6 py-5 overflow-y-auto">
-            <div className="rounded-lg border border-stone-200 divide-y divide-stone-100">
-              <div className="flex items-center gap-3 bg-stone-50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+            <div className="rounded-lg border border-stone-200 dark:border-charcoal-600 divide-y divide-stone-100 dark:divide-charcoal-700">
+              <div className="flex items-center gap-3 bg-stone-50 dark:bg-charcoal-700/50 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-stone-500 dark:text-charcoal-300">
                 <span className="flex-1 min-w-0">Produto</span>
                 <span className="w-14 text-center shrink-0">Levado</span>
                 <span className="w-20 text-center shrink-0">Vendido</span>
@@ -537,66 +542,66 @@ function ConsignmentDetailModal({ consignmentId, onClose, onChanged }: {
               {c.items.map((it) => (
                 <div key={it.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-stone-700" title={it.productName}>{it.productName}</p>
-                    <span className="block text-[10px] text-stone-400">{it.productSku}</span>
+                    <p className="truncate text-stone-700 dark:text-charcoal-100" title={it.productName}>{it.productName}</p>
+                    <span className="block text-[10px] text-stone-400 dark:text-charcoal-300">{it.productSku}</span>
                   </div>
-                  <div className="w-14 text-center text-stone-600 shrink-0">{it.quantity}</div>
+                  <div className="w-14 text-center text-stone-600 dark:text-charcoal-200 shrink-0">{it.quantity}</div>
                   <div className="w-20 text-center shrink-0">
                     {isOpen ? (
                       <input type="number" min="0" max={it.quantity} value={sold[it.id] ?? '0'}
                         onChange={(e) => setSold({ ...sold, [it.id]: e.target.value })}
-                        className="w-16 rounded-lg border border-stone-200 px-2 py-1 text-sm text-center focus:border-gold focus:outline-none" />
+                        className="w-16 rounded-lg border border-stone-200 dark:border-charcoal-600 px-2 py-1 text-sm text-center focus:border-gold focus:outline-none" />
                     ) : (
-                      <span className="text-stone-700">{it.soldQuantity}
-                        <span className="block text-[10px] text-stone-400">dev. {it.returnedQuantity}</span>
+                      <span className="text-stone-700 dark:text-charcoal-100">{it.soldQuantity}
+                        <span className="block text-[10px] text-stone-400 dark:text-charcoal-300">dev. {it.returnedQuantity}</span>
                       </span>
                     )}
                   </div>
-                  <div className="w-24 text-right text-stone-600 shrink-0">{BRL.format(it.unitSalePrice)}</div>
+                  <div className="w-24 text-right text-stone-600 dark:text-charcoal-200 shrink-0">{BRL.format(it.unitSalePrice)}</div>
                 </div>
               ))}
             </div>
 
             {/* Resumo */}
             {summary && (
-              <div className="rounded-lg bg-stone-50 border border-stone-200 p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+              <div className="rounded-lg bg-stone-50 dark:bg-charcoal-700/50 border border-stone-200 dark:border-charcoal-600 p-4 grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-stone-400">Vendido</p>
-                  <p className="text-sm font-semibold text-stone-800">{BRL.format(summary.totalSold)}</p>
-                  <p className="text-[10px] text-stone-400">{summary.piecesSold} pç</p>
+                  <p className="text-[10px] uppercase tracking-wide text-stone-400 dark:text-charcoal-300">Vendido</p>
+                  <p className="text-sm font-semibold text-stone-800 dark:text-cream-200">{BRL.format(summary.totalSold)}</p>
+                  <p className="text-[10px] text-stone-400 dark:text-charcoal-300">{summary.piecesSold} pç</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-stone-400">Devolvido</p>
-                  <p className="text-sm font-semibold text-stone-800">{summary.piecesReturned} pç</p>
+                  <p className="text-[10px] uppercase tracking-wide text-stone-400 dark:text-charcoal-300">Devolvido</p>
+                  <p className="text-sm font-semibold text-stone-800 dark:text-cream-200">{summary.piecesReturned} pç</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-stone-400">Comissão</p>
-                  <p className="text-sm font-semibold text-amber-700">{BRL.format(summary.commissionAmount)}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-stone-400 dark:text-charcoal-300">Comissão</p>
+                  <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">{BRL.format(summary.commissionAmount)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-stone-400">Líquido loja</p>
-                  <p className="text-sm font-semibold text-emerald-700">{BRL.format(summary.netAmount)}</p>
+                  <p className="text-[10px] uppercase tracking-wide text-stone-400 dark:text-charcoal-300">Líquido loja</p>
+                  <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">{BRL.format(summary.netAmount)}</p>
                 </div>
               </div>
             )}
 
             {c.status === 'FECHADO' && (
-              <p className="text-xs text-stone-400">
+              <p className="text-xs text-stone-400 dark:text-charcoal-300">
                 Fechado em {c.closedAt ? new Date(c.closedAt).toLocaleString('pt-BR') : '—'}. A venda entrou na receita com origem CONSIGNADO.
               </p>
             )}
 
-            {error && <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-xs text-red-600">{error}</div>}
+            {error && <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-3 text-xs text-red-600 dark:text-red-400">{error}</div>}
 
             {isOpen && (
               <div className="flex flex-wrap justify-between gap-2 pt-2">
                 <button type="button" onClick={handleCancel} disabled={busy}
-                  className="rounded-lg px-4 py-2 text-sm text-red-500 hover:bg-red-50 disabled:opacity-50">
+                  className="rounded-lg px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50">
                   Cancelar lote
                 </button>
                 <div className="flex gap-2">
                   <button type="button" onClick={handleSaveSettle} disabled={busy}
-                    className="rounded-lg border border-stone-200 px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50">
+                    className="rounded-lg border border-stone-200 dark:border-charcoal-600 px-4 py-2 text-sm font-medium text-stone-700 dark:text-charcoal-100 hover:bg-stone-50 dark:hover:bg-charcoal-700/50 disabled:opacity-50">
                     Salvar acerto
                   </button>
                   <button type="button" onClick={handleClose} disabled={busy}
